@@ -30,3 +30,9 @@
 | 2026-10-19 | TASK-001 | 실호출 승인 | "ITS 실호출 승인" | — (`진행 중` 유지) | 범위: Vercel `icn1` 확인 함수로 제주 ITS 오픈API 안내 페이지 확인 후 평화로·1100도로·516도로 소통정보 표본 호출 **20건 이내**. 키는 사용자가 Vercel 환경 변수(`JEJU_ITS_API_KEY`, Sensitive)로 등록, 값 출력 금지. 결제수단 연결 금지 |
 | 2026-10-19 | TASK-001 | 기타 | (C단계 실행 종료) | `진행 중` → `결과 검토` | `reports/TASK-001-RESULT.md` §10 갱신. 사용자 승인이 아닌 AGENTS.md 규칙 5에 따른 전환. 완료 승인 대기 |
 | 2026-10-19 | TASK-001 | 완료 승인 | "완료 승인: TASK-001" | TASK-001 `결과 검토` → `완료`, TASK-002 `미착수` → `대기` | §10.9의 결정 4건(호스팅 구성·복수 경로 방식·교통 정보 범위·Vercel 시험 프로젝트)은 **이 승인에 포함되지 않음**. IMPLEMENTATION_PLAN 미수정. TASK-002 자동 시작 안 함 |
+| 2026-10-19 | TASK-002 | 기타 | "jeju-ai-traffic 다음" | `대기` → `계획 검토` | 읽기 전용 계획 제시(파일 미변경). 상태 전환을 이 행에 사후 기록 |
+| 2026-10-19 | TASK-002 | 계획 승인 | "계획 승인: TASK-002 1. 승인 2. 승인 3. 승인 4. (a)" | `계획 검토` → `진행 중` | 범위: `jeju-ai-traffic/` 안에 웹(React+TS+Vite+Tailwind)·API(Vercel Functions `icn1`)·shared·tests 최소 기반, lint/typecheck/test/build, `/api/health`(외부 호출 없음), README 실측. **외부 API 호출·배포는 포함하지 않음** |
+| 2026-10-19 | — | 기술 선정 | "1. 승인" | — | 호스팅을 **Vercel Hobby 단일 프로젝트(웹+Functions, 리전 `icn1`)** 로 통합. Cloudflare Workers 제외. IMPLEMENTATION_PLAN 2절 갱신 |
+| 2026-10-19 | — | 기술 선정 | "2. 승인" | — | 복수 경로: 카카오 우선순위 2종(RECOMMEND·DISTANCE) + 주요 도로(평화로·1100도로·516도로) 경유지 지정 다회 호출. 구현은 TASK-005 |
+| 2026-10-19 | — | 기술 선정 | "3. 승인" | — | 교통 정보: 구간 혼잡도는 카카오 `traffic_state`, 제주 ITS는 돌발·통제·공사·기상·VMS 보조(좌표 근접 매칭). 미제공 구간은 '정보 미확보'. 구현은 TASK-006 |
+| 2026-10-19 | — | 기타 | "4. (a)" | — | Vercel 프로젝트 `jeju-its-probe`를 유지하고 Root Directory를 `jeju-ai-traffic`으로 변경해 계속 사용(사용자 수행) |
