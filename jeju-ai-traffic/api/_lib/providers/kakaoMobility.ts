@@ -86,7 +86,7 @@ export function normalizeKakaoDirections(body: unknown, query: RouteQuery, obser
   };
 }
 
-/** 카카오모빌리티 자동차 길찾기·경유지 길찾기 어댑터. 키는 서버 환경 변수로만 받고 출력하지 않는다. */
+/** 카카오모빌리티 자동차 길찾기(추천, 실시간 교통 반영) 어댑터. 키는 서버 환경 변수로만 받고 출력하지 않는다. */
 export function createKakaoMobilityProvider(
   apiKey: string,
   fetchImpl: typeof fetch = fetch,
@@ -96,27 +96,11 @@ export function createKakaoMobilityProvider(
   return {
     id: "kakao",
     async fetchRoute(request: RouteCompareRequest, query: RouteQuery): Promise<RouteResult> {
-      const priority = query.kind === "distance" ? "DISTANCE" : "RECOMMEND";
-      let res: Response;
-      if (query.via) {
-        res = await fetchImpl(`${BASE}/waypoints/directions`, {
-          method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            origin: { x: request.origin.lng, y: request.origin.lat },
-            destination: { x: request.destination.lng, y: request.destination.lat },
-            waypoints: [{ x: query.via.lng, y: query.via.lat }],
-            priority,
-          }),
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-      } else {
-        const url = new URL(`${BASE}/directions`);
-        url.searchParams.set("origin", xy(request.origin));
-        url.searchParams.set("destination", xy(request.destination));
-        url.searchParams.set("priority", priority);
-        res = await fetchImpl(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
-      }
+      const url = new URL(`${BASE}/directions`);
+      url.searchParams.set("origin", xy(request.origin));
+      url.searchParams.set("destination", xy(request.destination));
+      url.searchParams.set("priority", "RECOMMEND");
+      const res = await fetchImpl(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
       if (res.status === 429) throw new ProviderError("rate_limited", "kakao 429");
       if (!res.ok) throw new ProviderError("unavailable", `kakao ${res.status}`);
       return normalizeKakaoDirections(await res.json(), query, now().toISOString());

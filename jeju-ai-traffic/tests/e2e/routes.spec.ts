@@ -15,22 +15,25 @@ async function setup(page: Page, destinationQuery: string, destinationName: stri
 test.use({ permissions: ["geolocation"], geolocation: { ...AIRPORT, accuracy: 15 } });
 test.beforeEach(async ({ page }) => page.setExtraHTTPHeaders(uniqueClient()));
 
-test("한라산 횡단: 경로 4개, 추천과 차이 표시 (개발 서버 모의 경로)", async ({ page }) => {
+test("한라산 횡단도 카카오 추천 1개만, 경유 경로 없음 (개발 서버 모의 경로, TASK-011 경로방식 (a))", async ({ page }) => {
   await setup(page, "서귀포", "서귀포시청 제1청사");
   await page.getByRole("button", { name: "경로 조회" }).click();
   const section = page.getByRole("region", { name: "경로 비교" });
   await expect(section).toBeVisible();
-  await expect(section.getByRole("list", { name: "경로 목록" }).getByRole("listitem")).toHaveCount(4);
-  await expect(section.getByText("모의 데이터")).toBeVisible();
-  await expect(section.getByRole("list", { name: "경로 목록" }).getByRole("listitem").first().getByText("추천", { exact: true })).toBeVisible();
-  await page.getByRole("region", { name: "경로 비교" }).scrollIntoViewIfNeeded();
-  await shot(page, "TASK-005-01-routes");
+  // 카드 안에 사건 목록(li)이 있으므로 경로 카드(직계 li)만 센다.
+  const items = section.getByRole("list", { name: "경로 목록" }).locator(":scope > li");
+  await expect(items).toHaveCount(1);
+  await expect(items.first()).toHaveAccessibleName("카카오 추천");
+  await expect(section.getByText(/조회 기준 · 모의 데이터/)).toBeVisible();
+  await expect(section.getByText("카카오 추천 경로(실시간 교통 반영)를 보여 줍니다. 다른 경로와는 비교하지 않습니다.")).toBeVisible();
+  await expect(page.getByText(/1100도로|516도로|최단거리/)).toHaveCount(0);
+  await shot(page, "TASK-011-03-single-route");
 });
 
-test("같은 쪽 이동: 경로 2개", async ({ page }) => {
+test("같은 쪽 이동도 카카오 추천 1개", async ({ page }) => {
   await setup(page, "성산", "성산일출봉");
   await page.getByRole("button", { name: "경로 조회" }).click();
-  await expect(page.getByRole("list", { name: "경로 목록" }).getByRole("listitem")).toHaveCount(2);
+  await expect(page.getByRole("list", { name: "경로 목록" }).getByRole("listitem")).toHaveCount(1);
 });
 
 test("단일 경로·동률 표시 (응답 대체)", async ({ page }) => {
@@ -64,7 +67,7 @@ test("단일 경로·동률 표시 (응답 대체)", async ({ page }) => {
     }),
   );
   await page.getByRole("button", { name: "경로 조회" }).click();
-  await expect(page.getByText("대체 경로 없음: 제공된 경로가 하나입니다.")).toBeVisible();
+  await expect(page.getByText("카카오 추천 경로(실시간 교통 반영)를 보여 줍니다. 다른 경로와는 비교하지 않습니다.")).toBeVisible();
   await shot(page, "TASK-005-03-single");
 });
 
@@ -110,26 +113,18 @@ test.describe("지도 (OSM 타일 차단 상태)", () => {
     await expect(map.locator("path.route-seg-smooth")).not.toHaveCount(0);
     await expect(page.getByText("지도 배경을 불러오지 못했습니다", { exact: false })).toBeVisible();
     await shot(page, "TASK-006-01-map");
-
-    // 1100도로 경유(모의 혼잡: 전부 정보 미확보)를 선택하면 강조가 바뀐다
-    await page.getByRole("button", { name: /1100도로 경유/ }).click();
-    await expect(map.locator("path.route-seg-smooth")).toHaveCount(0);
-    await expect(map.locator("path.route-seg-unknown")).not.toHaveCount(0);
-    await expect(page.getByRole("button", { name: /1100도로 경유/ })).toHaveAttribute("aria-pressed", "true");
-    await shot(page, "TASK-006-02-select");
   });
 
-  test("516도로 경유 선택 시 모의 공사 사건 표시", async ({ page }) => {
+  test("카카오 추천 경로의 모의 사건을 종류별로 묶어 표시", async ({ page }) => {
     await setup(page, "서귀포", "서귀포시청 제1청사");
     await page.getByRole("button", { name: "경로 조회" }).click();
-    const card = page.getByRole("button", { name: /516도로 경유/ });
-    await expect(card).toContainText("확인된 교통 사건 1건");
-    await card.click();
+    const card = page.getByRole("button", { name: /카카오 추천/ });
+    await expect(card).toContainText("확인된 교통 사건 2건");
+    await expect(card).toContainText("정지차량 감지 1건");
     await expect(card).toContainText("공사 도로 공사 1건");
     await expect(card).toContainText("제주 ITS가 감지한 정보로, 발생 시각과 상세는 제공되지 않습니다");
-    await expect(page.getByRole("region", { name: "경로 지도" }).locator("path.incident-marker")).toHaveCount(1);
+    await expect(page.getByRole("region", { name: "경로 지도" }).locator("path.incident-marker")).toHaveCount(2);
     await card.scrollIntoViewIfNeeded();
-    await shot(page, "TASK-006-03-incident");
     await shot(page, "TASK-011-02-incident-group");
   });
 
@@ -156,7 +151,7 @@ test.describe("추천 이유", () => {
     await page.getByRole("button", { name: "경로 조회" }).click();
     const card = page.getByRole("region", { name: "추천 이유" });
     await expect(card.getByText("규칙 기반")).toBeVisible();
-    await expect(card).toContainText("가장 빠릅니다");
+    await expect(card).toContainText("실시간 교통을 반영한 카카오 추천 경로의 예상 소요시간은");
     await expect(card.getByText("AI 설명 확인 중…")).toHaveCount(0);
     await card.getByText("근거 보기").click();
     await expect(card).toContainText("경로 조회 시각");
@@ -249,8 +244,15 @@ test.describe("교통상황 재평가 (FR-009)", () => {
 });
 
 test.describe("경로 변경 안내 (FR-010)", () => {
-  test("느린 경로를 따라가면 안내, '변경'하면 지도 강조가 바뀐다", async ({ page }) => {
+  // 조회는 카카오 추천 1개뿐이라(TASK-011 경로방식 (a)) 느린 경로 하나를 응답에 덧붙여 비교 규칙을 확인한다.
+  test("느린 경로를 따라가면 안내, '변경'하면 지도 강조가 바뀐다 (응답 대체)", async ({ page }) => {
     await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
+    await page.route("**/api/routes/compare", async (route) => {
+      const body = await (await route.fetch()).json();
+      const base = body.routes[0];
+      const slow = { ...base, id: "via1100", label: "1100도로 경유", durationSeconds: base.durationSeconds + 900, geometry: [...base.geometry].reverse(), incidentIds: [] };
+      await route.fulfill({ json: { ...body, routes: [base, slow] } });
+    });
     await setup(page, "서귀포", "서귀포시청 제1청사");
     await page.getByRole("button", { name: "경로 조회" }).click();
     await page.getByRole("button", { name: /1100도로 경유/ }).click();
@@ -271,12 +273,12 @@ test.describe("경로 변경 안내 (FR-010)", () => {
 test("네트워크 단절: 갱신 실패를 알리고 조회한 경로는 유지 (EX-006, AC-011-08)", async ({ page, context }) => {
   await setup(page, "서귀포", "서귀포시청 제1청사");
   await page.getByRole("button", { name: "경로 조회" }).click();
-  const list = page.getByRole("list", { name: "경로 목록" });
-  await expect(list.getByRole("listitem")).toHaveCount(4);
+  const cards = page.getByRole("list", { name: "경로 목록" }).locator(":scope > li");
+  await expect(cards).toHaveCount(1);
   await context.setOffline(true);
   await page.getByRole("button", { name: "모니터링 시작" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "갱신 실패" })).toContainText("네트워크 연결을 확인한 뒤 다시 시도하세요.");
-  await expect(list.getByRole("listitem")).toHaveCount(4);
+  await expect(cards).toHaveCount(1);
   await shot(page, "TASK-011-01-offline");
   await page.getByRole("button", { name: "중지" }).click();
   await context.setOffline(false);

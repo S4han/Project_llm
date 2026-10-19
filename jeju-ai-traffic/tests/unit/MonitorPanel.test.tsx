@@ -48,10 +48,11 @@ describe("교통상황 재평가 화면 (FR-009)", () => {
     expect(screen.getByRole("button", { name: "중지" })).toBeTruthy();
   });
 
-  it("선택 경로가 가장 빠르면 그렇게 알리고, 같은 방식 경로가 없으면 비교 불가", async () => {
+  it("경로가 하나면 남은 예상시간만 보여 주고(비교 문구 없음), 같은 방식 경로가 없으면 비교 불가", async () => {
     renderPanel(async () => ({ ok: true, data: data([route("via1100", "1100도로 경유", 3000)], "via1100") }));
     fireEvent.click(screen.getByRole("button", { name: "모니터링 시작" }));
-    expect(await screen.findByText("현재 선택 경로가 가장 빠릅니다.")).toBeTruthy();
+    expect(await screen.findByText(/남은 예상/)).toBeTruthy();
+    expect(screen.queryByText("현재 선택 경로가 가장 빠릅니다.")).toBeNull();
     cleanup();
     renderPanel(async () => ({ ok: true, data: data([route("recommend", "카카오 추천", 3000)], "recommend") }), "via516");
     fireEvent.click(screen.getByRole("button", { name: "모니터링 시작" }));
@@ -87,7 +88,7 @@ describe("교통상황 재평가 화면 (FR-009)", () => {
   it("화면이 숨겨지면 멈춤 안내, 위치 권한이 없으면 시작하지 못한다", async () => {
     renderPanel(async () => ({ ok: true, data: data([route("via1100", "1100도로 경유", 3000)], "via1100") }));
     fireEvent.click(screen.getByRole("button", { name: "모니터링 시작" }));
-    await screen.findByText("현재 선택 경로가 가장 빠릅니다.");
+    await screen.findByText(/남은 예상/);
     const vis = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
     act(() => {
       document.dispatchEvent(new Event("visibilitychange"));

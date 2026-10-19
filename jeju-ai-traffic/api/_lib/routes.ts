@@ -85,7 +85,7 @@ function clientKey(request: Request): string {
  * 모두 실패하면: 429가 있으면 rate_limited, 장애가 있으면 unavailable, 모두 경로 없음이면 INVALID_INPUT.
  */
 async function fetchAll(deps: RoutesDeps, request: RouteCompareRequest) {
-  const queries = planRouteQueries(request.origin, request.destination);
+  const queries = planRouteQueries();
   const run = async () => {
     const settled = await Promise.allSettled(queries.map((q) => deps.provider.fetchRoute(request, q)));
     const routes: RouteOption[] = [];

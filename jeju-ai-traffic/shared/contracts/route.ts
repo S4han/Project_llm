@@ -6,7 +6,10 @@ export interface Coordinate {
   lng: number;
 }
 
-/** 경로를 얻은 호출 방식. 경로 ID와 이름의 기준이다. */
+/**
+ * 경로를 얻은 호출 방식. 경로 ID와 이름의 기준이다.
+ * 현재 조회는 recommend 1회뿐이다(TASK-011 경로방식 (a), `planRouteQueries`). 나머지 값은 비교·설명 규칙이 여러 경로를 다루는 형식으로 남겨 둔 것이다.
+ */
 export type RouteQueryKind = "recommend" | "distance" | "via1100" | "via516";
 
 /** 공급자 응답을 정규화한 경로 하나. 시간은 초 단위, 공급자 값을 변경하지 않는다. */

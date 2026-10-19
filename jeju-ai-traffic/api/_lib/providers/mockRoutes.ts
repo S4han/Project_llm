@@ -50,7 +50,7 @@ export function createMockRouteProvider(now: () => Date = () => new Date()): Rou
       const f = FACTORS[query.kind];
       const meters = Math.round(distanceMeters(request.origin, request.destination) * f.detour);
       const { geometry, segments } = mockGeometry(
-        [request.origin, ...(query.via ? [query.via] : []), request.destination],
+        [request.origin, request.destination],
         query.kind,
         meters,
       );

@@ -61,7 +61,7 @@ tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
   - 공급자: 기본은 모의 데이터(`provider: "mock"`, 화면에 '모의 데이터' 표시). `PLACES_PROVIDER=kakao`와 `KAKAO_REST_API_KEY`가 **둘 다** 있을 때만 카카오 로컬 키워드 검색을 호출한다(실호출은 별도 승인 후).
 
 - `POST /api/routes/compare` `{ origin: {lat,lng}, destination: {lat,lng} }` → `{ routes[], recommendedRouteId, tiedRouteIds, observedAt, stale }`.
-  - 호출 구성: 카카오 추천(RECOMMEND)·최단거리(DISTANCE) 2회. 한라산 횡단(한쪽 위도 ≥ 33.38, 다른 쪽 ≤ 33.33)이면 1100도로·516도로 경유 2회 추가.
+  - 호출 구성: 카카오 추천(RECOMMEND, 실시간 교통 반영) 1회. 최단거리·1100도로·516도로 경유 호출은 TASK-011 경로방식 (a)로 제거.
   - 거리 1% 이내 + 시간 2분 이내는 같은 경로로 합친다. 일부 호출이 실패하면 성공분만 준다.
   - 추천: 예상시간(초) 최솟값. 동률이면 거리가 짧은 경로, 거리도 같으면 호출 순서. 동률 경로는 `tiedRouteIds`.
   - 카카오가 경로를 못 찾으면 400 `INVALID_INPUT`(출발지·목적지 주변 도로 없음 안내). 결과는 저장·캐시하지 않는다. IP별 분당 10회.

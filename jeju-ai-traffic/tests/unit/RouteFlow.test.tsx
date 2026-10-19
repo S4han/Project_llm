@@ -90,13 +90,13 @@ describe("경로 조회 화면", () => {
     expect(within(cards[0]!).getByText("1시간 9분")).toBeTruthy();
     expect(cards[1]!.textContent).toContain("43.5km · 추천 경로보다 7분 느림");
     expect(cards[2]!.textContent).toContain("추천 경로보다 10분 느림");
-    expect(screen.queryByText(/대체 경로 없음/)).toBeNull();
+    expect(screen.queryByText(/다른 경로와는 비교하지 않습니다/)).toBeNull();
   });
 
-  it("경로가 하나면 '대체 경로 없음' (AC-003-03)", async () => {
+  it("경로가 하나면 카카오 추천(실시간 교통 반영)만 보여 준다고 안내 (AC-003-03, TASK-011 경로방식 (a))", async () => {
     compare = () => Response.json({ ...FOUR, routes: [FOUR.routes[0]] });
     await selectAndQuery();
-    expect(await screen.findByText("대체 경로 없음: 제공된 경로가 하나입니다.")).toBeTruthy();
+    expect(await screen.findByText("카카오 추천 경로(실시간 교통 반영)를 보여 줍니다. 다른 경로와는 비교하지 않습니다.")).toBeTruthy();
   });
 
   it("동률이면 안내와 '동률' 표시 (AC-004-04)", async () => {

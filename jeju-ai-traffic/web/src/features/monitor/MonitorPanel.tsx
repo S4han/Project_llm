@@ -175,7 +175,7 @@ export function MonitorPanel({ destination, selectedId, onFollowChange, deps }: 
               {formatDiff(fastest.durationSeconds - same.durationSeconds).replace("추천 경로보다 ", "").replace("추천 경로와 ", "")})
             </p>
           )}
-          {fastest && same && fastest.id === same.id && <p>현재 선택 경로가 가장 빠릅니다.</p>}
+          {fastest && same && fastest.id === same.id && data.routes.length > 1 && <p>현재 선택 경로가 가장 빠릅니다.</p>}
           {facts && <p className="text-xs text-slate-600">{buildRulesExplanation(facts, new Date()).text}</p>}
         </div>
       )}

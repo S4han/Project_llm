@@ -66,37 +66,17 @@ describe("createKakaoMobilityProvider (모의 fetch, 실제 호출 없음)", () 
     return { impl, calls };
   }
 
-  it("우선순위 호출은 GET /v1/directions, origin·destination은 '경도,위도'", async () => {
+  it("추천(RECOMMEND) 1회를 GET /v1/directions로, origin·destination은 '경도,위도'", async () => {
     const { impl, calls } = fakeFetch(200, DIRECTIONS_OK);
     const provider = createKakaoMobilityProvider("test-key", impl, () => new Date(AT));
     await provider.fetchRoute(REQUEST, RECOMMEND);
-    await provider.fetchRoute(REQUEST, { kind: "distance", label: "최단거리" });
     const first = new URL(calls[0]!.url);
     expect(first.origin + first.pathname).toBe("https://apis-navi.kakaomobility.com/v1/directions");
     expect(first.searchParams.get("origin")).toBe("126.4929,33.5066");
     expect(first.searchParams.get("destination")).toBe("126.5601,33.2541");
     expect(first.searchParams.get("priority")).toBe("RECOMMEND");
-    expect(new URL(calls[1]!.url).searchParams.get("priority")).toBe("DISTANCE");
+    expect(calls).toHaveLength(1);
     expect(new Headers(calls[0]!.init?.headers).get("authorization")).toBe("KakaoAK test-key");
-  });
-
-  it("경유지 호출은 POST /v1/waypoints/directions", async () => {
-    const { impl, calls } = fakeFetch(200, DIRECTIONS_OK);
-    const via = { lat: 33.3575, lng: 126.463 };
-    const result = await createKakaoMobilityProvider("test-key", impl).fetchRoute(REQUEST, {
-      kind: "via1100",
-      label: "1100도로 경유",
-      via,
-    });
-    expect(result.ok && result.route.id).toBe("via1100");
-    expect(calls[0]!.url).toBe("https://apis-navi.kakaomobility.com/v1/waypoints/directions");
-    expect(calls[0]!.init?.method).toBe("POST");
-    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({
-      origin: { x: 126.4929, y: 33.5066 },
-      destination: { x: 126.5601, y: 33.2541 },
-      waypoints: [{ x: 126.463, y: 33.3575 }],
-      priority: "RECOMMEND",
-    });
   });
 
   it("429는 rate_limited, 그 밖의 실패는 unavailable", async () => {

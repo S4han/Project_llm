@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RouteOption } from "../../shared/contracts/route";
 import {
-  crossesHallasan,
   dedupeRoutes,
   durationDiffSeconds,
   isSameRoute,
@@ -9,9 +8,6 @@ import {
   planRouteQueries,
 } from "../../shared/rules/route";
 
-const AIRPORT = { lat: 33.5066, lng: 126.4929 };
-const SEOGWIPO = { lat: 33.2541, lng: 126.5601 };
-const SEONGSAN = { lat: 33.4613, lng: 126.9367 };
 
 function route(id: string, durationSeconds: number, distanceMeters: number): RouteOption {
   return {
@@ -29,25 +25,8 @@ function route(id: string, durationSeconds: number, distanceMeters: number): Rou
 }
 
 describe("경로 구성", () => {
-  it("한라산 횡단: 한쪽 위도 ≥ 33.38, 다른 쪽 ≤ 33.33", () => {
-    expect(crossesHallasan(AIRPORT, SEOGWIPO)).toBe(true);
-    expect(crossesHallasan(SEOGWIPO, AIRPORT)).toBe(true);
-    expect(crossesHallasan(AIRPORT, SEONGSAN)).toBe(false);
-    expect(crossesHallasan({ lat: 33.38, lng: 126.5 }, { lat: 33.33, lng: 126.5 })).toBe(true);
-    expect(crossesHallasan({ lat: 33.379, lng: 126.5 }, { lat: 33.33, lng: 126.5 })).toBe(false);
-    expect(crossesHallasan({ lat: 33.38, lng: 126.5 }, { lat: 33.331, lng: 126.5 })).toBe(false);
-  });
-
-  it("횡단이면 4회(추천·최단거리·1100·516), 아니면 2회", () => {
-    expect(planRouteQueries(AIRPORT, SEOGWIPO).map((q) => q.kind)).toEqual(["recommend", "distance", "via1100", "via516"]);
-    expect(planRouteQueries(AIRPORT, SEONGSAN).map((q) => [q.kind, q.label, q.via])).toEqual([
-      ["recommend", "카카오 추천", undefined],
-      ["distance", "최단거리", undefined],
-    ]);
-    const [, , via1100, via516] = planRouteQueries(AIRPORT, SEOGWIPO);
-    expect(via1100?.label).toBe("1100도로 경유");
-    expect(via516?.label).toBe("516도로 경유");
-    expect(via1100?.via).toBeDefined();
+  it("카카오 추천 1회만 호출한다(TASK-011 경로방식 (a), 경유 호출 없음)", () => {
+    expect(planRouteQueries()).toEqual([{ kind: "recommend", label: "카카오 추천" }]);
   });
 });
 

@@ -49,7 +49,7 @@ describe("규칙 기반 설명", () => {
 
   it("서행·정체가 없고 미확보 30% 이하면 원활 비율, 미확보가 많으면 원활을 말하지 않는다", () => {
     const smooth = { ...FACTS, routes: [route("recommend", "카카오 추천", 3000, 40000, shares(95, 0, 0, 5))] };
-    expect(buildRulesExplanation(smooth, NOW).text).toBe("카카오 추천 경로가 예상 50분으로 가장 빠릅니다. 비교할 대체 경로가 없습니다. 이 경로는 원활 구간이 95%입니다.");
+    expect(buildRulesExplanation(smooth, NOW).text).toBe("실시간 교통을 반영한 카카오 추천 경로의 예상 소요시간은 50분입니다. 이 경로는 원활 구간이 95%입니다.");
     const unknown = { ...FACTS, routes: [route("recommend", "카카오 추천", 3000, 40000, shares(60, 0, 0, 40))] };
     const text = buildRulesExplanation(unknown, NOW).text;
     expect(text).toContain("교통 정보가 확인되지 않은 구간이 40%입니다.");

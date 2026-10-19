@@ -82,11 +82,13 @@ export function buildRulesExplanation(facts: ExplanationFacts, now: Date): Expla
     parts.push(
       `${rec.label} 경로와 ${tiedOthers.map((r) => r.label).join("·")} 경로의 예상시간이 ${minutes(rec.durationSeconds)}분으로 같아, 거리가 짧은 ${rec.label} 경로를 추천합니다.`,
     );
+  } else if (others.length === 0) {
+    // 카카오 추천 1개만 조회한다(TASK-011 경로방식 (a)).
+    parts.push(`실시간 교통을 반영한 ${rec.label} 경로의 예상 소요시간은 ${minutes(rec.durationSeconds)}분입니다.`);
   } else {
     parts.push(`${rec.label} 경로가 예상 ${minutes(rec.durationSeconds)}분으로 가장 빠릅니다.`);
     const next = others[0];
-    if (!next) parts.push("비교할 대체 경로가 없습니다.");
-    else {
+    if (next) {
       const diff = minutes(next.durationSeconds - rec.durationSeconds);
       parts.push(diff >= 1 ? `다음으로 빠른 ${next.label} 경로보다 약 ${diff}분 빠릅니다.` : `${next.label} 경로와의 차이는 1분 미만입니다.`);
     }

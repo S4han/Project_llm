@@ -1,4 +1,4 @@
-import type { Coordinate, RouteOption, RouteQueryKind } from "../contracts/route.js";
+import type { RouteOption, RouteQueryKind } from "../contracts/route.js";
 
 /** 공급자가 경로를 찾지 못한 이유. 카카오 result_code 102(출발지)·103(도착지) 기준, 그 외는 notFound. */
 export type NoRouteReason = "originUnreachable" | "destinationUnreachable" | "notFound";
@@ -8,35 +8,14 @@ export type RouteResult = { ok: true; route: RouteOption } | { ok: false; reason
 export interface RouteQuery {
   kind: RouteQueryKind;
   label: string;
-  /** 경유지가 있으면 경유지 길찾기로 호출한다. */
-  via?: Coordinate;
 }
 
-/** 경유지: 1100고지, 성판악(516도로). 공공 장소 근사 좌표. */
-export const VIA_1100: Coordinate = { lat: 33.3575, lng: 126.463 };
-export const VIA_516: Coordinate = { lat: 33.385, lng: 126.6196 };
-
-/** 한라산 횡단 판정: 한쪽이 북쪽(위도 ≥ 33.38), 다른 쪽이 남쪽(≤ 33.33). DECISIONS 2026-10-19 TASK-005 "2. 승인". */
-export const NORTH_MIN_LAT = 33.38;
-export const SOUTH_MAX_LAT = 33.33;
-
-export function crossesHallasan(a: Coordinate, b: Coordinate): boolean {
-  const north = (c: Coordinate) => c.lat >= NORTH_MIN_LAT;
-  const south = (c: Coordinate) => c.lat <= SOUTH_MAX_LAT;
-  return (north(a) && south(b)) || (south(a) && north(b));
-}
-
-/** 조회에 쓸 호출 목록. 순서가 동률 처리의 마지막 기준이다. */
-export function planRouteQueries(origin: Coordinate, destination: Coordinate): RouteQuery[] {
-  const queries: RouteQuery[] = [
-    { kind: "recommend", label: "카카오 추천" },
-    { kind: "distance", label: "최단거리" },
-  ];
-  if (crossesHallasan(origin, destination)) {
-    queries.push({ kind: "via1100", label: "1100도로 경유", via: VIA_1100 });
-    queries.push({ kind: "via516", label: "516도로 경유", via: VIA_516 });
-  }
-  return queries;
+/**
+ * 조회에 쓸 호출 목록: 카카오 추천(실시간 교통 반영) 1회.
+ * DECISIONS 2026-10-19 TASK-011 "경로방식 (a)" — 최단거리·1100도로·516도로 경유 호출은 하지 않는다.
+ */
+export function planRouteQueries(): RouteQuery[] {
+  return [{ kind: "recommend", label: "카카오 추천" }];
 }
 
 /** 같은 경로 판정: 거리 차이 1% 이내이면서 시간 차이 120초 이내. */

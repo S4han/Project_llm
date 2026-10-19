@@ -10,7 +10,7 @@
 | 현재 TASK | **TASK-011** — 품질/출시 |
 | 상태 | **진행 중** |
 | 실행 주체 | Claude (사용자 지정, 2026-10-18) |
-| 승인 범위 | AC 추적표(`docs/ACCEPTANCE.md`), 운영 문서(`docs/OPERATIONS.md`), 오프라인 e2e·키 노출 검사·npm audit, 고지 문구(개인정보·출처·운전 안전), 성능 측정(Production API 5회), 정지차량 묶음 표시, 사용자 실기기·청구 차단 확인, 롤백 절차 문서화, 출시/보류 결정 (`DECISIONS.md` 2026-10-19) |
+| 승인 범위 | AC 추적표(`docs/ACCEPTANCE.md`), 운영 문서(`docs/OPERATIONS.md`), 오프라인 e2e·키 노출 검사·npm audit, 고지 문구(개인정보·출처·운전 안전), 성능 측정(Production API 5회), 정지차량 묶음 표시, 경로 조회를 카카오 추천 1회로 변경(경로방식 (a)), 사용자 실기기·청구 차단 확인, 롤백 절차 문서화, 출시/보류 결정 (`DECISIONS.md` 2026-10-19) |
 | 차단 요인 | 없음 |
 | 결과 보고서 | — (TASK-010: `reports/TASK-010-RESULT.md`, 완료) |
 | 다음 행동 | 점검·문서 작성 → 사용자 실기기·청구 차단 확인 → `reports/TASK-011-RESULT.md` → 출시/보류 결정 |

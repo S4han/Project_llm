@@ -11,7 +11,7 @@
 - 프론트엔드: React + TypeScript + Vite + Tailwind CSS. 모바일 우선, 위치 권한·활성 탭·접근성 상태 관리.
 - 서버리스 API: **Vercel Functions (TypeScript), 실행 리전 `icn1`(서울) 고정.** 제주 ITS는 국외 IP를 차단하므로 국내 리전에서 호출해야 한다(BLK-06). 외부 키 보호, 서버 측 사용량 제한, 공급자 응답 정규화, 실패 처리.
 - 배포: **Vercel Hobby 단일 프로젝트**(웹 정적 + Functions). Cloudflare Workers는 제외. 프로젝트 `jeju-its-probe`(팀 `splendid3`)를 Root Directory `jeju-ai-traffic`으로 재사용. 실제 배포는 별도 승인.
-- 경로: **카카오모빌리티 길찾기 REST**(비상업, 일 10,000건 무료, 소진 시 429 차단). 복수 경로는 우선순위 2종(RECOMMEND·DISTANCE) + 주요 도로(평화로·1100도로·516도로) 경유지 지정 다회 호출로 구성(`alternatives`는 1개만 반환). Google Routes 제외(한국 자동차 경로 미제공).
+- 경로: **카카오모빌리티 길찾기 REST**(비상업, 일 10,000건 무료, 소진 시 429 차단). 복수 경로는 우선순위 2종(RECOMMEND·DISTANCE) + 주요 도로(평화로·1100도로·516도로) 경유지 지정 다회 호출로 구성(`alternatives`는 1개만 반환). **TASK-011 경로방식 (a)(2026-10-19)로 카카오 추천 1회만 호출하도록 변경** — 최단거리·경유 호출 제거. Google Routes 제외(한국 자동차 경로 미제공).
 - 장소 검색: **카카오 로컬 키워드 검색**(서버 경유, TASK-004 승인). 내부 일일 한도 3,000건, IP별 분당 20회. 실호출 전 카카오 앱의 카카오맵 무료 쿼터(계정당 첫 활성화 앱) 확인 필요.
 - 지도: **Leaflet + OpenStreetMap 타일**(TASK-006 승인). 키·비용 없음, 출처 표시. 선택 경로는 구간 혼잡 색, 대체 경로는 회색. 지도 실패 시 텍스트 목록 유지.
 - 교통: 구간 혼잡도는 카카오 응답 `traffic_state`(블록 평균; 4 원활, 2·3 서행, 1·6 정체, 0 미확보). **제주 ITS 오픈API**(`http://api.jejuits.go.kr/api/<기능>?code=`)의 돌발·통제·공사를 경로 좌표선 **200m 이내** 매칭으로 표시(TASK-006 구현). 교통기상·VMS는 미포함. 항목 필드: `ocrr_id`, `latitude`, `longitude`, `link_id`, 돌발 `code`, 공사 `text`. **시각 필드 없음** → 조회 시각 표시. 미제공 구간은 `unknown`. 경로·혼잡은 조회 10분 경과 시 '오래된 정보'.

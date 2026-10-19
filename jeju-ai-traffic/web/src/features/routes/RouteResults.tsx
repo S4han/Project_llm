@@ -164,7 +164,7 @@ function Results({ data, destination, onRetry }: { data: RouteCompareResponse; d
         혼잡도는 카카오모빌리티 구간 평균값입니다. {incidentsNote(incidentsStatus, incidentsObservedAt, incidents.length)}
       </p>
       {routes.length === 1 && (
-        <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">대체 경로 없음: 제공된 경로가 하나입니다.</p>
+        <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">카카오 추천 경로(실시간 교통 반영)를 보여 줍니다. 다른 경로와는 비교하지 않습니다.</p>
       )}
       {tiedRouteIds.length > 0 && (
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
