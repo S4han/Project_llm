@@ -80,3 +80,4 @@
 | 2026-10-19 | TASK-006 | 기타 | (실행 종료) | `진행 중` → `결과 검토` | `reports/TASK-006-RESULT.md` 작성. lint·typecheck·test(138/138)·build·Playwright(15/15) 통과. **확인된 사실:** Vercel이 푸시마다 자동 배포(main → Production) — 이전 TASK의 main 반영도 Production 배포였음(모의 데이터, 외부 호출 없음). 사용자 승인이 아닌 AGENTS.md 규칙 5에 따른 전환. 완료 승인 대기 |
 | 2026-10-19 | TASK-006 | 완료 승인 | "완료 승인: TASK-006" | TASK-006 `결과 검토` → `완료`, TASK-007 `미착수` → `대기` | TASK-007 자동 시작 안 함 |
 | 2026-10-19 | — | 기타 | "자동배포 : (a)" | — | **Vercel 자동 배포 유지:** 작업 브랜치 푸시 → Preview, main 반영 → Production(공개) 자동 배포. 이후 "main에 합쳐줘"는 Production 배포를 뜻함. 실제 공급자(카카오·제주 ITS) 활성화 환경 변수 설정은 별도 결정 |
+| 2026-10-19 | — | 기타 | "main에 합쳐줘" | — | 작업 브랜치 `claude/adoring-sagan-harjwg`를 main에 fast-forward로 반영(TASK-006 지도·교통·완료 승인 포함). 자동 배포 결정 (a)에 따라 Production 배포됨(모의 데이터, 임시 확인 함수 없음) |
