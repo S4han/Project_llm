@@ -147,3 +147,22 @@ BLK-01~05 (`docs/TECH_VALIDATION.md` §8).
 - 정리: 저장소 최상위의 확인용 파일 3개(`api/probe.js`, `vercel.json`, `package.json`)는 시험 후 삭제했다. Vercel 프로젝트 `jeju-its-probe`는 남아 있으며 삭제는 사용자가 대시보드에서 수행해야 한다(커넥터 권한 없음).
 - 영향: 호스팅 잠정안을 Cloudflare Workers 단독에서 **Vercel `icn1` 함수(최소한 제주 ITS 프록시 용도)** 로 바꾸는 검토가 필요하다. IMPLEMENTATION_PLAN 변경이므로 사용자 승인 후 반영한다.
 - 다음 확인(별도 승인 필요): 제주 ITS 오픈API 호출 URL 확인 → `JEJU_ITS_API_KEY`를 Vercel 프로젝트 환경 변수에 사용자가 등록 → `icn1` 함수에서 평화로·1100도로·516도로 링크 소통정보 표본 호출(20건 이내) → 카카오 경로 좌표와 매칭 가능성 확인(BLK-04).
+
+### 10.8 제주 ITS 오픈API 확인 (2026-10-19)
+- 근거: 사용자 "ITS 실호출 승인" (2026-10-19). 한도 20건 중 **5건 사용**(Vercel `icn1` 함수, 사용자가 1회 열람).
+- 1단계(키 미사용) — 안내 페이지에서 확인한 호출 형식: `http://api.jejuits.go.kr/api/<기능>?code=<인증키>`, 응답 JSON `{result, info_cnt, info[]}`.
+  - 제공 기능: `infoVvmsList`(VMS, 교차로별 소통 색 1:녹·2:노·3:빨), `infoRoadEventList`(돌발: 정지차량·낙하물·역주행·서행·미끄러운 도로·보행자·합류·**지정체구간(258)**), `infoRoadCloseList`(통제), `infoRoadWorkList`(공사), `infoRwisList`(교통기상), 주차장·EV·주유소·신호·관광·빅데이터·통계 등.
+  - **목록에 도로 구간(링크)별 실시간 속도·소통 API는 없다.** 항목마다 `latitude`·`longitude`·`link_id`(표준노드링크)가 있어 좌표 근접 매칭은 가능한 구조.
+  - Vercel Preview 환경에 `JEJU_ITS_API_KEY` 주입 확인(`keyPresent: true`).
+- 2단계(키 사용) — 5종 각 1회:
+
+| API | HTTP | result | 건수 |
+|---|---|---|---|
+| infoRoadEventList | 200 | `code not registered` | 0 |
+| infoRoadCloseList | 200 | `code not registered` | 0 |
+| infoRoadWorkList | 200 | `code not registered` | 0 |
+| infoVvmsList | 200 | `code not registered` | 0 |
+| infoRwisList | 200 | `code not registered` | 0 |
+
+- 판정: **API 서버 접근은 성공(국내 IP 경유, 200 + JSON)**, 그러나 **등록된 인증키로 인식되지 않음.** 가능한 원인: ① 등록한 키가 jejuits.go.kr 발급 키가 아님(예: 공공데이터포털 키) ② jejuits.go.kr 오픈API 신청이 아직 승인 전 ③ 붙여넣을 때 공백·줄바꿈 포함. → 사용자 확인 필요. 원인 확인 전 추가 호출하지 않음.
+- 남은 한도: 15건. 확인 함수는 재시험을 위해 브랜치에 유지(시험 종료 후 삭제).
