@@ -110,3 +110,18 @@ BLK-01~05 (`docs/TECH_VALIDATION.md` §8).
 1. BLK-06 해소 경로 결정 — (a) 국내 IP 경유 방안(국내 호스팅·프록시) 조사, (b) 기관에 해외 IP 허용 문의, (c) MVP에서 제주 ITS 제외하고 카카오 자체 혼잡도만 사용(AC-005-03 '정보 미확보' 표시)
 2. 쿼터 예산 재산정(추천 1건당 다회 호출)
 3. 카카오 남은 호출 여유: 14건
+
+### 10.5 BLK-06 처리 (a) 국내 IP 경유 방안 조사 (2026-10-19, 문서 조사만)
+- 근거: 사용자 "(a)" (2026-10-19). 계정 생성·배포·결제 등록은 하지 않았다.
+
+| 후보 | 국내 IP로 나가는가 | 0원·결제수단 조건 | 판정 |
+|---|---|---|---|
+| **Vercel Functions, 리전 `icn1`(서울)** | 함수 실행 리전을 지정 가능. 공식 문서: "Hobby plans support any single region" [공식-발췌] → 서울 리전 AWS IP로 나갈 것으로 예상 [미검증] | Hobby는 결제수단 없이 사용 가능, 개인·비상업 용도 한정 [2차·재확인 필요] — 본 서비스는 비상업(DEC 2026-10-18)이라 조건 부합 | **1순위.** 사용자 계정에 Vercel 팀(`splendid3`)이 이미 연결되어 있음. 플랜 종류는 API로 확인되지 않음 |
+| Cloudflare Workers (기존 잠정 구성) | 아웃바운드 IP·국가를 지정하는 방법이 문서로 확인되지 않음 [미확인] | 0원 하드 캡 | 제주 ITS 호출용으로는 **부적합 가능성**. 카카오 호출에는 문제 없음 |
+| Oracle Cloud Always Free (서울·춘천) | 국내 리전 VM | **카드 등록 필수** [2차] | 승인 조건(결제수단 연결 금지) 위반 → **제외** |
+| AWS·GCP·NCP 무료 티어 | 국내 리전 있음(GCP 무료는 미국 리전만) | 카드 등록 필수 | **제외** |
+
+- 핵심 미확인점: 제주 ITS 방화벽이 **국내 클라우드(AWS 서울) IP까지 막는지**는 실제로 호출해 봐야 안다. 일부 공공기관 방화벽은 국외 IP뿐 아니라 클라우드 대역도 차단한다.
+- 검증 방법(제안): Vercel Hobby에 **키 없이 jejuits.go.kr 홈페이지 응답 코드만 확인하는 최소 함수 1개**를 `icn1`로 배포 → 1~2회 호출 → 결과 확인 후 삭제. 이는 **실제 배포**이므로 AGENTS.md 규칙 3에 따라 별도 명시 승인이 필요하다.
+- 영향: Vercel이 통과하면 호스팅 구성안을 "Cloudflare Workers 단독"에서 "Vercel `icn1` 함수(제주 ITS 프록시) 또는 Vercel 단독"으로 바꾸는 것을 검토해야 한다. IMPLEMENTATION_PLAN 변경이므로 사용자 승인 후 반영한다.
+- 출처: https://vercel.com/docs/project-configuration/vercel-ts , https://vercel.com/docs/functions/configuring-functions/region , https://vercel.com/docs/pricing/regional-pricing/icn1 , Oracle 무료 티어 카드 요구(2차): https://zenn.dev/seanmamasde/articles/3a6597a1562b1f
