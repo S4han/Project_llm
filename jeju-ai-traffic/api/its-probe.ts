@@ -1,6 +1,7 @@
 // TASK-006 일회성 확인용(승인: ITS 실호출 10건 이내). 확인 후 삭제한다.
 // 열 때마다 돌발·통제·공사를 1회씩(3건) 호출하고, 필드 이름과 정규화 결과 요약만 돌려준다.
 // 인스턴스당 3회까지만 호출한다(최대 9건). 키 값은 응답에 넣지 않는다.
+// 사용: 미리보기 주소 + /api/its-probe 를 한 번만 연다(Vercel icn1, 국내 IP).
 import { normalizeItsResponse, ITS_ENDPOINTS } from "./_lib/providers/jejuIts.js";
 import type { IncidentKind } from "../shared/contracts/traffic.js";
 
