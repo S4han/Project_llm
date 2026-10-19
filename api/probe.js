@@ -72,5 +72,7 @@ export default async function handler(req, res) {
   if (!KEY) return res.status(200).json({ keyPresent: false });
   const results = [];
   for (const name of ENDPOINTS) results.push(await call(name));
-  res.status(200).json(JSON.parse(redact(JSON.stringify({ keyPresent: true, calls: ENDPOINTS.length, bufferM: BUFFER_M, results }))));
+  // keyLen: 붙여넣기 공백·줄바꿈 여부 확인용(값은 노출하지 않음)
+  const keyInfo = { keyLen: KEY.length, keyHasSpace: /\s/.test(KEY) };
+  res.status(200).json(JSON.parse(redact(JSON.stringify({ keyPresent: true, ...keyInfo, calls: ENDPOINTS.length, bufferM: BUFFER_M, deployedAt: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || null, results }))));
 }
