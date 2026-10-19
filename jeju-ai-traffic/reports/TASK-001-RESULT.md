@@ -125,3 +125,8 @@ BLK-01~05 (`docs/TECH_VALIDATION.md` §8).
 - 검증 방법(제안): Vercel Hobby에 **키 없이 jejuits.go.kr 홈페이지 응답 코드만 확인하는 최소 함수 1개**를 `icn1`로 배포 → 1~2회 호출 → 결과 확인 후 삭제. 이는 **실제 배포**이므로 AGENTS.md 규칙 3에 따라 별도 명시 승인이 필요하다.
 - 영향: Vercel이 통과하면 호스팅 구성안을 "Cloudflare Workers 단독"에서 "Vercel `icn1` 함수(제주 ITS 프록시) 또는 Vercel 단독"으로 바꾸는 것을 검토해야 한다. IMPLEMENTATION_PLAN 변경이므로 사용자 승인 후 반영한다.
 - 출처: https://vercel.com/docs/project-configuration/vercel-ts , https://vercel.com/docs/functions/configuring-functions/region , https://vercel.com/docs/pricing/regional-pricing/icn1 , Oracle 무료 티어 카드 요구(2차): https://zenn.dev/seanmamasde/articles/3a6597a1562b1f
+
+### 10.6 Vercel `icn1` 시험 배포 시도 (2026-10-19)
+- 근거: 사용자 "Vercel 시험 배포 승인" (2026-10-19)
+- 결과: **실패 — 배포 전 단계에서 거부.** Vercel 커넥터로 새 프로젝트(`jeju-its-probe`)를 만드는 요청이 `403 forbidden: You don't have permission to create a project`로 거부됨. 프로젝트·배포·과금 발생 없음. 작업 환경에 Vercel CLI·토큰도 없음.
+- 해소 방법(사용자 수행): Vercel 대시보드에서 빈 프로젝트 `jeju-its-probe`를 직접 만들면, Claude가 그 프로젝트에 확인 함수를 배포한다(기존 프로젝트에는 배포하지 않음). 또는 커넥터 권한 범위를 확인한다.
