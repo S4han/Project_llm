@@ -84,5 +84,6 @@ tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
 ## 배포 (확인된 사실, 2026-10-19)
 - Vercel 프로젝트 `jeju-its-probe`(팀 splendid3, Hobby)가 GitHub `S4han/Project_llm`과 연결되어 있고 Root Directory는 `jeju-ai-traffic`이다.
 - **푸시하면 자동 배포된다:** 작업 브랜치 → Preview, `main` → Production. Production 주소는 공개된다.
+- **Production은 실제 공급자를 쓴다**(2026-10-19 "Production 실호출 승인"): Vercel Production 환경 변수 `ROUTES_PROVIDER=kakao`, `PLACES_PROVIDER=kakao`, `TRAFFIC_PROVIDER=jejuIts`와 키. Preview는 `JEJU_ITS_API_KEY`만 있어 모의 데이터로 동작한다.
 - 지도 타일(OpenStreetMap)은 브라우저가 직접 받는다. 출처 표시가 필요하며, 사용자의 IP와 보는 지역이 OSM 서버에 전달된다.
 

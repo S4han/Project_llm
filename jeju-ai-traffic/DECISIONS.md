@@ -81,3 +81,5 @@
 | 2026-10-19 | TASK-006 | 완료 승인 | "완료 승인: TASK-006" | TASK-006 `결과 검토` → `완료`, TASK-007 `미착수` → `대기` | TASK-007 자동 시작 안 함 |
 | 2026-10-19 | — | 기타 | "자동배포 : (a)" | — | **Vercel 자동 배포 유지:** 작업 브랜치 푸시 → Preview, main 반영 → Production(공개) 자동 배포. 이후 "main에 합쳐줘"는 Production 배포를 뜻함. 실제 공급자(카카오·제주 ITS) 활성화 환경 변수 설정은 별도 결정 |
 | 2026-10-19 | — | 기타 | "main에 합쳐줘" | — | 작업 브랜치 `claude/adoring-sagan-harjwg`를 main에 fast-forward로 반영(TASK-006 지도·교통·완료 승인 포함). 자동 배포 결정 (a)에 따라 Production 배포됨(모의 데이터, 임시 확인 함수 없음) |
+| 2026-10-19 | — | 기타 | (사용자 수행) Vercel Production 환경 변수 추가·재배포 | — | `ROUTES_PROVIDER=kakao`, `PLACES_PROVIDER=kakao`, `TRAFFIC_PROVIDER=jejuIts`, `KAKAO_REST_API_KEY`(Sensitive)를 Production에 추가, `JEJU_ITS_API_KEY`는 Production·Preview. Production 재배포 후 확인: 카카오 경로 3개(추천 54분 등, 최단거리는 추천과 합쳐짐), 구간 혼잡 실값, 제주 ITS 돌발 5건 연결. 표시 문제 발견: 미확인 코드가 "돌발 돌발 상황(코드 1286)"으로 중복 표기 |
+| 2026-10-19 | — | 실호출 승인 | "Production 실호출 승인" | — | **공개 Production에서 실제 공급자 사용 승인:** 카카오모빌리티 경로, 카카오 로컬 장소 검색, 제주 ITS. 결제수단·비즈월렛 미연결(0원, 공급자 한도 초과 시 429 차단). 앱 내부 일일 한도 경로 8,000·장소 3,000·ITS 2,000건, IP별 분당 10~20회. 카카오맵(로컬) 무료 쿼터 부여 여부는 사용자 확인 대상(미보고) |
