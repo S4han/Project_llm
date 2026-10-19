@@ -3,7 +3,7 @@
 - 보고일: 2026-10-19 / 실행 주체: Claude
 - 승인 근거: 사용자 "계획 승인: TASK-007 1. (a) 2. 승인 3. 승인 4. 승인" (2026-10-19). `DECISIONS.md` 참조
 - 수행 범위: 규칙 설명 보강, `POST /api/explanations`, Cloudflare Workers AI 어댑터, AI 검증기, '추천 이유' 화면, ITS 미확인 코드 표기 수정, **Workers AI 실호출 4건(승인 20건 이내, Vercel Preview)**
-- 상태: **결과 검토** (사용자 `완료 승인: TASK-007` 대기)
+- 상태: **완료** (사용자 "완료 승인: TASK-007 Production AI 실호출 승인", 2026-10-19). §7은 (b) Production AI 실호출 승인으로 결정
 
 ## 1. 변경 파일
 | 파일 | 변경 |

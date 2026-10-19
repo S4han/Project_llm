@@ -89,7 +89,7 @@ tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
 ## 배포 (확인된 사실, 2026-10-19)
 - Vercel 프로젝트 `jeju-its-probe`(팀 splendid3, Hobby)가 GitHub `S4han/Project_llm`과 연결되어 있고 Root Directory는 `jeju-ai-traffic`이다.
 - **푸시하면 자동 배포된다:** 작업 브랜치 → Preview, `main` → Production. Production 주소는 공개된다.
-- **Production은 실제 공급자를 쓴다**(2026-10-19 "Production 실호출 승인"): Vercel 환경 변수 `ROUTES_PROVIDER=kakao`, `PLACES_PROVIDER=kakao`, `TRAFFIC_PROVIDER=jejuIts`와 키. 2026-10-19 기준 이 변수들과 AI 변수(`AI_PROVIDER` 등)는 Production·Preview 모두에 설정되어 있다. **AI 변수가 Production에도 있으므로 AI 설명 코드가 main에 반영되면 공개 사이트에서 AI가 켜진다**(Production AI 활성화는 별도 승인 대상).
+- **Production은 실제 공급자를 쓴다**(2026-10-19 "Production 실호출 승인"): Vercel 환경 변수 `ROUTES_PROVIDER=kakao`, `PLACES_PROVIDER=kakao`, `TRAFFIC_PROVIDER=jejuIts`와 키. 2026-10-19 기준 이 변수들과 AI 변수(`AI_PROVIDER` 등)는 Production·Preview 모두에 설정되어 있다. AI 변수가 Production에도 있어 main 반영 시 공개 사이트에서 검증을 통과한 AI 설명을 쓴다(2026-10-19 "Production AI 실호출 승인").
 - 환경 변수는 **새로 빌드한 배포에만** 적용된다. 변수를 바꾼 뒤에는 새 커밋 푸시 또는 Redeploy가 필요하다.
 - 지도 타일(OpenStreetMap)은 브라우저가 직접 받는다. 출처 표시가 필요하며, 사용자의 IP와 보는 지역이 OSM 서버에 전달된다.
 

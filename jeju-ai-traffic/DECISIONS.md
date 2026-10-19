@@ -92,3 +92,5 @@
 | 2026-10-19 | TASK-007 | 기타 | (사용자 수행) Cloudflare 계정·Workers AI 토큰 생성, Vercel 환경 변수 추가 | — | `AI_PROVIDER`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_TOKEN`을 **Production과 Preview**에 추가(승인 범위는 Preview). 카카오·ITS 변수도 Production·Preview로 확인. 처음 두 번은 변수 추가 전 빌드된 배포라 미적용 → 진단 코드 푸시(`2a84260`) 후 정상 |
 | 2026-10-19 | TASK-007 | 기타 | (AI 실호출 결과 전달) | — | Workers AI 4건/20건, 모델 llama-3.3-70b-instruct-fp8-fast, 3건 검증 통과·1건 거부(미확보 45%에서 원활 단정), 평균 약 14.3 Neurons/건, 1.0~1.5초. 임시 함수 삭제 |
 | 2026-10-19 | TASK-007 | 기타 | (실행 종료) | `진행 중` → `결과 검토` | `reports/TASK-007-RESULT.md` 작성. lint·typecheck·test(160/160)·build·Playwright(17/17) 통과. main 반영 전 Production AI 결정 필요. 사용자 승인이 아닌 AGENTS.md 규칙 5에 따른 전환. 완료 승인 대기 |
+| 2026-10-19 | TASK-007 | 완료 승인 | "완료 승인: TASK-007" | TASK-007 `결과 검토` → `완료`, TASK-008 `미착수` → `대기` | TASK-008 자동 시작 안 함 |
+| 2026-10-19 | — | 실호출 승인 | "Production AI 실호출 승인" | — | **공개 Production에서 Cloudflare Workers AI 설명 사용 승인.** 조건: 검증 정책 통과 문장만 표시(실패 시 규칙 설명), 내부 일일 200건, IP별 분당 10회, 결제수단 미등록(무료 일 10,000 Neurons 초과 시 오류). main 반영 시 적용 |
