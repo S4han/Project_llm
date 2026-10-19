@@ -48,3 +48,4 @@
 | 2026-10-19 | TASK-003 | 기타 | "3. 승인" | — | 오류↔HTTP: `INVALID_INPUT` 400, `LOCATION_UNAVAILABLE` 422, `QUOTA_BLOCKED` 429(`retryAfter` 다음 0시), `PROVIDER_UNAVAILABLE` 503, `STALE_DATA` 200+`stale: true` |
 | 2026-10-19 | TASK-003 | 기타 | "4. 승인" | — | 제외: 카카오 응답 정규화(TASK-005), ITS 정규화(TASK-006), 사용자별 요청 빈도 제한(TASK-004), 실호출·배포 |
 | 2026-10-19 | TASK-003 | 기타 | (실행 종료) | `진행 중` → `결과 검토` | `reports/TASK-003-RESULT.md` 작성. lint·typecheck·test(38/38)·build 통과. 사용자 승인이 아닌 AGENTS.md 규칙 5에 따른 전환. 외부 호출·배포 없음. 완료 승인 대기 |
+| 2026-10-19 | TASK-003 | 완료 승인 | "완료 승인: TASK-003" | TASK-003 `결과 검토` → `완료`, TASK-004 `미착수` → `대기` | 공유 카운터 저장소·배포·실호출은 이 승인에 포함되지 않음. TASK-004 자동 시작 안 함 |
