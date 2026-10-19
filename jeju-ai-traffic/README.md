@@ -1,6 +1,6 @@
 # 제주 AI 교통 경로 추천 웹서비스
 
-- 상태: **TASK-009 교통상황 재평가** (2026-10-19). 공급자 환경 변수가 없으면 장소·경로·교통 사건은 모의 데이터, 설명은 규칙 기반만 쓴다.
+- 상태: **TASK-010 경로 변경 안내** (2026-10-19). MVP 기능(FR-001~011) 구현 완료, 품질/출시 점검은 TASK-011. 공급자 환경 변수가 없으면 장소·경로·교통 사건은 모의 데이터, 설명은 규칙 기반만 쓴다.
 - 요구사항: `PRD.md` (구글 드라이브 확정 PRD v1.0의 동일 사본)
 - Codex 시작: `START_HERE.md`
 - 설계: `IMPLEMENTATION_PLAN.md`
@@ -34,7 +34,7 @@ api/_lib/       함수 공용 코드 (밑줄 폴더는 Vercel이 엔드포인트
   policies/       사용량 한도(quota), 외부 호출 관문(guardedCall), KST 날짜, 짧은 캐시, IP별 빈도 제한(rateLimit)
   providers/      공급자 인터페이스(types), 모의 공급자(mock, mockPlaces, mockRoutes, mockTraffic), 카카오 로컬·모빌리티·제주 ITS·Cloudflare Workers AI 어댑터(kakaoLocal, kakaoMobility, jejuIts, cloudflareAi)
   explanations/   설명 처리(explain: AI 시도→검증→규칙 대체, handler: POST /api/explanations)
-shared/         웹·API 공용 (contracts/: common, route, traffic, explanation, place, health / rules/geo: 제주 범위·좌표 검사, rules/route: 경로 구성·중복·최단·동률, rules/traffic: 혼잡 코드·비율, 사건 매칭(200m), 최신성(10분), rules/explanation: 설명 사실·규칙 설명, rules/explanationCheck: AI 문장 검증, rules/navLinks: 외부 내비 링크)
+shared/         웹·API 공용 (contracts/: common, route, traffic, explanation, place, health / rules/geo: 제주 범위·좌표 검사, rules/route: 경로 구성·중복·최단·동률, rules/traffic: 혼잡 코드·비율, 사건 매칭(200m), 최신성(10분), rules/explanation: 설명 사실·규칙 설명, rules/explanationCheck: AI 문장 검증, rules/navLinks: 외부 내비 링크, rules/changeAdvice: 경로 변경 안내 판정·중복 억제)
 tests/unit/     Vitest 단위·계약·화면 테스트
 tests/e2e/      Playwright 브라우저 흐름 테스트(모바일 390×844)
 tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
@@ -78,6 +78,11 @@ tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
 - 활성 조건: 모니터링 켬 + 화면 보임 + 위치(정확도 200m) + 서버 허용. 숨겨지면 정지, 돌아오면 300초 경과 시 즉시 1회. 진행 중 중복 요청 없음.
 - 중지 조건: 사용자 중지, 목적지 200m 도착, 연속 3회 실패, 조회 한도(이후 호출 없음), 위치 권한 없음, 60분 경과. 마지막 성공 시각을 표시한다.
 - '기존 경로'는 현재 위치에서 같은 호출 방식으로 다시 조회한 경로(근사). 재평가 결과로 AI 설명은 다시 요청하지 않는다.
+
+### 경로 변경 안내 (TASK-010)
+- 재평가마다 '따라가는 경로'(모니터링 시작 시 선택한 호출 방식) 남은 시간 − 가장 빠른 대체 경로 남은 시간(초)이 **300초 이상**이면 재평가 패널에 안내 카드(변경/유지). 소리·진동·푸시 알림 없음.
+- '변경' → 따라가는 경로 전환(최초 결과 목록에 있으면 지도 강조도 변경), 외부 내비 재확인 안내. '유지' → 그대로.
+- 중복 억제: '유지'한 같은 (지금 → 대체) 조합은 다시 안내하지 않음, 단 거부 당시보다 300초 이상 더 단축되면 재안내. 답하지 않은 안내는 숫자만 갱신, 5분 미만이 되면 닫음.
 
 ### 외부 내비 (TASK-008)
 - '길 안내 시작' → 카카오맵 웹 링크(`https://map.kakao.com/link/to/이름,위도,경도`), 네이버지도 앱 주소(`nmap://route/car?dlat=&dlng=&dname=&appname=`), 목적지 복사. 목적지 이름·좌표만 전달(출발지 없음). 앱 주소 이동 후 1.5초가 지나도 페이지가 보이면 대체 안내. 실기기 확인은 미실시.

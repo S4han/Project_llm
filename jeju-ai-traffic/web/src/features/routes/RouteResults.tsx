@@ -167,7 +167,11 @@ function Results({ data, destination, onRetry }: { data: RouteCompareResponse; d
         </p>
       )}
       <NavigationPanel destination={destination} />
-      <MonitorPanel destination={destination.location} selectedId={selectedId} />
+      <MonitorPanel
+        destination={destination.location}
+        selectedId={selectedId}
+        onFollowChange={(id) => routes.some((r) => r.id === id) && select(id)}
+      />
       <ExplanationCard data={data} />
       <ul aria-label="경로 목록" className="flex flex-col gap-2">
         {ordered.map((route) => (

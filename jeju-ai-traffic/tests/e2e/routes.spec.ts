@@ -245,3 +245,23 @@ test.describe("교통상황 재평가 (FR-009)", () => {
     expect(purposes).toHaveLength(3);
   });
 });
+
+test.describe("경로 변경 안내 (FR-010)", () => {
+  test("느린 경로를 따라가면 안내, '변경'하면 지도 강조가 바뀐다", async ({ page }) => {
+    await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
+    await setup(page, "서귀포", "서귀포시청 제1청사");
+    await page.getByRole("button", { name: "경로 조회" }).click();
+    await page.getByRole("button", { name: /1100도로 경유/ }).click();
+    const panel = page.getByRole("region", { name: "교통상황 재평가" });
+    await panel.getByRole("button", { name: "모니터링 시작" }).click();
+    const advice = panel.getByRole("alert", { name: "더 빠른 경로가 있습니다" });
+    await expect(advice).toContainText(/카카오 추천 경로가 지금 경로보다 남은 시간 기준 약 \d+분 빠릅니다/);
+    await panel.scrollIntoViewIfNeeded();
+    await shot(page, "TASK-010-01-advice");
+
+    await advice.getByRole("button", { name: "변경" }).click();
+    await expect(panel.getByText(/카카오 추천 경로로 바꿨습니다/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /카카오 추천/ }).first()).toHaveAttribute("aria-pressed", "true");
+    await expect(panel.getByText("현재 선택 경로가 가장 빠릅니다.")).toBeVisible();
+  });
+});

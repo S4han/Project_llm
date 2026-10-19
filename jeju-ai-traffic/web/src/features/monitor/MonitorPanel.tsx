@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import type { Coordinate } from "../../../../shared/contracts/route";
+import { adviceReducer, initialAdvice } from "../../../../shared/rules/changeAdvice";
 import { buildRulesExplanation, toExplanationFacts } from "../../../../shared/rules/explanation";
 import { getCurrentLocation } from "../../services/geolocation";
 import { compareRoutes } from "../../services/routesApi";
@@ -30,27 +31,34 @@ const at = (ms: number | null) => (ms === null ? "" : formatKstTime(new Date(ms)
 interface Props {
   destination: Coordinate;
   selectedId: string;
+  /** '변경'을 누르면 새로 따라갈 경로의 호출 방식(지도 강조용). */
+  onFollowChange?: (id: string) => void;
   /** 테스트용 주입. */
   deps?: Partial<Omit<MonitorDeps, "destination" | "onUpdate">>;
 }
 
 /** 5분 재평가(FR-009). 화면이 켜져 있고 이 페이지가 열려 있을 때만 동작한다. */
-export function MonitorPanel({ destination, selectedId, deps }: Props) {
+export function MonitorPanel({ destination, selectedId, onFollowChange, deps }: Props) {
   const [state, setState] = useState<MonitorState | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [monitor] = useState(
-    () =>
-      new Monitor({
-        destination,
-        locate: getCurrentLocation,
-        compare: (origin) => compareRoutes({ origin, destination, purpose: "reevaluation" }),
-        ...deps,
-        onUpdate: (s) => {
-          setState(s);
-          setNow(Date.now());
-        },
-      }),
-  );
+  const [advice, dispatch] = useReducer(adviceReducer, selectedId, initialAdvice);
+  const [monitor] = useState(() => {
+    let prev: MonitorState | null = null;
+    return new Monitor({
+      destination,
+      locate: getCurrentLocation,
+      compare: (origin) => compareRoutes({ origin, destination, purpose: "reevaluation" }),
+      ...deps,
+      onUpdate: (s) => {
+        // 새 재평가 결과마다 변경 안내를 판단하고, 멈추면 떠 있던 안내를 닫는다(FR-010).
+        if (s.lastData && s.lastData !== prev?.lastData && s.status === "running") dispatch({ type: "data", data: s.lastData });
+        if (s.status === "stopped" && prev?.status === "running") dispatch({ type: "stop" });
+        prev = s;
+        setState(s);
+        setNow(Date.now());
+      },
+    });
+  });
   useEffect(() => () => monitor.dispose(), [monitor]);
   useEffect(() => {
     if (state?.status !== "running") return;
@@ -60,7 +68,7 @@ export function MonitorPanel({ destination, selectedId, deps }: Props) {
 
   const running = state?.status === "running";
   const data = state?.lastData ?? null;
-  const same = data?.routes.find((r) => r.id === selectedId) ?? null;
+  const same = data?.routes.find((r) => r.id === advice.followed) ?? null;
   const fastest = data?.routes.find((r) => r.id === data.recommendedRouteId) ?? null;
   const facts = data ? toExplanationFacts(data) : null;
   const minutesLeft = state?.nextAt ? Math.max(1, Math.ceil((state.nextAt - now) / 60_000)) : null;
@@ -76,7 +84,14 @@ export function MonitorPanel({ destination, selectedId, deps }: Props) {
             중지
           </button>
         ) : (
-          <button type="button" onClick={() => monitor.start()} className="min-h-12 rounded-lg bg-indigo-700 px-4 font-semibold text-white">
+          <button
+            type="button"
+            onClick={() => {
+              dispatch({ type: "reset", followed: selectedId });
+              monitor.start();
+            }}
+            className="min-h-12 rounded-lg bg-indigo-700 px-4 font-semibold text-white"
+          >
             {state?.status === "stopped" ? "다시 시작" : "모니터링 시작"}
           </button>
         )}
@@ -105,6 +120,41 @@ export function MonitorPanel({ destination, selectedId, deps }: Props) {
           </p>
         )}
       </div>
+
+      {advice.pending && (
+        <div role="alert" aria-labelledby="advice-heading" className="flex flex-col gap-2 rounded-lg border-2 border-orange-500 bg-orange-50 p-3">
+          <p id="advice-heading" className="font-bold text-orange-900">
+            더 빠른 경로가 있습니다
+          </p>
+          <p className="text-sm text-orange-900">
+            <strong>{advice.pending.toLabel}</strong> 경로가 지금 경로보다 남은 시간 기준 약 <strong>{Math.round(advice.pending.savingsSeconds / 60)}분</strong> 빠릅니다.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const to = advice.pending?.to;
+                dispatch({ type: "accept" });
+                if (to) onFollowChange?.(to);
+              }}
+              className="min-h-12 flex-1 rounded-lg bg-orange-600 font-semibold text-white"
+            >
+              변경
+            </button>
+            <button type="button" onClick={() => dispatch({ type: "decline" })} className="min-h-12 flex-1 rounded-lg border border-orange-400 bg-white font-semibold text-orange-900">
+              유지
+            </button>
+          </div>
+        </div>
+      )}
+      {advice.notice && (
+        <p role="status" className="text-sm text-slate-700">
+          {advice.notice.kind === "accepted" &&
+            `${advice.notice.label} 경로로 바꿨습니다. 외부 내비로 안내 중이라면 내비에서 경로를 다시 확인하세요.`}
+          {advice.notice.kind === "declined" && "지금 경로를 유지합니다. 같은 경로 안내는 5분 이상 더 빨라질 때만 다시 알립니다."}
+          {advice.notice.kind === "withdrawn" && "더 이상 5분 이상 빠르지 않아 안내를 닫았습니다."}
+        </p>
+      )}
 
       {data && (
         <div className="flex flex-col gap-1 border-t border-slate-100 pt-2 text-sm">
