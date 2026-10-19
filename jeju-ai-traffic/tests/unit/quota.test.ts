@@ -19,9 +19,10 @@ async function blocked(p: Promise<unknown>): Promise<AppError> {
 }
 
 describe("승인된 기본 예산", () => {
-  it("카카오 8,000 / 재평가 6,000, ITS 2,000, AI 0", () => {
+  it("카카오 8,000 / 재평가 6,000, 장소 검색 3,000, ITS 2,000, AI 0", () => {
     expect(DEFAULT_BUDGETS).toEqual({
       kakao: { dailyLimit: 8000, reevaluationCutoff: 6000 },
+      kakaoLocal: { dailyLimit: 3000 },
       jejuIts: { dailyLimit: 2000 },
       ai: { dailyLimit: 0 },
     });

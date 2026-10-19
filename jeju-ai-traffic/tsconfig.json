@@ -16,5 +16,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["web/src", "api", "shared", "tests", "vite.config.ts", "vitest.config.ts"]
+  "include": ["web/src", "api", "shared", "tests", "vite.config.ts", "vitest.config.ts", "playwright.config.ts"]
 }

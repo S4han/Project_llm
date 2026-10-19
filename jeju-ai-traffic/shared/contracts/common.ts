@@ -1,8 +1,8 @@
 /** ISO 8601 UTC 시각 문자열 (예: 2026-10-19T00:00:00.000Z). */
 export type IsoDateTime = string;
 
-/** 외부 호출 공급자. 사용량 한도는 이 단위로 관리한다. */
-export type ProviderId = "kakao" | "jejuIts" | "ai";
+/** 외부 호출 공급자. 사용량 한도는 이 단위로 관리한다. kakao는 경로(모빌리티), kakaoLocal은 장소 검색. */
+export type ProviderId = "kakao" | "kakaoLocal" | "jejuIts" | "ai";
 
 /** 공통 오류 코드. HTTP 상태 대응은 api/_lib/errors.ts. */
 export const ERROR_CODES = [

@@ -1,4 +1,4 @@
-# IMPLEMENTATION_PLAN — v0.4 (TASK-003 계약·호출 통제 반영, 2026-10-19)
+# IMPLEMENTATION_PLAN — v0.5 (TASK-004 장소 검색 반영, 2026-10-19)
 
 ## 1. 기준선과 목표
 - 단일 제품 요구사항 기준: `PRD.md` (구글 드라이브 원본 `제주_AI_교통_경로_추천_웹서비스_PRD_v1.0.md`의 사본; 원본 수정 금지).
@@ -12,7 +12,7 @@
 - 서버리스 API: **Vercel Functions (TypeScript), 실행 리전 `icn1`(서울) 고정.** 제주 ITS는 국외 IP를 차단하므로 국내 리전에서 호출해야 한다(BLK-06). 외부 키 보호, 서버 측 사용량 제한, 공급자 응답 정규화, 실패 처리.
 - 배포: **Vercel Hobby 단일 프로젝트**(웹 정적 + Functions). Cloudflare Workers는 제외. 프로젝트 `jeju-its-probe`(팀 `splendid3`)를 Root Directory `jeju-ai-traffic`으로 재사용. 실제 배포는 별도 승인.
 - 경로: **카카오모빌리티 길찾기 REST**(비상업, 일 10,000건 무료, 소진 시 429 차단). 복수 경로는 우선순위 2종(RECOMMEND·DISTANCE) + 주요 도로(평화로·1100도로·516도로) 경유지 지정 다회 호출로 구성(`alternatives`는 1개만 반환). Google Routes 제외(한국 자동차 경로 미제공).
-- 장소/지도: 카카오(검색·지도) 후보. 카카오맵 무료 쿼터는 계정당 첫 활성화 앱에만 부여 — 활성화는 해당 TASK에서 승인 후.
+- 장소 검색: **카카오 로컬 키워드 검색**(서버 경유, TASK-004 승인). 내부 일일 한도 3,000건, IP별 분당 20회. 실호출 전 카카오 앱의 카카오맵 무료 쿼터(계정당 첫 활성화 앱) 확인 필요. 지도는 카카오 후보(TASK-006).
 - 교통: 구간 혼잡도는 카카오 응답 `traffic_state`·`traffic_speed`(블록 평균). **제주 ITS 오픈API**(`api.jejuits.go.kr`, `code` 파라미터)는 돌발·통제·공사·기상·VMS를 좌표 근접 매칭으로 보조 표시. 구간 속도 API는 없음. 미제공 구간은 `unknown`.
 - AI: 무료 한도 및 청구 차단을 검증한 공급자만 후보. 검증 실패 시 출시 차단 이슈로 보고하고 제품 승인 없이 요구사항 축소 금지.
 - DB: MVP에서는 도입하지 않는 방안 우선. **단, 공유·원자적 사용량 제한 및 다중 인스턴스 통제**가 필요하면 무료 영속 저장소/공급자 제공 제어수단 검증 후 결정.
@@ -38,16 +38,16 @@ README.md
 START_HERE.md
 tasks/
 package.json, vercel.json, vite.config.ts, vitest.config.ts, eslint.config.js, tsconfig.json
-web/index.html, web/src/                  # 생성. 하위 {components,features,services,types}/는 TASK-004 이후
+web/index.html, web/src/{features,services}/  # 생성(features/trip: 출발지·목적지 화면)
 api/health.ts                             # 생성. Vercel은 api/의 파일 하나를 엔드포인트 하나로 배포
 api/_lib/                                 # 생성. 함수 공용 코드({providers,policies}/ 등)는 여기에 둔다
-shared/contracts/                         # 생성. shared/rules/는 TASK-005 이후
-tests/unit/                               # 생성. tests/{e2e,fixtures}/는 해당 TASK에서
+shared/contracts/, shared/rules/           # 생성(rules/geo.ts: 제주 범위·좌표·출발지=목적지 판정)
+tests/unit/, tests/fixtures/, tests/e2e/   # 생성(e2e는 Playwright, TASK-004)
 ```
 `api/src/...` 제안은 Vercel 파일 기반 라우팅(하위 파일이 모두 엔드포인트가 됨) 때문에 `api/<엔드포인트>.ts` + `api/_lib/`로 바꿨다(TASK-002).
 
 ## 5. API 및 데이터 계약 — 엔드포인트는 제안, 공통 타입·오류·호출 통제는 TASK-003에서 확정
-- `GET /api/places?q=`: 제주 장소 후보, 공급자·좌표·검증 상태. 요청 빈도 제한 필수.
+- `GET /api/places?q=` (구현, TASK-004): 검색어 1~50자 → `{query, places[], observedAt}`. 제주 범위 + '제주특별자치도' 주소만. IP별 분당 20회, `kakaoLocal` 일일 3,000건. 기본 모의 공급자, `PLACES_PROVIDER=kakao`일 때만 실호출.
 - `POST /api/routes/compare`: 출발지/목적지 → 경로 목록, 예상시간, 형상, 기준 시각, 추천 경로 ID, 상태.
 - `POST /api/traffic/enrich`: 경로 ID/구간 → 확인된 사건, `unknown` 구간, 원천 시각. 별도 엔드포인트 여부는 구현 시 결정.
 - `POST /api/explanations`: 확인된 경로/사건 → 설명, `source: ai|rules`, 근거 목록.

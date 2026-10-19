@@ -8,3 +8,5 @@ node_modules/
 dist/
 .vercel/
 *.log
+test-results/
+playwright-report/

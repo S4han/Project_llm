@@ -1,12 +1,44 @@
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin, type ViteDevServer } from "vite";
+
+const apiDir = fileURLToPath(new URL("./api", import.meta.url));
+
+/**
+ * 개발 서버 전용: /api/<이름>을 api/<이름>.ts의 GET 핸들러로 실행한다(Vercel 로그인 없이 로컬 확인).
+ * 빌드 결과에는 포함되지 않는다. 장소 검색은 환경 변수가 없으면 모의 공급자를 쓴다.
+ */
+function devApi(): Plugin {
+  return {
+    name: "dev-api",
+    apply: "serve",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = new URL(req.url ?? "/", "http://localhost");
+        const match = /^\/api\/([a-z]+)$/.exec(url.pathname);
+        if (!match || req.method !== "GET") return next();
+        try {
+          const mod = (await server.ssrLoadModule(`${apiDir}/${match[1]}.ts`)) as {
+            GET?: (request: Request) => Response | Promise<Response>;
+          };
+          if (!mod.GET) return next();
+          const response = await mod.GET(new Request(url, { headers: { "x-real-ip": "127.0.0.1" } }));
+          res.statusCode = response.status;
+          response.headers.forEach((value, key) => res.setHeader(key, value));
+          res.end(Buffer.from(await response.arrayBuffer()));
+        } catch (err) {
+          next(err);
+        }
+      });
+    },
+  };
+}
 
 // 웹 소스는 web/, 빌드 결과는 Vercel outputDirectory(dist/)로 낸다.
 export default defineConfig({
   root: fileURLToPath(new URL("./web", import.meta.url)),
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), devApi()],
   build: {
     outDir: fileURLToPath(new URL("./dist", import.meta.url)),
     emptyOutDir: true,

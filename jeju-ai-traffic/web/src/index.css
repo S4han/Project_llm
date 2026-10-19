@@ -1,1 +1,8 @@
 @import "tailwindcss";
+
+body {
+  @apply bg-slate-50;
+  /* 한국어 문장이 단어 중간에서 줄바꿈되지 않도록 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
