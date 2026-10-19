@@ -38,7 +38,12 @@ export async function GET(): Promise<Response> {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
   const token = process.env.CLOUDFLARE_AI_TOKEN ?? "";
   const model = process.env.CF_AI_MODEL || DEFAULT_CF_MODEL;
-  if (!accountId || !token) return new Response(JSON.stringify({ configured: false, accountId: !!accountId, token: !!token }), { headers });
+  if (!accountId || !token) {
+    // 진단용: 이 배포에 보이는 관련 변수 이름만(값은 넣지 않는다).
+    const presentKeys = Object.keys(process.env).filter((k) => /^(AI_|CLOUDFLARE|CF_|JEJU_ITS|ROUTES_|PLACES_|TRAFFIC_)/.test(k));
+    const deployment = { env: process.env.VERCEL_ENV ?? null, commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null };
+    return new Response(JSON.stringify({ configured: false, accountId: !!accountId, token: !!token, presentKeys, deployment }), { headers });
+  }
   if (opens >= MAX_OPENS) return new Response(JSON.stringify({ stopped: "호출 상한 도달(인스턴스당 2회)" }), { headers });
   opens += 1;
 
