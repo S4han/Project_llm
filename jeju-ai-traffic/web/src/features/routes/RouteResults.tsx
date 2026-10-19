@@ -11,7 +11,8 @@ import { ExplanationCard } from "./ExplanationCard";
 import { MonitorPanel } from "../monitor/MonitorPanel";
 import { NavigationPanel } from "./NavigationPanel";
 import { RouteMap } from "./RouteMap";
-import { INCIDENT_LABEL, STATUS_ORDER, STATUS_STYLE } from "./trafficStyle";
+import { groupIncidents } from "./incidents";
+import { STATUS_ORDER, STATUS_STYLE } from "./trafficStyle";
 
 export type CompareState =
   | { kind: "idle" }
@@ -45,12 +46,16 @@ function TrafficBar({ route }: { route: RouteOption }) {
 function IncidentList({ incidents }: { incidents: TrafficIncident[] }) {
   return (
     <ul className="mt-2 flex flex-col gap-1 text-sm">
-      {incidents.map((i) => (
-        <li key={i.id} className="rounded bg-red-50 px-2 py-1 text-red-900">
-          <span className="font-semibold">{INCIDENT_LABEL[i.kind]}</span> {i.description}
+      {groupIncidents(incidents).map((g) => (
+        <li key={g.key} className="rounded bg-red-50 px-2 py-1 text-red-900">
+          <span className="font-semibold">
+            {g.label} {g.count}건
+          </span>
           <span className="block text-xs text-red-800/80">
-            {i.sourceTime ? `원천 ${formatKstTime(i.sourceTime)}` : `조회 ${formatKstTime(i.observedAt)}`}
-            {i.source === "mock" && " · 모의 데이터"}
+            {g.latestSourceTime
+              ? `원천 ${formatKstTime(g.latestSourceTime)}`
+              : `제주 ITS가 감지한 정보로, 발생 시각과 상세는 제공되지 않습니다 · 조회 ${formatKstTime(g.observedAt)}`}
+            {g.mock && " · 모의 데이터"}
           </span>
         </li>
       ))}

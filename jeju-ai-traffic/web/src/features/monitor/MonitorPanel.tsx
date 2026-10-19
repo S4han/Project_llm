@@ -99,6 +99,7 @@ export function MonitorPanel({ destination, selectedId, onFollowChange, deps }: 
       <p className="text-xs text-slate-600">
         {INTERVAL_MS / 60_000}분마다 현재 위치에서 다시 조회합니다. 화면이 켜져 있고 이 페이지가 열려 있을 때만 동작하며, 다른 앱으로 전환하거나 화면이 꺼지면 멈춥니다. 최대 60분.
       </p>
+      <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
 
       <div aria-live="polite" className="flex flex-col gap-1 text-sm">
         {running && state.inFlight && <p className="text-slate-600">재평가 중…</p>}

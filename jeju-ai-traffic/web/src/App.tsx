@@ -22,22 +22,28 @@ export function App() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 bg-slate-50 p-4">
-      <h1 className="text-2xl font-bold text-slate-900">제주 AI 교통 경로 추천</h1>
-      <TripForm
-        busy={state.kind === "loading"}
-        onRequestRoute={(origin, destination) =>
-          run({ origin: originLocation(origin), destination: destination.location }, destination)
-        }
-        onSelectionChange={() => {
-          seq.current += 1;
-          setState({ kind: "idle" });
-        }}
-      />
-      <RouteResults
-        state={state}
-        onRetry={() => lastRequest.current && run(lastRequest.current.request, lastRequest.current.destination)}
-      />
-    </main>
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 bg-slate-50 p-4">
+      <main className="flex flex-col gap-5">
+        <h1 className="text-2xl font-bold text-slate-900">제주 AI 교통 경로 추천</h1>
+        <TripForm
+          busy={state.kind === "loading"}
+          onRequestRoute={(origin, destination) =>
+            run({ origin: originLocation(origin), destination: destination.location }, destination)
+          }
+          onSelectionChange={() => {
+            seq.current += 1;
+            setState({ kind: "idle" });
+          }}
+        />
+        <RouteResults
+          state={state}
+          onRetry={() => lastRequest.current && run(lastRequest.current.request, lastRequest.current.destination)}
+        />
+      </main>
+      <footer className="mt-auto flex flex-col gap-1 border-t border-slate-200 pt-3 text-xs text-slate-500">
+        <p>위치는 경로 조회에만 쓰고 저장하지 않습니다. 예상시간은 참고용입니다.</p>
+        <p>지도 © OpenStreetMap 기여자 · 경로 카카오모빌리티 · 교통 제주 ITS · 설명 Cloudflare Workers AI</p>
+      </footer>
+    </div>
   );
 }

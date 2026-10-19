@@ -51,6 +51,8 @@ tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
 | `npm run test:e2e` | Playwright 브라우저 테스트(개발 서버 자동 실행). 캡처는 `SCREENSHOTS=TASK-00N npm run test:e2e`처럼 지정한 TASK 것만 `reports/screenshots/`에 저장 |
 | `npm run build` | 웹 빌드 → `dist/` |
 | `npm run check` | lint → typecheck → test → build 순서로 모두 실행 (e2e는 별도) |
+| `npm run check:secrets` | `dist/`와 git 이력에서 키·토큰 모양 문자열 검사(값은 출력하지 않음). 먼저 build 필요 |
+| `npm run check:release` | check → check:secrets → `npm audit` (출시 전 점검, `docs/OPERATIONS.md` 7절) |
 
 ### API
 - `GET /api/health` → `{ "status": "ok", "service": "jeju-ai-traffic", "region": "icn1", "checkedAt": "<ISO>" }`, `Cache-Control: no-store`. 외부 호출·키 사용 없음. 로컬에서는 `region`이 `local`.

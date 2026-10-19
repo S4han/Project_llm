@@ -14,7 +14,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "check:release": "npm run check && npm run check:secrets && npm audit --audit-level=moderate"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -125,10 +125,12 @@ test.describe("지도 (OSM 타일 차단 상태)", () => {
     const card = page.getByRole("button", { name: /516도로 경유/ });
     await expect(card).toContainText("확인된 교통 사건 1건");
     await card.click();
-    await expect(card).toContainText("공사 도로 공사");
+    await expect(card).toContainText("공사 도로 공사 1건");
+    await expect(card).toContainText("제주 ITS가 감지한 정보로, 발생 시각과 상세는 제공되지 않습니다");
     await expect(page.getByRole("region", { name: "경로 지도" }).locator("path.incident-marker")).toHaveCount(1);
     await card.scrollIntoViewIfNeeded();
     await shot(page, "TASK-006-03-incident");
+    await shot(page, "TASK-011-02-incident-group");
   });
 
   test("ITS 미확보와 오래된 정보 표시", async ({ page }) => {
@@ -264,4 +266,20 @@ test.describe("경로 변경 안내 (FR-010)", () => {
     await expect(page.getByRole("button", { name: /카카오 추천/ }).first()).toHaveAttribute("aria-pressed", "true");
     await expect(panel.getByText("현재 선택 경로가 가장 빠릅니다.")).toBeVisible();
   });
+});
+
+test("네트워크 단절: 갱신 실패를 알리고 조회한 경로는 유지 (EX-006, AC-011-08)", async ({ page, context }) => {
+  await setup(page, "서귀포", "서귀포시청 제1청사");
+  await page.getByRole("button", { name: "경로 조회" }).click();
+  const list = page.getByRole("list", { name: "경로 목록" });
+  await expect(list.getByRole("listitem")).toHaveCount(4);
+  await context.setOffline(true);
+  await page.getByRole("button", { name: "모니터링 시작" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "갱신 실패" })).toContainText("네트워크 연결을 확인한 뒤 다시 시도하세요.");
+  await expect(list.getByRole("listitem")).toHaveCount(4);
+  await shot(page, "TASK-011-01-offline");
+  await page.getByRole("button", { name: "중지" }).click();
+  await context.setOffline(false);
+  await page.getByRole("button", { name: "다시 시작" }).click();
+  await expect(page.getByText(/모니터링 중 · 다음 갱신 약/)).toBeVisible();
 });

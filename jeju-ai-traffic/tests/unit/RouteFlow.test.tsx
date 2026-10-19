@@ -199,7 +199,7 @@ describe("지도·혼잡·교통 사건", () => {
     await selectAndQuery();
     const recommend = await screen.findByRole("button", { name: /카카오 추천/ });
     expect(recommend.textContent).toContain("확인된 교통 사건 1건");
-    expect(recommend.textContent).toContain("돌발 정지차량");
+    expect(recommend.textContent).toContain("정지차량 감지 1건");
     expect(recommend.textContent).toContain("원천 10월 19일 15:58");
     expect(screen.getByText(/제주 ITS 돌발·통제·공사 정보\(경로 200m 이내\)/)).toBeTruthy();
   });

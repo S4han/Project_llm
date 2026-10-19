@@ -42,6 +42,8 @@ function devApi(): Plugin {
           response.headers.forEach((value, key) => res.setHeader(key, value));
           res.end(Buffer.from(await response.arrayBuffer()));
         } catch (err) {
+          // 브라우저가 요청을 끊은 경우(오프라인 전환 등)는 응답할 곳이 없으므로 오류 화면을 띄우지 않는다.
+          if (req.destroyed || (err as Error).message === "aborted") return;
           next(err);
         }
       });

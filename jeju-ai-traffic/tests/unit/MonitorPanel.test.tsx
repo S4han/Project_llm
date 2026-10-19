@@ -33,6 +33,7 @@ describe("교통상황 재평가 화면 (FR-009)", () => {
     renderPanel(async () => ({ ok: true, data: data([], "x") }));
     expect(screen.getByText(/화면이 켜져 있고 이 페이지가 열려 있을 때만 동작하며/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "모니터링 시작" })).toBeTruthy();
+    expect(screen.getByText("운전 중에는 화면을 조작하지 마세요.")).toBeTruthy();
   });
 
   it("시작하면 즉시 재평가해 선택 경로와 가장 빠른 경로의 남은 시간을 비교한다 (AC-009-01·04)", async () => {
