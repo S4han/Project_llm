@@ -168,6 +168,24 @@ describe("POST /api/routes/compare", () => {
   });
 });
 
+describe("재평가 요청 (purpose)", () => {
+  it("purpose=reevaluation이면 카카오 사용 6,000건 이상에서 429, 직접 조회는 허용 (COST-003)", async () => {
+    const { post, provider, guard } = setup();
+    await guard.reserve("kakao", { cost: 5999 });
+    const res = await post({ ...SAME_SIDE, purpose: "reevaluation" });
+    expect(res.status).toBe(429);
+    expect((await res.json()).error.message).toContain("자동 재평가");
+    expect(provider.calls).toBe(0);
+    expect((await post(SAME_SIDE)).status).toBe(200);
+  });
+
+  it("알 수 없는 purpose는 직접 조회로 본다", async () => {
+    const { post, guard } = setup();
+    await guard.reserve("kakao", { cost: 5999 });
+    expect((await post({ ...SAME_SIDE, purpose: "anything" })).status).toBe(200);
+  });
+});
+
 describe("교통 사건 연결 (제주 ITS, 모의)", () => {
   // 평화로 부근 모의 사건(33.4366, 126.4242)을 지나는 경로와 지나지 않는 경로
   const near = { ...route("recommend", 4166, 52300), geometry: [{ lat: 33.45, lng: 126.43 }, { lat: 33.42, lng: 126.418 }] };

@@ -1,6 +1,6 @@
 # 제주 AI 교통 경로 추천 웹서비스
 
-- 상태: **TASK-008 외부 내비 연결** (2026-10-19). 공급자 환경 변수가 없으면 장소·경로·교통 사건은 모의 데이터, 설명은 규칙 기반만 쓴다.
+- 상태: **TASK-009 교통상황 재평가** (2026-10-19). 공급자 환경 변수가 없으면 장소·경로·교통 사건은 모의 데이터, 설명은 규칙 기반만 쓴다.
 - 요구사항: `PRD.md` (구글 드라이브 확정 PRD v1.0의 동일 사본)
 - Codex 시작: `START_HERE.md`
 - 설계: `IMPLEMENTATION_PLAN.md`
@@ -24,6 +24,7 @@
 web/            React 앱 (Vite root, index.html, src/)
   src/features/trip/  출발지·목적지 선택 화면
   src/features/routes/ 경로 비교 결과·지도(RouteMap)·혼잡 표시·추천 이유(ExplanationCard)·길 안내 시작(NavigationPanel)
+  src/features/monitor/ 5분 재평가 제어기(monitor)와 화면(MonitorPanel)
   src/services/       API 호출(placesApi, routesApi, explanationsApi), 위치(geolocation), 앱 주소 열기(appLink)
 api/            Vercel Functions — 파일 하나가 엔드포인트 (api/health.ts, api/places.ts, api/routes/compare.ts, api/explanations.ts)
 api/_lib/       함수 공용 코드 (밑줄 폴더는 Vercel이 엔드포인트로 배포하지 않음)
@@ -71,6 +72,12 @@ tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
   - 경로 표시 후 화면이 따로 요청한다. 경로 이름은 정해진 4개만 받는다(지시문 주입 방지). IP별 분당 10회.
   - AI 문장은 검증(숫자·도로 이름·조건부 단어·3문장·180자)을 통과해야 쓰고, 아니면 규칙 기반 설명. AI 4초 제한, 일일 200건.
   - AI 공급자: `AI_PROVIDER=cloudflare`와 `CLOUDFLARE_ACCOUNT_ID`·`CLOUDFLARE_AI_TOKEN`이 모두 있을 때만 Workers AI(기본 모델 `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, `CF_AI_MODEL`로 변경). 없으면 규칙 기반만.
+
+### 교통상황 재평가 (TASK-009)
+- '모니터링 시작' → 즉시 1회, 이후 재평가 종료 시점부터 300초마다(늦음 +15초 허용) 현재 위치로 `POST /api/routes/compare`(`purpose: "reevaluation"`)를 다시 호출한다. 서버는 카카오 사용 6,000건 이상이면 재평가만 막는다.
+- 활성 조건: 모니터링 켬 + 화면 보임 + 위치(정확도 200m) + 서버 허용. 숨겨지면 정지, 돌아오면 300초 경과 시 즉시 1회. 진행 중 중복 요청 없음.
+- 중지 조건: 사용자 중지, 목적지 200m 도착, 연속 3회 실패, 조회 한도(이후 호출 없음), 위치 권한 없음, 60분 경과. 마지막 성공 시각을 표시한다.
+- '기존 경로'는 현재 위치에서 같은 호출 방식으로 다시 조회한 경로(근사). 재평가 결과로 AI 설명은 다시 요청하지 않는다.
 
 ### 외부 내비 (TASK-008)
 - '길 안내 시작' → 카카오맵 웹 링크(`https://map.kakao.com/link/to/이름,위도,경도`), 네이버지도 앱 주소(`nmap://route/car?dlat=&dlng=&dname=&appname=`), 목적지 복사. 목적지 이름·좌표만 전달(출발지 없음). 앱 주소 이동 후 1.5초가 지나도 페이지가 보이면 대체 안내. 실기기 확인은 미실시.

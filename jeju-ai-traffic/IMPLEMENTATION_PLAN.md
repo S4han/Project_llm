@@ -1,4 +1,4 @@
-# IMPLEMENTATION_PLAN — v0.9 (TASK-008 외부 내비 반영, 2026-10-19)
+# IMPLEMENTATION_PLAN — v0.10 (TASK-009 재평가 반영, 2026-10-19)
 
 ## 1. 기준선과 목표
 - 단일 제품 요구사항 기준: `PRD.md` (구글 드라이브 원본 `제주_AI_교통_경로_추천_웹서비스_PRD_v1.0.md`의 사본; 원본 수정 금지).
@@ -27,7 +27,7 @@
 4. 교통정보 조회 → 확인된 사건/구간만 경로에 연결; 미제공은 `unknown`으로 유지.
 5. 가장 짧은 `durationSeconds`를 결정적으로 선택. 동률(초 단위 같음)이면 거리가 짧은 경로, 거리도 같으면 호출 순서(추천 → 최단거리 → 1100 → 516). 동률 경로는 모두 표시(TASK-005 승인).
 6. AI에는 확인된 구조화 데이터만 제공; 응답 사실 검증 실패/무료 한도 소진 시 규칙 기반 설명 사용. 설명 출처 `ai|rules` 필수.
-7. 활성·사용자 시작·위치 허용·호출 허용 조건에서 300초마다 남은 경로 재평가; 기존 대비 단축 >= 300초이면 알림 후보.
+7. 활성·사용자 시작·위치 허용·호출 허용 조건에서 300초마다 남은 경로 재평가(구현 TASK-009: 종료 후 300초, +15초 허용, 숨김 시 정지, 3회 실패·한도·도착·60분 시 중지); 기존 대비 단축 >= 300초이면 알림 후보(TASK-010).
 8. 외부 내비에는 목적지만 전달. 선택 경로 동일 재현 보장 금지. 구현(TASK-008): 카카오맵 웹 링크, 네이버지도 앱 주소(1.5초 미실행 감지), 목적지 복사. 카카오내비 SDK·TMAP 제외.
 
 ## 4. 파일 구조 (TASK-002에서 생성한 부분은 확정, 나머지는 제안)
@@ -52,7 +52,7 @@ tests/unit/, tests/fixtures/, tests/e2e/   # 생성(e2e는 Playwright, TASK-004)
 - `POST /api/routes/compare` (구현, TASK-005): `{origin, destination}` → `{routes[], recommendedRouteId, tiedRouteIds, observedAt, stale}`. 2회(+횡단 시 경유 2회) 호출, 중복 합치기(거리 1%·시간 120초), 일부 실패 시 성공분, 경로 없음은 400(102 출발지·103 도착지 주변 도로 없음). IP별 분당 10회. 저장·캐시 안 함. 기본 모의, `ROUTES_PROVIDER=kakao`일 때만 실호출.
 - 교통 사건 연결(구현, TASK-006): 별도 엔드포인트 없이 `POST /api/routes/compare` 응답에 `segments`·`incidentIds`·`incidents`·`incidentsStatus`·`incidentsObservedAt`을 넣는다. ITS 실패·한도여도 경로 비교는 유지(AC-005-04).
 - `POST /api/explanations` (구현, TASK-007): `ExplanationFacts`(숫자 요약, 좌표 없음, 경로 이름 화이트리스트) → `{explanation, aiStatus}`. 경로 표시 후 별도 요청, AI 4초 제한, IP별 분당 10회. **검증 정책:** 숫자는 입력 계산값과 일치, 경로·도로 이름은 입력 이름만, 정체·서행·공사·통제는 해당 데이터 있을 때만, '사고' 금지, 미확보 30% 초과 시 원활 단정 금지, 3문장·180자. 실패 시 규칙 설명(`source: rules`).
-- `POST /api/routes/reevaluate`: 현 위치/선택 경로 → 잔여시간 비교, 절감 초, 변경 후보, 데이터 시각.
+- 재평가(구현, TASK-009): 별도 엔드포인트 없이 `POST /api/routes/compare`에 `purpose: "reevaluation"`(서버 재평가 사용량 기준 6,000건). 잔여시간 비교는 화면에서 같은 호출 방식 경로 기준.
 - 공통 타입: `shared/contracts/`(`RouteOption`, `TrafficStatus`·`TrafficIncident`, `Explanation`, `ApiError`, `Freshness{observedAt, stale}`).
 - 공통 오류(확정, TASK-003): `INVALID_INPUT` 400, `LOCATION_UNAVAILABLE` 422, `QUOTA_BLOCKED` 429(`retryAfter` = 다음 KST 0시, `Retry-After` 헤더), `PROVIDER_UNAVAILABLE` 503, `STALE_DATA` 200 + `stale: true`. 구현 `api/_lib/errors.ts`.
 - 비용 통제(확정, TASK-003): **모든 외부 호출은 `guardedCall`** — 서버 측 사용량 예약 후 호출, 거절 시 호출 0회. 내부 일일 한도 카카오 8,000(재평가는 6,000 미만일 때만), 제주 ITS 2,000 + 60초 캐시, AI 0. KST 0시 초기화. 공급자 429 → 다음 KST 0시까지 차단. 카운터는 서버 메모리(인스턴스별 근사치, 저장소 교체 가능). 클라이언트 카운터 단독 사용 금지. 최종 과금 차단은 공급자 측 하드 캡에 의존.
@@ -81,8 +81,8 @@ tests/unit/, tests/fixtures/, tests/e2e/   # 생성(e2e는 Playwright, TASK-004)
 
 ## 8. 미결정/검증 필요
 **P0 출시 차단 후보:** 실제 복수 경로 및 도로별 교통정보 가용성, 공급자별 무료/청구 조건, 호출 차단 신뢰성. 최신 가격·무료 한도는 이 문서에서 검증하지 않았음.
-**상세 설계:** 재평가 허용 오차·중복 요청, 중복 알림 억제, 위치정보 처리·삭제, 브라우저 지원, 성능 목표, API 공급자·내비 종류, DB 필요성.
-**제안 기본값(승인 전 미확정):** 5분 타이머 300초, 미확보 `unknown`, AI 설명 출처 필드. (내부 시간 계산 초 단위는 TASK-005에서 확정)
+**상세 설계:** 중복 알림 억제, 위치정보 처리·삭제, 브라우저 지원, 성능 목표, API 공급자·내비 종류, DB 필요성.
+**확정된 기본값:** 5분 타이머 300초·허용 오차 +15초(TASK-009), 내부 시간 계산 초 단위(TASK-005), 미확보 `unknown`, AI 설명 출처 필드(TASK-007).
 
 ## 9. 요구사항 추적표
 | PRD | TASK | 검증 관점 |

@@ -61,14 +61,18 @@ const NO_ROUTE_MESSAGES: Record<NoRouteReason, string> = {
 };
 
 function parseRequest(body: unknown): RouteCompareRequest {
-  const b = body as { origin?: { lat?: unknown; lng?: unknown }; destination?: { lat?: unknown; lng?: unknown } } | null;
+  const b = body as {
+    origin?: { lat?: unknown; lng?: unknown };
+    destination?: { lat?: unknown; lng?: unknown };
+    purpose?: unknown;
+  } | null;
   const coord = (c: { lat?: unknown; lng?: unknown } | undefined) =>
     c && typeof c.lat === "number" && typeof c.lng === "number" ? { lat: c.lat, lng: c.lng } : null;
   const origin = coord(b?.origin);
   const destination = coord(b?.destination);
   const problem = checkTrip(origin, destination);
   if (problem || !origin || !destination) throw new AppError("INVALID_INPUT", INPUT_MESSAGES[problem ?? "originMissing"]);
-  return { origin, destination };
+  return { origin, destination, purpose: b?.purpose === "reevaluation" ? "reevaluation" : "user" };
 }
 
 function clientKey(request: Request): string {
@@ -103,7 +107,7 @@ async function fetchAll(deps: RoutesDeps, request: RouteCompareRequest) {
     }
     return { routes, rateLimited };
   };
-  return guardedCall(deps.guard, "kakao", run, { cost: queries.length });
+  return guardedCall(deps.guard, "kakao", run, { cost: queries.length, purpose: request.purpose ?? "user" });
 }
 
 /** 교통 사건 조회. 실패·한도여도 경로 비교를 막지 않도록 오류를 던지지 않고 상태로 돌려준다(AC-005-04). */

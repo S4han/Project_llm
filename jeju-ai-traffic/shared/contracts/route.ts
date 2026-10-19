@@ -31,6 +31,8 @@ export interface RouteOption {
 export interface RouteCompareRequest {
   origin: Coordinate;
   destination: Coordinate;
+  /** reevaluation이면 서버가 재평가 사용량 기준(카카오 6,000건)을 적용한다. 기본 user. */
+  purpose?: "user" | "reevaluation";
 }
 
 export interface RouteCompareResponse extends Freshness {

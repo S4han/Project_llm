@@ -214,3 +214,34 @@ test.describe("길 안내 시작 (FR-008)", () => {
   });
 });
 
+
+test.describe("교통상황 재평가 (FR-009)", () => {
+  test("시작 시 즉시 1회, 브라우저 시계 5분 경과 후 다시 1회 (purpose: reevaluation)", async ({ page }) => {
+    await page.clock.install();
+    await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
+    const purposes: string[] = [];
+    page.on("request", (req) => {
+      if (req.url().endsWith("/api/routes/compare") && req.method() === "POST") {
+        purposes.push((JSON.parse(req.postData() ?? "{}") as { purpose?: string }).purpose ?? "user");
+      }
+    });
+    await setup(page, "서귀포", "서귀포시청 제1청사");
+    await page.getByRole("button", { name: "경로 조회" }).click();
+    const panel = page.getByRole("region", { name: "교통상황 재평가" });
+    await panel.getByRole("button", { name: "모니터링 시작" }).click();
+    await expect(panel.getByText(/선택 경로\(같은 방식으로 다시 조회\)/)).toBeVisible();
+    await expect(panel.getByText(/다음 갱신 약 5분 후/)).toBeVisible();
+    expect(purposes).toEqual(["user", "reevaluation"]);
+
+    await page.clock.fastForward("05:01");
+    await expect.poll(() => purposes.length).toBe(3);
+    expect(purposes[2]).toBe("reevaluation");
+    await panel.scrollIntoViewIfNeeded();
+    await shot(page, "TASK-009-01-monitor");
+
+    await panel.getByRole("button", { name: "중지" }).click();
+    await expect(panel.getByText(/모니터링을 중지했습니다/)).toBeVisible();
+    await page.clock.fastForward("10:00");
+    expect(purposes).toHaveLength(3);
+  });
+});
