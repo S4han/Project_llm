@@ -8,12 +8,12 @@
 | 항목 | 값 |
 |---|---|
 | 현재 TASK | **TASK-007** — 설명 |
-| 상태 | **대기** |
+| 상태 | **진행 중** |
 | 실행 주체 | Claude (사용자 지정, 2026-10-18) |
-| 승인 범위 | — (계획 미제시) |
+| 승인 범위 | 규칙 설명 보강, `POST /api/explanations`, Cloudflare Workers AI 어댑터·모의, AI 검증기, '추천 이유' 화면, ITS 미확인 코드 표기 수정, AI 일일 200건·IP 분당 10회, **Preview에서 Workers AI 실호출 20건 이내**(결제수단 미등록, 원문 미저장). Production AI 활성화 제외 (`DECISIONS.md` 2026-10-19) |
 | 차단 요인 | 없음 |
 | 결과 보고서 | — (TASK-006: `reports/TASK-006-RESULT.md`, 완료) |
-| 다음 행동 | 사용자 `다음` 메시지 대기 → TASK-007 읽기 전용 계획 제시. **main 반영 = Production 자동 배포**(2026-10-19 사용자 결정 (a)). 실호출은 별도 승인 필요 |
+| 다음 행동 | 구현·검증 → Cloudflare 계정·토큰(사용자) → Preview 실호출 확인 → `reports/TASK-007-RESULT.md` → `완료 승인: TASK-007` 대기. **main 반영 = Production 자동 배포** |
 | 최종 갱신 | 2026-10-19 |
 
 ## 상태 정의
@@ -36,7 +36,7 @@
 | TASK-004 | 검색 | **완료** (2026-10-19) | `reports/TASK-004-RESULT.md` |
 | TASK-005 | 경로 추천 | **완료** (2026-10-19) | `reports/TASK-005-RESULT.md` |
 | TASK-006 | 지도/교통 | **완료** (2026-10-19) | `reports/TASK-006-RESULT.md` |
-| TASK-007 | 설명 | **대기** | — |
+| TASK-007 | 설명 | **진행 중** | — |
 | TASK-008 | 외부 내비 | 미착수 | — |
 | TASK-009 | 재평가 | 미착수 | — |
 | TASK-010 | 변경 안내 | 미착수 | — |
