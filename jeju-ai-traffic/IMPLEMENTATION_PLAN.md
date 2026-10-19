@@ -1,4 +1,4 @@
-# IMPLEMENTATION_PLAN — v0.2 (2절 기술 구조 승인 반영, 2026-10-19)
+# IMPLEMENTATION_PLAN — v0.3 (TASK-002 파일 구조·명령 실측 반영, 2026-10-19)
 
 ## 1. 기준선과 목표
 - 단일 제품 요구사항 기준: `PRD.md` (구글 드라이브 원본 `제주_AI_교통_경로_추천_웹서비스_PRD_v1.0.md`의 사본; 원본 수정 금지).
@@ -16,7 +16,7 @@
 - 교통: 구간 혼잡도는 카카오 응답 `traffic_state`·`traffic_speed`(블록 평균). **제주 ITS 오픈API**(`api.jejuits.go.kr`, `code` 파라미터)는 돌발·통제·공사·기상·VMS를 좌표 근접 매칭으로 보조 표시. 구간 속도 API는 없음. 미제공 구간은 `unknown`.
 - AI: 무료 한도 및 청구 차단을 검증한 공급자만 후보. 검증 실패 시 출시 차단 이슈로 보고하고 제품 승인 없이 요구사항 축소 금지.
 - DB: MVP에서는 도입하지 않는 방안 우선. **단, 공유·원자적 사용량 제한 및 다중 인스턴스 통제**가 필요하면 무료 영속 저장소/공급자 제공 제어수단 검증 후 결정.
-- 테스트: Vitest(규칙·계약), Playwright(브라우저 흐름, TASK-004 이후). 실제 실행 명령은 TASK-002에서 확정.
+- 테스트: Vitest(규칙·계약), Playwright(브라우저 흐름, TASK-004 이후). 실행 명령은 `README.md`(TASK-002 실측).
 - 쿼터 예산(참고): 추천 1건당 카카오 약 3회 → 일 약 3,300건. 5분 재평가 예산은 TASK-003·009에서 산정.
 
 ## 3. 논리 구성 및 데이터 흐름
@@ -29,7 +29,7 @@
 7. 활성·사용자 시작·위치 허용·호출 허용 조건에서 300초마다 남은 경로 재평가; 기존 대비 단축 >= 300초이면 알림 후보.
 8. 외부 내비에는 목적지만 전달. 선택 경로 동일 재현 보장 금지.
 
-## 4. 제안 파일 구조 (새 프로젝트; 실제 생성 전 미확정)
+## 4. 파일 구조 (TASK-002에서 생성한 부분은 확정, 나머지는 제안)
 ```text
 PRD.md
 IMPLEMENTATION_PLAN.md
@@ -37,12 +37,14 @@ AGENTS.md
 README.md
 START_HERE.md
 tasks/
-web/src/{components,features,services,types}/
-api/src/{routes,providers,policies,types}/
-shared/{contracts,rules}/
-tests/{unit,e2e,fixtures}/
+package.json, vercel.json, vite.config.ts, vitest.config.ts, eslint.config.js, tsconfig.json
+web/index.html, web/src/                  # 생성. 하위 {components,features,services,types}/는 TASK-004 이후
+api/health.ts                             # 생성. Vercel은 api/의 파일 하나를 엔드포인트 하나로 배포
+api/_lib/                                 # 생성. 함수 공용 코드({providers,policies}/ 등)는 여기에 둔다
+shared/contracts/                         # 생성. shared/rules/는 TASK-005 이후
+tests/unit/                               # 생성. tests/{e2e,fixtures}/는 해당 TASK에서
 ```
-폴더 경로는 설계 제안이다. Codex가 TASK-002 시작 전 계획을 제시하고 승인받는다.
+`api/src/...` 제안은 Vercel 파일 기반 라우팅(하위 파일이 모두 엔드포인트가 됨) 때문에 `api/<엔드포인트>.ts` + `api/_lib/`로 바꿨다(TASK-002).
 
 ## 5. API 및 데이터 계약 — 제안
 - `GET /api/places?q=`: 제주 장소 후보, 공급자·좌표·검증 상태. 요청 빈도 제한 필수.

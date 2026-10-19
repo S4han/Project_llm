@@ -2,3 +2,9 @@
 .env
 .env.*
 !.env.example
+
+# 빌드·의존성 산출물
+node_modules/
+dist/
+.vercel/
+*.log

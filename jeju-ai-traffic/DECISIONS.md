@@ -37,3 +37,5 @@
 | 2026-10-19 | — | 기술 선정 | "3. 승인" | — | 교통 정보: 구간 혼잡도는 카카오 `traffic_state`, 제주 ITS는 돌발·통제·공사·기상·VMS 보조(좌표 근접 매칭). 미제공 구간은 '정보 미확보'. 구현은 TASK-006 |
 | 2026-10-19 | — | 기타 | "4. (a)" | — | Vercel 프로젝트 `jeju-its-probe`를 유지하고 Root Directory를 `jeju-ai-traffic`으로 변경해 계속 사용(사용자 수행) |
 | 2026-10-19 | — | 기타 | "(가) main에 바로 합쳐줘" | — | 작업 브랜치 `claude/nice-tesla-17m9p2`를 main에 fast-forward로 반영(TASK-001 결과·TASK-002 계획 승인 포함). 새 세션이 main 기준으로 재개하도록 함 |
+| 2026-10-19 | TASK-002 | 기타 | "jeju-ai-traffic 상태" → "진행해" | — (`진행 중` 유지) | 새 세션에서 npm 레지스트리 접속 확인(차단 해소). 기존 계획 승인 범위 내 실행 지시 |
+| 2026-10-19 | TASK-002 | 기타 | (실행 종료) | `진행 중` → `결과 검토` | `reports/TASK-002-RESULT.md` 작성. lint·typecheck·test(4/4)·build 통과. 사용자 승인이 아닌 AGENTS.md 규칙 5에 따른 전환. 외부 호출·배포 없음. 완료 승인 대기 |

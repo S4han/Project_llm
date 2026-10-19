@@ -8,12 +8,12 @@
 | 항목 | 값 |
 |---|---|
 | 현재 TASK | **TASK-002** — 기반 |
-| 상태 | **진행 중** |
+| 상태 | **결과 검토** |
 | 실행 주체 | Claude (사용자 지정, 2026-10-18) |
 | 승인 범위 | 최소 기반(웹·API·shared·tests), lint/typecheck/test/build, `/api/health`. 외부 API 호출·배포 제외 (`DECISIONS.md` 2026-10-19) |
-| 차단 요인 | **작업 환경에서 npm 레지스트리(`registry.npmjs.org`) 접속 불가** → 사용자가 환경 Network access에서 'Allow package managers' 확인 또는 도메인 추가 후 **새 세션**에서 재개 |
-| 결과 보고서 | — (TASK-001: `reports/TASK-001-RESULT.md`, 완료) |
-| 다음 행동 | 새 세션에서 `jeju-ai-traffic 상태` → npm 접속 확인 → 스캐폴드·검증 → `reports/TASK-002-RESULT.md` → `완료 승인: TASK-002` 대기 |
+| 차단 요인 | 없음 (npm 레지스트리 접속 불가 → 2026-10-19 새 세션에서 해소 확인) |
+| 결과 보고서 | `reports/TASK-002-RESULT.md` |
+| 다음 행동 | 사용자 `완료 승인: TASK-002` 대기. 배포·`icn1` 확인은 별도 승인 필요 |
 | 최종 갱신 | 2026-10-19 |
 
 ## 상태 정의
@@ -31,7 +31,7 @@
 | TASK | 단계 | 상태 | 결과 보고서 |
 |---|---|---|---|
 | TASK-001 | P0 기술 타당성 | **완료** (2026-10-19) | `reports/TASK-001-RESULT.md` |
-| TASK-002 | 기반 | **진행 중** | — |
+| TASK-002 | 기반 | **결과 검토** | `reports/TASK-002-RESULT.md` |
 | TASK-003 | 계약/비용 | 미착수 | — |
 | TASK-004 | 검색 | 미착수 | — |
 | TASK-005 | 경로 추천 | 미착수 | — |
