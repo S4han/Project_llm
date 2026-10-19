@@ -1,4 +1,4 @@
-# IMPLEMENTATION_PLAN — v0.5 (TASK-004 장소 검색 반영, 2026-10-19)
+# IMPLEMENTATION_PLAN — v0.6 (TASK-005 경로 비교 반영, 2026-10-19)
 
 ## 1. 기준선과 목표
 - 단일 제품 요구사항 기준: `PRD.md` (구글 드라이브 원본 `제주_AI_교통_경로_추천_웹서비스_PRD_v1.0.md`의 사본; 원본 수정 금지).
@@ -24,7 +24,7 @@
 2. API 계층에서 요청 유효성 검사 및 공급자별 호출 가능 상태 확인.
 3. 장소/경로 API 조회 → 응답 정규화(`RouteOption`: id, durationSeconds, geometry, observedAt, provider, trafficStatus).
 4. 교통정보 조회 → 확인된 사건/구간만 경로에 연결; 미제공은 `unknown`으로 유지.
-5. 가장 짧은 `durationSeconds`를 결정적으로 선택; 동률 처리 규칙은 미결정.
+5. 가장 짧은 `durationSeconds`를 결정적으로 선택. 동률(초 단위 같음)이면 거리가 짧은 경로, 거리도 같으면 호출 순서(추천 → 최단거리 → 1100 → 516). 동률 경로는 모두 표시(TASK-005 승인).
 6. AI에는 확인된 구조화 데이터만 제공; 응답 사실 검증 실패/무료 한도 소진 시 규칙 기반 설명 사용. 설명 출처 `ai|rules` 필수.
 7. 활성·사용자 시작·위치 허용·호출 허용 조건에서 300초마다 남은 경로 재평가; 기존 대비 단축 >= 300초이면 알림 후보.
 8. 외부 내비에는 목적지만 전달. 선택 경로 동일 재현 보장 금지.
@@ -48,7 +48,7 @@ tests/unit/, tests/fixtures/, tests/e2e/   # 생성(e2e는 Playwright, TASK-004)
 
 ## 5. API 및 데이터 계약 — 엔드포인트는 제안, 공통 타입·오류·호출 통제는 TASK-003에서 확정
 - `GET /api/places?q=` (구현, TASK-004): 검색어 1~50자 → `{query, places[], observedAt}`. 제주 범위 + '제주특별자치도' 주소만. IP별 분당 20회, `kakaoLocal` 일일 3,000건. 기본 모의 공급자, `PLACES_PROVIDER=kakao`일 때만 실호출.
-- `POST /api/routes/compare`: 출발지/목적지 → 경로 목록, 예상시간, 형상, 기준 시각, 추천 경로 ID, 상태.
+- `POST /api/routes/compare` (구현, TASK-005): `{origin, destination}` → `{routes[], recommendedRouteId, tiedRouteIds, observedAt, stale}`. 2회(+횡단 시 경유 2회) 호출, 중복 합치기(거리 1%·시간 120초), 일부 실패 시 성공분, 경로 없음은 400(102 출발지·103 도착지 주변 도로 없음). IP별 분당 10회. 저장·캐시 안 함. 기본 모의, `ROUTES_PROVIDER=kakao`일 때만 실호출.
 - `POST /api/traffic/enrich`: 경로 ID/구간 → 확인된 사건, `unknown` 구간, 원천 시각. 별도 엔드포인트 여부는 구현 시 결정.
 - `POST /api/explanations`: 확인된 경로/사건 → 설명, `source: ai|rules`, 근거 목록.
 - `POST /api/routes/reevaluate`: 현 위치/선택 경로 → 잔여시간 비교, 절감 초, 변경 후보, 데이터 시각.
@@ -80,8 +80,8 @@ tests/unit/, tests/fixtures/, tests/e2e/   # 생성(e2e는 Playwright, TASK-004)
 
 ## 8. 미결정/검증 필요
 **P0 출시 차단 후보:** 실제 복수 경로 및 도로별 교통정보 가용성, 공급자별 무료/청구 조건, 호출 차단 신뢰성. 최신 가격·무료 한도는 이 문서에서 검증하지 않았음.
-**상세 설계:** 동률 정책, 데이터 신선도 임계값, 재평가 허용 오차·중복 요청, 중복 알림 억제, 위치정보 처리·삭제, 브라우저 지원, 성능 목표, API 공급자·내비 종류, DB 필요성.
-**제안 기본값(승인 전 미확정):** 5분 타이머 300초, 내부 시간 계산 초 단위, 미확보 `unknown`, AI 설명 출처 필드.
+**상세 설계:** 데이터 신선도 임계값, 재평가 허용 오차·중복 요청, 중복 알림 억제, 위치정보 처리·삭제, 브라우저 지원, 성능 목표, API 공급자·내비 종류, DB 필요성.
+**제안 기본값(승인 전 미확정):** 5분 타이머 300초, 미확보 `unknown`, AI 설명 출처 필드. (내부 시간 계산 초 단위는 TASK-005에서 확정)
 
 ## 9. 요구사항 추적표
 | PRD | TASK | 검증 관점 |

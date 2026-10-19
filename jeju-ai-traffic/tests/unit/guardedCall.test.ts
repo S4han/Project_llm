@@ -10,7 +10,10 @@ function setup(start = "2026-10-19T03:00:00.000Z") {
   const guard = new QuotaGuard(new MemoryQuotaStore(), DEFAULT_BUDGETS, () => now);
   const provider = new MockRouteProvider(ROUTES);
   const call = (purpose: "user" | "reevaluation" = "user") =>
-    guardedCall(guard, "kakao", () => provider.fetchRoutes(REQUEST), { cost: provider.callsPerRequest, purpose });
+    guardedCall(guard, "kakao", () => provider.fetchRoute(REQUEST, { kind: "recommend", label: "카카오 추천" }), {
+      cost: 3,
+      purpose,
+    });
   return { guard, provider, call, setNow: (iso: string) => (now = new Date(iso)) };
 }
 
@@ -24,9 +27,9 @@ async function codeOf(p: Promise<unknown>): Promise<string | undefined> {
 describe("guardedCall", () => {
   it("허용되면 공급자 결과를 그대로 돌려주고 원천 시각을 유지한다", async () => {
     const { call, provider } = setup();
-    const routes = await call();
-    expect(routes).toEqual(ROUTES);
-    expect(routes.every((r) => !Number.isNaN(Date.parse(r.observedAt)))).toBe(true);
+    const result = await call();
+    expect(result).toEqual({ ok: true, route: ROUTES[0] });
+    expect(result.ok && Number.isNaN(Date.parse(result.route.observedAt))).toBe(false);
     expect(provider.calls).toBe(1);
   });
 

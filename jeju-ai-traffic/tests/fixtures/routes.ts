@@ -9,7 +9,7 @@ const SEOGWIPO = { lat: 33.2541, lng: 126.5601 };
 
 export const ROUTES: RouteOption[] = [
   {
-    id: "pyeonghwa",
+    id: "recommend",
     provider: "kakao",
     label: "평화로",
     durationSeconds: 4080,
@@ -19,7 +19,7 @@ export const ROUTES: RouteOption[] = [
     trafficStatus: "smooth",
   },
   {
-    id: "road516",
+    id: "via516",
     provider: "kakao",
     label: "516도로",
     durationSeconds: 4560,
@@ -29,7 +29,7 @@ export const ROUTES: RouteOption[] = [
     trafficStatus: "unknown",
   },
   {
-    id: "road1100",
+    id: "via1100",
     provider: "kakao",
     label: "1100도로",
     durationSeconds: 5400,

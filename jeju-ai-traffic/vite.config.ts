@@ -6,8 +6,8 @@ import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 const apiDir = fileURLToPath(new URL("./api", import.meta.url));
 
 /**
- * 개발 서버 전용: /api/<이름>을 api/<이름>.ts의 GET 핸들러로 실행한다(Vercel 로그인 없이 로컬 확인).
- * 빌드 결과에는 포함되지 않는다. 장소 검색은 환경 변수가 없으면 모의 공급자를 쓴다.
+ * 개발 서버 전용: /api/<경로>를 api/<경로>.ts의 GET·POST 핸들러로 실행한다(Vercel 로그인 없이 로컬 확인).
+ * 빌드 결과에는 포함되지 않는다. 장소·경로는 환경 변수가 없으면 모의 공급자를 쓴다.
  */
 function devApi(): Plugin {
   return {
@@ -16,14 +16,28 @@ function devApi(): Plugin {
     configureServer(server: ViteDevServer) {
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? "/", "http://localhost");
-        const match = /^\/api\/([a-z]+)$/.exec(url.pathname);
-        if (!match || req.method !== "GET") return next();
+        const match = /^\/api\/([a-z]+(?:\/[a-z]+)*)$/.exec(url.pathname);
+        const method = req.method === "POST" ? "POST" : req.method === "GET" ? "GET" : null;
+        if (!match || !method) return next();
         try {
-          const mod = (await server.ssrLoadModule(`${apiDir}/${match[1]}.ts`)) as {
-            GET?: (request: Request) => Response | Promise<Response>;
-          };
-          if (!mod.GET) return next();
-          const response = await mod.GET(new Request(url, { headers: { "x-real-ip": "127.0.0.1" } }));
+          const mod = (await server.ssrLoadModule(`${apiDir}/${match[1]}.ts`)) as Partial<
+            Record<"GET" | "POST", (request: Request) => Response | Promise<Response>>
+          >;
+          const handler = mod[method];
+          if (!handler) return next();
+          const chunks: Buffer[] = [];
+          for await (const chunk of req) chunks.push(chunk as Buffer);
+          const response = await handler(
+            new Request(url, {
+              method,
+              headers: {
+                // 빈도 제한 키. 브라우저 테스트는 x-forwarded-for로 테스트마다 다른 키를 보낸다.
+                "x-real-ip": String(req.headers["x-forwarded-for"] ?? "127.0.0.1").split(",")[0]!.trim(),
+                "content-type": req.headers["content-type"] ?? "",
+              },
+              body: method === "POST" ? Buffer.concat(chunks) : undefined,
+            }),
+          );
           res.statusCode = response.status;
           response.headers.forEach((value, key) => res.setHeader(key, value));
           res.end(Buffer.from(await response.arrayBuffer()));

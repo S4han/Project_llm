@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { newClientContext, uniqueClient } from "./client";
 
 const SHOTS = "reports/screenshots";
 const AIRPORT = { latitude: 33.5066, longitude: 126.4929 };
@@ -10,8 +11,9 @@ async function pickDestination(page: Page, query: string, name: string) {
 }
 
 test.describe("출발지·목적지 선택 (모바일 390×844)", () => {
+  test.beforeEach(async ({ page }) => page.setExtraHTTPHeaders(uniqueClient()));
   test("위치 권한 허용 → 현재 위치 출발지, 목적지 선택, 경로 조회 버튼 활성", async ({ browser }) => {
-    const context = await browser.newContext({ permissions: ["geolocation"], geolocation: { ...AIRPORT, accuracy: 15 } });
+    const context = await newClientContext(browser, { permissions: ["geolocation"], geolocation: { ...AIRPORT, accuracy: 15 } });
     const page = await context.newPage();
     await page.goto("/");
     await page.screenshot({ path: `${SHOTS}/TASK-004-01-initial.png` });
@@ -31,12 +33,12 @@ test.describe("출발지·목적지 선택 (모바일 390×844)", () => {
     await page.screenshot({ path: `${SHOTS}/TASK-004-03-ready.png` });
 
     await route.click();
-    await expect(page.getByRole("status")).toHaveText("성산일출봉까지의 경로 비교는 다음 단계에서 제공됩니다.");
+    await expect(page.getByRole("region", { name: "경로 비교" })).toBeVisible();
     await context.close();
   });
 
   test("위치 권한 거부 → 안내 후 출발지 직접 검색", async ({ browser }) => {
-    const context = await browser.newContext({ permissions: [] });
+    const context = await newClientContext(browser, { permissions: [] });
     const page = await context.newPage();
     await page.goto("/");
     await page.getByRole("button", { name: "현재 위치 사용" }).click();
@@ -53,7 +55,7 @@ test.describe("출발지·목적지 선택 (모바일 390×844)", () => {
   });
 
   test("제주 밖 위치 → 안내 후 직접 검색", async ({ browser }) => {
-    const context = await browser.newContext({
+    const context = await newClientContext(browser, {
       permissions: ["geolocation"],
       geolocation: { latitude: 37.5665, longitude: 126.978, accuracy: 10 },
     });
@@ -66,7 +68,7 @@ test.describe("출발지·목적지 선택 (모바일 390×844)", () => {
   });
 
   test("정확도 부족 → 재확인 안내", async ({ browser }) => {
-    const context = await browser.newContext({ permissions: ["geolocation"], geolocation: { ...AIRPORT, accuracy: 850 } });
+    const context = await newClientContext(browser, { permissions: ["geolocation"], geolocation: { ...AIRPORT, accuracy: 850 } });
     const page = await context.newPage();
     await page.goto("/");
     await page.getByRole("button", { name: "현재 위치 사용" }).click();
@@ -102,7 +104,7 @@ test.describe("출발지·목적지 선택 (모바일 390×844)", () => {
   });
 
   test("출발지와 목적지가 같으면 조회 차단", async ({ browser }) => {
-    const context = await browser.newContext({ permissions: ["geolocation"], geolocation: { ...AIRPORT, accuracy: 10 } });
+    const context = await newClientContext(browser, { permissions: ["geolocation"], geolocation: { ...AIRPORT, accuracy: 10 } });
     const page = await context.newPage();
     await page.goto("/");
     await page.getByRole("button", { name: "현재 위치 사용" }).click();

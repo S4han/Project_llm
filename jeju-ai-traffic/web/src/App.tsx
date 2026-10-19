@@ -1,23 +1,39 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import type { RouteCompareRequest } from "../../shared/contracts/route";
+import { RouteResults, type CompareState } from "./features/routes/RouteResults";
 import { TripForm } from "./features/trip/TripForm";
+import { originLocation } from "./features/trip/types";
+import { compareRoutes } from "./services/routesApi";
 
-// 경로 비교는 TASK-005에서 연결한다. 지금은 출발지·목적지 선택까지만 제공한다.
 export function App() {
-  const [notice, setNotice] = useState<string | null>(null);
+  const [state, setState] = useState<CompareState>({ kind: "idle" });
+  const lastRequest = useRef<RouteCompareRequest | null>(null);
+  // 늦게 도착한 이전 응답이 새 상태를 덮어쓰지 않도록 요청 번호를 센다.
+  const seq = useRef(0);
+
+  async function run(request: RouteCompareRequest) {
+    const id = ++seq.current;
+    lastRequest.current = request;
+    setState({ kind: "loading" });
+    const result = await compareRoutes(request);
+    if (id !== seq.current) return;
+    setState(result.ok ? { kind: "done", data: result.data } : { kind: "error", error: result.error });
+  }
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 bg-slate-50 p-4">
       <h1 className="text-2xl font-bold text-slate-900">제주 AI 교통 경로 추천</h1>
       <TripForm
-        onRequestRoute={(_origin, destination) =>
-          setNotice(`${destination.name}까지의 경로 비교는 다음 단계에서 제공됩니다.`)
+        busy={state.kind === "loading"}
+        onRequestRoute={(origin, destination) =>
+          run({ origin: originLocation(origin), destination: destination.location })
         }
+        onSelectionChange={() => {
+          seq.current += 1;
+          setState({ kind: "idle" });
+        }}
       />
-      {notice && (
-        <p role="status" className="rounded-lg bg-slate-200 p-3 text-sm text-slate-800">
-          {notice}
-        </p>
-      )}
+      <RouteResults state={state} onRetry={() => lastRequest.current && run(lastRequest.current)} />
     </main>
   );
 }

@@ -5,7 +5,7 @@ import { MockExplanationProvider } from "../../api/_lib/providers/mock";
 import { INCIDENTS, ROUTES } from "../fixtures/routes";
 
 const NOW = new Date("2026-10-19T03:00:00.000Z");
-const INPUT = { routes: ROUTES, recommendedRouteId: "pyeonghwa", incidents: INCIDENTS };
+const INPUT = { routes: ROUTES, recommendedRouteId: "recommend", incidents: INCIDENTS };
 const openAiBudget = { ...DEFAULT_BUDGETS, ai: { dailyLimit: 10 } };
 
 describe("규칙 기반 설명", () => {
@@ -20,12 +20,12 @@ describe("규칙 기반 설명", () => {
   });
 
   it("경로가 하나면 대체 경로 없음을 알리고, 사건이 없으면 언급하지 않는다", () => {
-    const e = buildRulesExplanation({ routes: [ROUTES[0]!], recommendedRouteId: "pyeonghwa", incidents: [] }, NOW);
+    const e = buildRulesExplanation({ routes: [ROUTES[0]!], recommendedRouteId: "recommend", incidents: [] }, NOW);
     expect(e.text).toBe("평화로 경로의 예상 소요시간은 68분입니다. 비교할 대체 경로가 없습니다.");
   });
 
   it("추천 경로가 더 느리면 그 사실대로 설명한다", () => {
-    const e = buildRulesExplanation({ ...INPUT, recommendedRouteId: "road1100" }, NOW);
+    const e = buildRulesExplanation({ ...INPUT, recommendedRouteId: "via1100" }, NOW);
     expect(e.text).toContain("평화로 경로가 약 22분 더 빠릅니다.");
   });
 });

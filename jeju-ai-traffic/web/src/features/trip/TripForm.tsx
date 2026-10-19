@@ -16,6 +16,9 @@ const PROBLEM_TEXT: Record<TripProblem, string> = {
 
 interface Props {
   onRequestRoute: (origin: Origin, destination: Place) => void;
+  /** 출발지·목적지가 바뀌면 호출한다(이전 경로 결과를 지우는 데 쓴다). */
+  onSelectionChange?: () => void;
+  busy?: boolean;
   locate?: () => Promise<LocationResult>;
 }
 
@@ -34,9 +37,17 @@ function Selected({ title, detail, onClear }: { title: string; detail: string; o
 }
 
 /** 출발지·목적지 선택과 경로 조회 버튼(AC-001-04, AC-002-04). */
-export function TripForm({ onRequestRoute, locate }: Props) {
-  const [origin, setOrigin] = useState<Origin | null>(null);
-  const [destination, setDestination] = useState<Place | null>(null);
+export function TripForm({ onRequestRoute, onSelectionChange, busy = false, locate }: Props) {
+  const [origin, setOriginState] = useState<Origin | null>(null);
+  const [destination, setDestinationState] = useState<Place | null>(null);
+  const setOrigin = (o: Origin | null) => {
+    setOriginState(o);
+    onSelectionChange?.();
+  };
+  const setDestination = (d: Place | null) => {
+    setDestinationState(d);
+    onSelectionChange?.();
+  };
   const problem = checkTrip(origin && originLocation(origin), destination?.location ?? null);
 
   return (
@@ -83,7 +94,7 @@ export function TripForm({ onRequestRoute, locate }: Props) {
         )}
         <button
           type="button"
-          disabled={problem !== null}
+          disabled={problem !== null || busy}
           onClick={() => origin && destination && onRequestRoute(origin, destination)}
           className="min-h-14 rounded-xl bg-blue-700 text-lg font-bold text-white disabled:bg-slate-300"
         >

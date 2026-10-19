@@ -2,6 +2,7 @@ import type { Explanation } from "../../../shared/contracts/explanation.js";
 import type { Place } from "../../../shared/contracts/place.js";
 import type { RouteCompareRequest, RouteOption } from "../../../shared/contracts/route.js";
 import type { TrafficIncident } from "../../../shared/contracts/traffic.js";
+import type { RouteQuery, RouteResult } from "../../../shared/rules/route.js";
 
 /**
  * 외부 공급자 어댑터 인터페이스. 구현은 실패 시 ProviderError(429 → rate_limited)를 던진다.
@@ -9,9 +10,8 @@ import type { TrafficIncident } from "../../../shared/contracts/traffic.js";
  */
 export interface RouteProvider {
   readonly id: "kakao";
-  /** 한 번의 조회에 쓰는 공급자 호출 수(우선순위·경유지 다회 호출). 사용량 예약에 쓴다. */
-  readonly callsPerRequest: number;
-  fetchRoutes(request: RouteCompareRequest): Promise<RouteOption[]>;
+  /** 호출 하나(우선순위 또는 경유지). 경로를 찾지 못하면 ok: false와 이유. 호출 수는 planRouteQueries가 정한다. */
+  fetchRoute(request: RouteCompareRequest, query: RouteQuery): Promise<RouteResult>;
 }
 
 /** 장소 검색. 결과는 저장·캐시하지 않는다. */
