@@ -1,6 +1,6 @@
 # 제주 AI 교통 경로 추천 웹서비스
 
-- 상태: **TASK-007 AI 설명·규칙 대체** (2026-10-19). 공급자 환경 변수가 없으면 장소·경로·교통 사건은 모의 데이터, 설명은 규칙 기반만 쓴다.
+- 상태: **TASK-008 외부 내비 연결** (2026-10-19). 공급자 환경 변수가 없으면 장소·경로·교통 사건은 모의 데이터, 설명은 규칙 기반만 쓴다.
 - 요구사항: `PRD.md` (구글 드라이브 확정 PRD v1.0의 동일 사본)
 - Codex 시작: `START_HERE.md`
 - 설계: `IMPLEMENTATION_PLAN.md`
@@ -23,8 +23,8 @@
 ```text
 web/            React 앱 (Vite root, index.html, src/)
   src/features/trip/  출발지·목적지 선택 화면
-  src/features/routes/ 경로 비교 결과·지도(RouteMap)·혼잡 표시·추천 이유(ExplanationCard)
-  src/services/       API 호출(placesApi, routesApi), 위치(geolocation)
+  src/features/routes/ 경로 비교 결과·지도(RouteMap)·혼잡 표시·추천 이유(ExplanationCard)·길 안내 시작(NavigationPanel)
+  src/services/       API 호출(placesApi, routesApi, explanationsApi), 위치(geolocation), 앱 주소 열기(appLink)
 api/            Vercel Functions — 파일 하나가 엔드포인트 (api/health.ts, api/places.ts, api/routes/compare.ts, api/explanations.ts)
 api/_lib/       함수 공용 코드 (밑줄 폴더는 Vercel이 엔드포인트로 배포하지 않음)
   errors.ts       오류 코드 ↔ HTTP 상태, 공통 오류 응답
@@ -33,7 +33,7 @@ api/_lib/       함수 공용 코드 (밑줄 폴더는 Vercel이 엔드포인트
   policies/       사용량 한도(quota), 외부 호출 관문(guardedCall), KST 날짜, 짧은 캐시, IP별 빈도 제한(rateLimit)
   providers/      공급자 인터페이스(types), 모의 공급자(mock, mockPlaces, mockRoutes, mockTraffic), 카카오 로컬·모빌리티·제주 ITS·Cloudflare Workers AI 어댑터(kakaoLocal, kakaoMobility, jejuIts, cloudflareAi)
   explanations/   설명 처리(explain: AI 시도→검증→규칙 대체, handler: POST /api/explanations)
-shared/         웹·API 공용 (contracts/: common, route, traffic, explanation, place, health / rules/geo: 제주 범위·좌표 검사, rules/route: 경로 구성·중복·최단·동률, rules/traffic: 혼잡 코드·비율, 사건 매칭(200m), 최신성(10분), rules/explanation: 설명 사실·규칙 설명, rules/explanationCheck: AI 문장 검증)
+shared/         웹·API 공용 (contracts/: common, route, traffic, explanation, place, health / rules/geo: 제주 범위·좌표 검사, rules/route: 경로 구성·중복·최단·동률, rules/traffic: 혼잡 코드·비율, 사건 매칭(200m), 최신성(10분), rules/explanation: 설명 사실·규칙 설명, rules/explanationCheck: AI 문장 검증, rules/navLinks: 외부 내비 링크)
 tests/unit/     Vitest 단위·계약·화면 테스트
 tests/e2e/      Playwright 브라우저 흐름 테스트(모바일 390×844)
 tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
@@ -71,6 +71,9 @@ tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
   - 경로 표시 후 화면이 따로 요청한다. 경로 이름은 정해진 4개만 받는다(지시문 주입 방지). IP별 분당 10회.
   - AI 문장은 검증(숫자·도로 이름·조건부 단어·3문장·180자)을 통과해야 쓰고, 아니면 규칙 기반 설명. AI 4초 제한, 일일 200건.
   - AI 공급자: `AI_PROVIDER=cloudflare`와 `CLOUDFLARE_ACCOUNT_ID`·`CLOUDFLARE_AI_TOKEN`이 모두 있을 때만 Workers AI(기본 모델 `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, `CF_AI_MODEL`로 변경). 없으면 규칙 기반만.
+
+### 외부 내비 (TASK-008)
+- '길 안내 시작' → 카카오맵 웹 링크(`https://map.kakao.com/link/to/이름,위도,경도`), 네이버지도 앱 주소(`nmap://route/car?dlat=&dlng=&dname=&appname=`), 목적지 복사. 목적지 이름·좌표만 전달(출발지 없음). 앱 주소 이동 후 1.5초가 지나도 페이지가 보이면 대체 안내. 실기기 확인은 미실시.
 
 ### 외부 호출 규칙 (TASK-003)
 - 모든 외부 호출은 `guardedCall(quotaGuard, 공급자, 호출, { cost, purpose })`을 거친다. 사용량을 먼저 예약하고, 거절되면 호출하지 않는다.
