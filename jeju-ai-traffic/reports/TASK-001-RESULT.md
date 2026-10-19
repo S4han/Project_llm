@@ -130,3 +130,20 @@ BLK-01~05 (`docs/TECH_VALIDATION.md` §8).
 - 근거: 사용자 "Vercel 시험 배포 승인" (2026-10-19)
 - 결과: **실패 — 배포 전 단계에서 거부.** Vercel 커넥터로 새 프로젝트(`jeju-its-probe`)를 만드는 요청이 `403 forbidden: You don't have permission to create a project`로 거부됨. 프로젝트·배포·과금 발생 없음. 작업 환경에 Vercel CLI·토큰도 없음.
 - 해소 방법(사용자 수행): Vercel 대시보드에서 빈 프로젝트 `jeju-its-probe`를 직접 만들면, Claude가 그 프로젝트에 확인 함수를 배포한다(기존 프로젝트에는 배포하지 않음). 또는 커넥터 권한 범위를 확인한다.
+
+### 10.7 Vercel `icn1` 확인 결과 — BLK-06 해소 경로 확인 (2026-10-19)
+- 방법: 커넥터 권한 부족(프로젝트 생성·배포 모두 403)으로, 사용자가 대시보드에서 `Project_llm`을 가져와 프로젝트 `jeju-its-probe`(팀 `splendid3`)를 만들고, Claude가 작업 브랜치 `claude/nice-tesla-17m9p2`에 키 없는 확인 함수(`api/probe.js`, `vercel.json` `regions: ["icn1"]`)를 푸시 → Vercel 미리보기 자동 배포 → 사용자가 아이패드에서 1회 호출해 결과 전달.
+- 결과(사용자 화면 기준):
+
+| 항목 | 값 |
+|---|---|
+| 실행 리전 | `icn1` |
+| 아웃바운드 IP | **KR / Incheon / AS16509 Amazon.com** |
+| `https://www.jejuits.go.kr/` | **200**, 방화벽 차단 아님 (55바이트, 스크립트 이동 페이지로 추정) |
+| `https://jejuits.go.kr/open_api/open_apiView.do` | **200**, 방화벽 차단 아님, 제목 "페이지 로딩중 - 제주특별자치도 교통정보센터" (165,648바이트) |
+
+- 판정: **BLK-06은 Vercel `icn1`(국내 AWS IP) 경유로 해소 가능.** 제주 ITS 방화벽은 국외 IP를 막고 국내 클라우드 IP는 허용하는 것으로 보인다. 다만 이번 확인은 웹 페이지 접속까지이며, **오픈API 실제 호출(키 사용)은 아직 미검증**이다.
+- 비용: 0원(Hobby, 결제수단 미연결). 키 사용 없음.
+- 정리: 저장소 최상위의 확인용 파일 3개(`api/probe.js`, `vercel.json`, `package.json`)는 시험 후 삭제했다. Vercel 프로젝트 `jeju-its-probe`는 남아 있으며 삭제는 사용자가 대시보드에서 수행해야 한다(커넥터 권한 없음).
+- 영향: 호스팅 잠정안을 Cloudflare Workers 단독에서 **Vercel `icn1` 함수(최소한 제주 ITS 프록시 용도)** 로 바꾸는 검토가 필요하다. IMPLEMENTATION_PLAN 변경이므로 사용자 승인 후 반영한다.
+- 다음 확인(별도 승인 필요): 제주 ITS 오픈API 호출 URL 확인 → `JEJU_ITS_API_KEY`를 Vercel 프로젝트 환경 변수에 사용자가 등록 → `icn1` 함수에서 평화로·1100도로·516도로 링크 소통정보 표본 호출(20건 이내) → 카카오 경로 좌표와 매칭 가능성 확인(BLK-04).
