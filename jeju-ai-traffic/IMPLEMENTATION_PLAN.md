@@ -1,4 +1,4 @@
-# IMPLEMENTATION_PLAN — v0.3 (TASK-002 파일 구조·명령 실측 반영, 2026-10-19)
+# IMPLEMENTATION_PLAN — v0.4 (TASK-003 계약·호출 통제 반영, 2026-10-19)
 
 ## 1. 기준선과 목표
 - 단일 제품 요구사항 기준: `PRD.md` (구글 드라이브 원본 `제주_AI_교통_경로_추천_웹서비스_PRD_v1.0.md`의 사본; 원본 수정 금지).
@@ -46,14 +46,16 @@ tests/unit/                               # 생성. tests/{e2e,fixtures}/는 해
 ```
 `api/src/...` 제안은 Vercel 파일 기반 라우팅(하위 파일이 모두 엔드포인트가 됨) 때문에 `api/<엔드포인트>.ts` + `api/_lib/`로 바꿨다(TASK-002).
 
-## 5. API 및 데이터 계약 — 제안
+## 5. API 및 데이터 계약 — 엔드포인트는 제안, 공통 타입·오류·호출 통제는 TASK-003에서 확정
 - `GET /api/places?q=`: 제주 장소 후보, 공급자·좌표·검증 상태. 요청 빈도 제한 필수.
 - `POST /api/routes/compare`: 출발지/목적지 → 경로 목록, 예상시간, 형상, 기준 시각, 추천 경로 ID, 상태.
 - `POST /api/traffic/enrich`: 경로 ID/구간 → 확인된 사건, `unknown` 구간, 원천 시각. 별도 엔드포인트 여부는 구현 시 결정.
 - `POST /api/explanations`: 확인된 경로/사건 → 설명, `source: ai|rules`, 근거 목록.
 - `POST /api/routes/reevaluate`: 현 위치/선택 경로 → 잔여시간 비교, 절감 초, 변경 후보, 데이터 시각.
-- 공통 오류: `INVALID_INPUT`, `PROVIDER_UNAVAILABLE`, `QUOTA_BLOCKED`, `STALE_DATA`, `LOCATION_UNAVAILABLE`; HTTP 상태·재시도 정책은 계약 테스트로 확정.
-- 비용 통제는 **모든 외부 호출 전** 수행. 클라이언트 카운터 단독 사용 금지. 공급자 측 청구 방지 기능도 확인해야 함.
+- 공통 타입: `shared/contracts/`(`RouteOption`, `TrafficStatus`·`TrafficIncident`, `Explanation`, `ApiError`, `Freshness{observedAt, stale}`).
+- 공통 오류(확정, TASK-003): `INVALID_INPUT` 400, `LOCATION_UNAVAILABLE` 422, `QUOTA_BLOCKED` 429(`retryAfter` = 다음 KST 0시, `Retry-After` 헤더), `PROVIDER_UNAVAILABLE` 503, `STALE_DATA` 200 + `stale: true`. 구현 `api/_lib/errors.ts`.
+- 비용 통제(확정, TASK-003): **모든 외부 호출은 `guardedCall`** — 서버 측 사용량 예약 후 호출, 거절 시 호출 0회. 내부 일일 한도 카카오 8,000(재평가는 6,000 미만일 때만), 제주 ITS 2,000 + 60초 캐시, AI 0. KST 0시 초기화. 공급자 429 → 다음 KST 0시까지 차단. 카운터는 서버 메모리(인스턴스별 근사치, 저장소 교체 가능). 클라이언트 카운터 단독 사용 금지. 최종 과금 차단은 공급자 측 하드 캡에 의존.
+- 설명(계약 확정, TASK-003): AI 미설정·차단·실패·검증 실패 시 규칙 기반 설명(`source: "rules"`). AI 문장 사실 검증 규칙은 TASK-007.
 
 ## 6. 보안·개인정보·안전
 - 비밀키는 서버 측 비밀 저장소에만 보관. 브라우저 공개키는 공급자별 제한 설정 검증.

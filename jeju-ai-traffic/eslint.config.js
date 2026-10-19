@@ -13,6 +13,9 @@ export default tseslint.config(
       ecmaVersion: 2023,
       globals: { ...globals.browser, ...globals.node },
     },
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+    },
   },
   {
     files: ["web/src/**/*.{ts,tsx}"],

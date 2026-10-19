@@ -47,3 +47,4 @@
 | 2026-10-19 | TASK-003 | 기타 | "2. 승인" | — | 내부 일일 한도: 카카오 8,000건(사용 6,000건 이상이면 자동 재평가 차단), 제주 ITS 2,000건 + 60초 캐시, AI 0건(차단, TASK-007에서 결정). 초기화는 KST 0시. 공급자 429 시 다음 KST 0시까지 차단 |
 | 2026-10-19 | TASK-003 | 기타 | "3. 승인" | — | 오류↔HTTP: `INVALID_INPUT` 400, `LOCATION_UNAVAILABLE` 422, `QUOTA_BLOCKED` 429(`retryAfter` 다음 0시), `PROVIDER_UNAVAILABLE` 503, `STALE_DATA` 200+`stale: true` |
 | 2026-10-19 | TASK-003 | 기타 | "4. 승인" | — | 제외: 카카오 응답 정규화(TASK-005), ITS 정규화(TASK-006), 사용자별 요청 빈도 제한(TASK-004), 실호출·배포 |
+| 2026-10-19 | TASK-003 | 기타 | (실행 종료) | `진행 중` → `결과 검토` | `reports/TASK-003-RESULT.md` 작성. lint·typecheck·test(38/38)·build 통과. 사용자 승인이 아닌 AGENTS.md 규칙 5에 따른 전환. 외부 호출·배포 없음. 완료 승인 대기 |
