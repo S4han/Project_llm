@@ -1,36 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { ProviderError } from "../../api/_lib/errors";
-import { createJejuItsProvider, normalizeItsResponse, parseKstTime } from "../../api/_lib/providers/jejuIts";
+import { createJejuItsProvider, normalizeItsResponse } from "../../api/_lib/providers/jejuIts";
 import { ITS_EMPTY, ITS_EVENTS, ITS_NOT_REGISTERED, ITS_WORKS } from "../fixtures/jejuIts";
 
 const AT = "2026-10-19T07:00:00.000Z";
 
-describe("parseKstTime", () => {
-  it("KST 시각 문자열을 ISO(UTC)로", () => {
-    expect(parseKstTime("2026-10-19 15:58:00")).toBe("2026-10-19T06:58:00.000Z");
-    expect(parseKstTime("202610190930")).toBe("2026-10-19T00:30:00.000Z");
-    expect(parseKstTime("2026-10-19")).toBeNull();
-    expect(parseKstTime(null)).toBeNull();
-  });
-});
-
 describe("normalizeItsResponse", () => {
-  it("좌표를 읽고 무효 좌표(90,180)는 버리며, 원천 시각이 없으면 null", () => {
-    expect(normalizeItsResponse(ITS_EVENTS, "event", AT)).toEqual([
+  it("돌발: ocrr_id를 ID로, code를 설명으로(534 정지차량·258 지정체구간·그 외 코드 표기), 시각 필드가 없어 sourceTime null", () => {
+    const events = normalizeItsResponse(ITS_EVENTS, "event", AT);
+    expect(events[0]).toEqual({
+      id: "event-RA_0000000001",
+      kind: "event",
+      description: "정지차량",
+      location: { lat: 33.4366, lng: 126.4242 },
+      observedAt: AT,
+      sourceTime: null,
+      source: "jejuIts",
+    });
+    expect(events.map((e) => e.description)).toEqual(["정지차량", "정지차량", "지정체구간", "돌발 상황(코드 999)"]);
+  });
+
+  it("공사: text를 설명으로 쓰고 무효 좌표(90, 180)는 버린다", () => {
+    expect(normalizeItsResponse(ITS_WORKS, "roadwork", AT)).toEqual([
       {
-        id: "event-e1",
-        kind: "event",
-        description: "정지차량",
-        location: { lat: 33.4366, lng: 126.4242 },
-        observedAt: AT,
-        sourceTime: "2026-10-19T06:58:00.000Z",
-        source: "jejuIts",
-      },
-      {
-        id: "event-e2",
-        kind: "event",
-        description: "정지차량",
-        location: { lat: 33.4366, lng: 126.4242 },
+        id: "roadwork-2001",
+        kind: "roadwork",
+        description: "가상교차로 - 가상마을",
+        location: { lat: 33.4, lng: 126.6185 },
         observedAt: AT,
         sourceTime: null,
         source: "jejuIts",
@@ -38,9 +34,13 @@ describe("normalizeItsResponse", () => {
     ]);
   });
 
-  it("설명 필드가 없으면 종류 이름, ID가 없으면 link_id와 순번", () => {
-    const [work] = normalizeItsResponse(ITS_WORKS, "roadwork", AT);
-    expect(work).toMatchObject({ id: "roadwork-4070002-0", description: "도로 공사", sourceTime: "2026-10-19T00:30:00.000Z" });
+  it("ocrr_id·text가 없으면 link_id와 순번, 종류 이름", () => {
+    const [closure] = normalizeItsResponse(
+      { result: "success", info: [{ latitude: 33.45, longitude: 126.5, link_id: "4050000020" }] },
+      "closure",
+      AT,
+    );
+    expect(closure).toMatchObject({ id: "closure-4050000020-0", description: "도로 통제" });
   });
 
   it("result가 success가 아니면 장애(키 미등록 등)", () => {
@@ -74,7 +74,7 @@ describe("createJejuItsProvider (모의 fetch, 실제 호출 없음)", () => {
       "http://api.jejuits.go.kr/api/infoRoadEventList?code=test-key",
       "http://api.jejuits.go.kr/api/infoRoadWorkList?code=test-key",
     ]);
-    expect(incidents.map((i) => i.kind)).toEqual(["event", "event", "roadwork"]);
+    expect(incidents.map((i) => i.kind)).toEqual(["event", "event", "event", "event", "roadwork"]);
   });
 
   it("일부 실패는 성공분, 모두 실패는 장애, 모두 429는 rate_limited", async () => {
@@ -83,7 +83,7 @@ describe("createJejuItsProvider (모의 fetch, 실제 호출 없음)", () => {
       infoRoadCloseList: { status: 500, body: {} },
       infoRoadWorkList: ok(ITS_NOT_REGISTERED),
     });
-    expect(await createJejuItsProvider("k", partial.impl).fetchIncidents()).toHaveLength(2);
+    expect(await createJejuItsProvider("k", partial.impl).fetchIncidents()).toHaveLength(4);
 
     const allFail = fakeFetch({
       infoRoadEventList: { status: 500, body: {} },

@@ -23,37 +23,26 @@ const KIND_LABEL: Record<IncidentKind, string> = {
   weather: "교통기상",
 };
 
+/** 돌발 유형 코드(제주 ITS 오픈API 안내 페이지 기준, TASK-001). 그 밖의 코드는 "돌발 상황(코드 N)". */
+const EVENT_CODES: Record<number, string> = {
+  534: "정지차량",
+  258: "지정체구간",
+};
+
 /**
- * 항목 필드 이름은 TASK-001에서 좌표(latitude·longitude)와 link_id만 확인됐다.
- * 설명·시각 필드는 아래 후보 중 처음 값이 있는 것을 쓴다(TASK-006 실호출로 확인 후 정리).
+ * 항목 필드(TASK-006 실호출 확인, 2026-10-19):
+ * - 돌발: ocrr_id, latitude, longitude, heading, link_id, code
+ * - 공사: ocrr_id, latitude, longitude, heading, link_id, whole_lane, block_lane, text
+ * - 통제: 확인 시점 0건이라 필드 미확인(공사와 같은 형식으로 가정)
+ * 세 API 모두 시각 필드가 없어 sourceTime은 null이고, 화면에는 조회 시각을 표시한다.
  */
-const DESCRIPTION_KEYS = ["event_name", "eventName", "incident_name", "type_name", "title", "contents", "content", "descr", "message", "road_name"];
-const TIME_KEYS = ["update_time", "updateTime", "reg_date", "regDate", "regdate", "occur_time", "start_time", "startTime", "created_at", "date"];
-const ID_KEYS = ["id", "event_id", "eventId", "incident_id", "seq", "idx"];
-
-function firstString(item: Record<string, unknown>, keys: string[]): string | null {
-  for (const key of keys) {
-    const v = item[key];
-    if ((typeof v === "string" && v.trim()) || typeof v === "number") return String(v).trim();
+function describe(item: Record<string, unknown>, kind: IncidentKind): string {
+  const text = typeof item.text === "string" ? item.text.trim() : "";
+  if (text) return text;
+  if (kind === "event" && typeof item.code === "number") {
+    return EVENT_CODES[item.code] ?? `${KIND_LABEL.event}(코드 ${item.code})`;
   }
-  return null;
-}
-
-/** "YYYY-MM-DD HH:MM(:SS)" 또는 "YYYYMMDDHHMM(SS)"를 KST로 보고 ISO로 바꾼다. 해석할 수 없으면 null. */
-export function parseKstTime(raw: string | null): string | null {
-  if (!raw) return null;
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length < 12) return null;
-  const [y, mo, d, h, mi, s] = [
-    digits.slice(0, 4),
-    digits.slice(4, 6),
-    digits.slice(6, 8),
-    digits.slice(8, 10),
-    digits.slice(10, 12),
-    digits.slice(12, 14) || "00",
-  ];
-  const ms = Date.parse(`${y}-${mo}-${d}T${h}:${mi}:${s}+09:00`);
-  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+  return KIND_LABEL[kind];
 }
 
 /** 제주 ITS 응답 하나 → TrafficIncident[]. result가 success가 아니면 장애. 무효·범위 밖 좌표는 버린다. */
@@ -66,14 +55,14 @@ export function normalizeItsResponse(body: unknown, kind: IncidentKind, observed
     const item = raw as Record<string, unknown>;
     const location = { lat: Number(item.latitude ?? item.lat), lng: Number(item.longitude ?? item.lng) };
     if (!isInJeju(location)) return;
-    const id = firstString(item, ID_KEYS) ?? `${firstString(item, ["link_id"]) ?? "x"}-${index}`;
+    const id = typeof item.ocrr_id === "string" && item.ocrr_id ? item.ocrr_id : `${String(item.link_id ?? "x")}-${index}`;
     incidents.push({
       id: `${kind}-${id}`,
       kind,
-      description: firstString(item, DESCRIPTION_KEYS) ?? KIND_LABEL[kind],
+      description: describe(item, kind),
       location,
       observedAt,
-      sourceTime: parseKstTime(firstString(item, TIME_KEYS)),
+      sourceTime: null,
       source: "jejuIts",
     });
   });
