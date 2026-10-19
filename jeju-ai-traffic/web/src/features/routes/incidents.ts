@@ -1,6 +1,8 @@
 import type { TrafficIncident } from "../../../../shared/contracts/traffic";
 import { INCIDENT_LABEL } from "./trafficStyle";
 
+export type IncidentGroup = ReturnType<typeof groupIncidents>[number];
+
 /** 같은 종류·내용의 사건을 한 줄로 묶는다(예: "정지차량 감지 3건", TASK-011). */
 export function groupIncidents(incidents: TrafficIncident[]) {
   const groups = new Map<string, { first: TrafficIncident; items: TrafficIncident[] }>();
@@ -20,6 +22,8 @@ export function groupIncidents(incidents: TrafficIncident[]) {
       latestSourceTime: times.at(-1) ?? null,
       observedAt: first.observedAt,
       mock: items.some((i) => i.source === "mock"),
+      /** 지도에서 한 곳씩 보여 줄 사건(입력 순서). */
+      items,
     };
   });
 }

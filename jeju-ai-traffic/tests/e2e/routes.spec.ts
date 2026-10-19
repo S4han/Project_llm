@@ -118,7 +118,7 @@ test.describe("지도 (OSM 타일 차단 상태)", () => {
   test("카카오 추천 경로의 모의 사건을 종류별로 묶어 표시", async ({ page }) => {
     await setup(page, "서귀포", "서귀포시청 제1청사");
     await page.getByRole("button", { name: "경로 조회" }).click();
-    const card = page.getByRole("button", { name: /카카오 추천/ });
+    const card = page.getByRole("listitem", { name: "카카오 추천" });
     await expect(card).toContainText("확인된 교통 사건 2건");
     await expect(card).toContainText("정지차량 감지 1건");
     await expect(card).toContainText("공사 도로 공사 1건");
@@ -126,6 +126,40 @@ test.describe("지도 (OSM 타일 차단 상태)", () => {
     await expect(page.getByRole("region", { name: "경로 지도" }).locator("path.incident-marker")).toHaveCount(2);
     await card.scrollIntoViewIfNeeded();
     await shot(page, "TASK-011-02-incident-group");
+  });
+
+  test("사건 묶음을 누르면 지도에서 지점을 강조·확대, '다음 지점'·'전체 보기' (TASK-011 계획 (b))", async ({ page }) => {
+    // 모의 정지차량 1곳에 같은 경로 위 1곳을 더해 '다음 지점'을 확인한다(응답 대체).
+    await page.route("**/api/routes/compare", async (route) => {
+      const body = await (await route.fetch()).json();
+      const first = body.incidents.find((i: { kind: string }) => i.kind === "event");
+      const extra = { ...first, id: "mock-event-2", location: { lat: 33.4687, lng: 126.503 } };
+      body.incidents.push(extra);
+      body.routes[0].incidentIds.push(extra.id);
+      await route.fulfill({ json: body });
+    });
+    await setup(page, "서귀포", "서귀포시청 제1청사");
+    await page.getByRole("button", { name: "경로 조회" }).click();
+    const map = page.getByRole("region", { name: "경로 지도" });
+    await expect(map.locator("path.incident-marker")).toHaveCount(3);
+    await expect(map.locator("path.incident-current")).toHaveCount(0);
+
+    await page.getByRole("button", { name: /정지차량 감지 2건/ }).click();
+    const bar = page.getByRole("status").filter({ hasText: "번째 지점 표시 중" });
+    await expect(bar).toContainText("정지차량 감지 1/2번째 지점 표시 중");
+    await expect(map.locator("path.incident-current")).toHaveCount(1);
+    await expect(map.locator("path.incident-focus")).toHaveCount(2);
+    await expect(map.locator(".leaflet-popup-content")).toContainText("정지차량(모의 데이터) · 조회");
+    await shot(page, "TASK-011-04-incident-focus");
+
+    await bar.getByRole("button", { name: "다음 지점 ›" }).click();
+    await expect(bar).toContainText("정지차량 감지 2/2번째 지점 표시 중");
+    await expect(map.locator("path.incident-current")).toHaveCount(1);
+
+    await bar.getByRole("button", { name: "전체 보기" }).click();
+    await expect(page.getByText(/번째 지점 표시 중/)).toHaveCount(0);
+    await expect(map.locator("path.incident-current")).toHaveCount(0);
+    await expect(map.locator("path.incident-focus")).toHaveCount(0);
   });
 
   test("ITS 미확보와 오래된 정보 표시", async ({ page }) => {

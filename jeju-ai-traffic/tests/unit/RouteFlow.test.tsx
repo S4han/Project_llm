@@ -197,11 +197,46 @@ describe("지도·혼잡·교통 사건", () => {
   it("선택 경로의 확인된 사건과 원천 시각을 보여 준다", async () => {
     compare = () => Response.json(WITH_TRAFFIC);
     await selectAndQuery();
-    const recommend = await screen.findByRole("button", { name: /카카오 추천/ });
+    const recommend = await screen.findByRole("listitem", { name: "카카오 추천" });
     expect(recommend.textContent).toContain("확인된 교통 사건 1건");
     expect(recommend.textContent).toContain("정지차량 감지 1건");
     expect(recommend.textContent).toContain("원천 10월 19일 15:58");
     expect(screen.getByText(/제주 ITS 돌발·통제·공사 정보\(경로 200m 이내\)/)).toBeTruthy();
+  });
+
+  it("사건 묶음을 누르면 지도에 지점 표시, 여러 곳이면 '다음 지점', '전체 보기'로 닫는다 (TASK-011 계획 (b))", async () => {
+    const two = { id: "event-2", kind: "event", description: "정지차량", location: { lat: 33.45, lng: 126.47 }, observedAt: OBSERVED, sourceTime: null, source: "jejuIts" } as const;
+    compare = () =>
+      Response.json({
+        ...WITH_TRAFFIC,
+        routes: [{ ...WITH_TRAFFIC.routes[0]!, incidentIds: ["event-1", "event-2"] }],
+        incidents: [...WITH_TRAFFIC.incidents, two],
+      });
+    await selectAndQuery();
+    const group = await screen.findByRole("button", { name: /정지차량 감지 2건/ });
+    expect(group.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(group);
+    expect(group.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("정지차량 감지 1/2번째 지점 표시 중")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "다음 지점 ›" }));
+    expect(screen.getByText("정지차량 감지 2/2번째 지점 표시 중")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "다음 지점 ›" }));
+    expect(screen.getByText("정지차량 감지 1/2번째 지점 표시 중")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "전체 보기" }));
+    expect(screen.queryByText(/번째 지점 표시 중/)).toBeNull();
+    expect(group.getAttribute("aria-pressed")).toBe("false");
+    // 같은 줄을 다시 누르면 닫힌다
+    fireEvent.click(group);
+    fireEvent.click(group);
+    expect(screen.queryByText(/번째 지점 표시 중/)).toBeNull();
+  });
+
+  it("한 곳뿐인 사건 묶음은 '다음 지점' 없이 지점만 보여 준다", async () => {
+    compare = () => Response.json(WITH_TRAFFIC);
+    await selectAndQuery();
+    fireEvent.click(await screen.findByRole("button", { name: /정지차량 감지 1건/ }));
+    expect(screen.getByText("정지차량 감지 지점 표시 중")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "다음 지점 ›" })).toBeNull();
   });
 
   it("사건이 없으면 '확인되지 않음'과 한계를 함께 알린다", async () => {
