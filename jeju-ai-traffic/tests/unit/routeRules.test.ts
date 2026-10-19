@@ -23,6 +23,8 @@ function route(id: string, durationSeconds: number, distanceMeters: number): Rou
     geometry: [],
     observedAt: "2026-10-19T00:00:00.000Z",
     trafficStatus: "unknown",
+    segments: [],
+    incidentIds: [],
   };
 }
 

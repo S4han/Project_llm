@@ -17,6 +17,8 @@ export const ROUTES: RouteOption[] = [
     geometry: [AIRPORT, SEOGWIPO],
     observedAt: OBSERVED_AT,
     trafficStatus: "smooth",
+    segments: [{ startIndex: 0, endIndex: 1, status: "smooth", distanceMeters: 1000 }],
+    incidentIds: [],
   },
   {
     id: "via516",
@@ -27,6 +29,8 @@ export const ROUTES: RouteOption[] = [
     geometry: [AIRPORT, SEOGWIPO],
     observedAt: OBSERVED_AT,
     trafficStatus: "unknown",
+    segments: [{ startIndex: 0, endIndex: 1, status: "unknown", distanceMeters: 1000 }],
+    incidentIds: [],
   },
   {
     id: "via1100",
@@ -37,6 +41,8 @@ export const ROUTES: RouteOption[] = [
     geometry: [AIRPORT, SEOGWIPO],
     observedAt: OBSERVED_AT,
     trafficStatus: "slow",
+    segments: [{ startIndex: 0, endIndex: 1, status: "slow", distanceMeters: 1000 }],
+    incidentIds: [],
   },
 ];
 
@@ -47,6 +53,7 @@ export const INCIDENTS: TrafficIncident[] = [
     description: "정지차량",
     location: { lat: 33.43, lng: 126.45 },
     observedAt: OBSERVED_AT,
+    sourceTime: null,
     source: "jejuIts",
   },
 ];

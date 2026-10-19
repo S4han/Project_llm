@@ -8,7 +8,7 @@ import { App } from "../../web/src/App";
 const OBSERVED = "2026-10-19T07:05:00.000Z"; // KST 16:05
 
 function route(id: string, label: string, durationSeconds: number, distanceMeters: number): RouteOption {
-  return { id, provider: "kakao", label, durationSeconds, distanceMeters, geometry: [], observedAt: OBSERVED, trafficStatus: "unknown" };
+  return { id, provider: "kakao", label, durationSeconds, distanceMeters, geometry: [], observedAt: OBSERVED, trafficStatus: "unknown", segments: [], incidentIds: [] };
 }
 
 const FOUR: RouteCompareResponse = {
@@ -22,11 +22,17 @@ const FOUR: RouteCompareResponse = {
   tiedRouteIds: [],
   observedAt: OBSERVED,
   stale: false,
+  incidents: [],
+  incidentsStatus: "ok",
+  incidentsObservedAt: OBSERVED,
 };
 
 let compare: () => Response;
 let compareCalls = 0;
 beforeEach(() => {
+  // Date만 고정(조회 1분 후). 타이머는 실제로 둔다.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-19T07:06:00.000Z"));
   compareCalls = 0;
   compare = () => Response.json(FOUR);
   vi.stubGlobal(
@@ -46,6 +52,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 async function pick(label: "출발지" | "목적지", q: string, name: string) {
@@ -69,7 +76,7 @@ describe("경로 조회 화면", () => {
     await selectAndQuery();
     const section = await screen.findByRole("region", { name: "경로 비교" });
     expect(within(section).getByText("10월 19일 16:05 조회 기준 · 카카오모빌리티 예상시간")).toBeTruthy();
-    const cards = within(section).getAllByRole("listitem");
+    const cards = within(within(section).getByRole("list", { name: "경로 목록" })).getAllByRole("listitem");
     expect(cards.map((c) => c.getAttribute("aria-label"))).toEqual(["카카오 추천", "516도로 경유", "최단거리", "1100도로 경유"]);
     expect(within(cards[0]!).getByText("추천")).toBeTruthy();
     expect(within(cards[0]!).getByText("1시간 9분")).toBeTruthy();
@@ -135,5 +142,89 @@ describe("경로 조회 화면", () => {
     await screen.findByRole("region", { name: "경로 비교" });
     fireEvent.click(screen.getAllByRole("button", { name: "변경" })[1]!);
     await waitFor(() => expect(screen.queryByRole("region", { name: "경로 비교" })).toBeNull());
+  });
+});
+
+describe("지도·혼잡·교통 사건", () => {
+  const seg = (startIndex: number, status: "smooth" | "slow" | "congested" | "unknown", distanceMeters: number) => ({
+    startIndex, endIndex: startIndex + 1, status, distanceMeters,
+  });
+  const line = [{ lat: 33.5, lng: 126.49 }, { lat: 33.4, lng: 126.45 }, { lat: 33.25, lng: 126.56 }];
+  const WITH_TRAFFIC: RouteCompareResponse = {
+    ...FOUR,
+    routes: [
+      { ...route("recommend", "카카오 추천", 4166, 52300), geometry: line, segments: [seg(0, "smooth", 30000), seg(1, "slow", 22300)], incidentIds: ["event-1"] },
+      { ...route("distance", "최단거리", 4770, 43000), geometry: line, segments: [seg(0, "unknown", 43000)] },
+    ],
+    incidents: [
+      { id: "event-1", kind: "event", description: "정지차량", location: { lat: 33.43, lng: 126.46 }, observedAt: OBSERVED, sourceTime: "2026-10-19T06:58:00.000Z", source: "jejuIts" },
+    ],
+  };
+
+  it("지도와 범례, 경로별 혼잡 비율을 보여 준다 (AC-007-01, AC-005-02·03)", async () => {
+    compare = () => Response.json(WITH_TRAFFIC);
+    await selectAndQuery();
+    expect(await screen.findByRole("region", { name: "경로 지도" })).toBeTruthy();
+    expect(screen.getByRole("list", { name: "혼잡 범례" }).textContent).toContain("정보 미확보");
+    const first = screen.getByRole("button", { name: /카카오 추천/ });
+    const second = screen.getByRole("button", { name: /최단거리/ });
+    expect(first.textContent).toContain("원활 57% · 서행 43%");
+    expect(second.textContent).toContain("정보 미확보 100%");
+    expect(second.textContent).not.toContain("원활");
+  });
+
+  it("추천 경로가 기본 선택이고, 카드를 누르면 선택이 바뀐다 (AC-007-02·03)", async () => {
+    compare = () => Response.json(WITH_TRAFFIC);
+    await selectAndQuery();
+    const recommend = await screen.findByRole("button", { name: /카카오 추천/ });
+    const distance = screen.getByRole("button", { name: /최단거리/ });
+    expect(recommend.getAttribute("aria-pressed")).toBe("true");
+    expect(distance.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(distance);
+    expect(distance.getAttribute("aria-pressed")).toBe("true");
+    expect(recommend.getAttribute("aria-pressed")).toBe("false");
+    expect(within(distance).getByText("지도에 표시 중")).toBeTruthy();
+  });
+
+  it("선택 경로의 확인된 사건과 원천 시각을 보여 준다", async () => {
+    compare = () => Response.json(WITH_TRAFFIC);
+    await selectAndQuery();
+    const recommend = await screen.findByRole("button", { name: /카카오 추천/ });
+    expect(recommend.textContent).toContain("확인된 교통 사건 1건");
+    expect(recommend.textContent).toContain("돌발 정지차량");
+    expect(recommend.textContent).toContain("원천 10월 19일 15:58");
+    expect(screen.getByText(/제주 ITS 돌발·통제·공사 정보\(경로 200m 이내\)/)).toBeTruthy();
+  });
+
+  it("사건이 없으면 '확인되지 않음'과 한계를 함께 알린다", async () => {
+    await selectAndQuery();
+    expect(await screen.findByText(/경로 주변 사건이 확인되지 않았습니다. 모든 도로의 사건이 제공되지는 않습니다/)).toBeTruthy();
+  });
+
+  it("ITS 실패·한도면 '교통 사건 정보 미확보(사유)'를 표시하고 경로는 유지한다 (AC-005-04)", async () => {
+    compare = () => Response.json({ ...FOUR, incidentsStatus: "unavailable", incidentsObservedAt: null });
+    await selectAndQuery();
+    expect(await screen.findByText(/교통 사건 정보 미확보\(조회 실패\)/)).toBeTruthy();
+    expect(screen.getByRole("list", { name: "경로 목록" })).toBeTruthy();
+    cleanup();
+    compare = () => Response.json({ ...FOUR, incidentsStatus: "quotaBlocked", incidentsObservedAt: null });
+    await selectAndQuery();
+    expect(await screen.findByText(/교통 사건 정보 미확보\(조회 한도 도달\)/)).toBeTruthy();
+  });
+
+  it("조회 10분이 지나면 '오래된 정보'와 다시 조회 (NFR-007)", async () => {
+    vi.setSystemTime(new Date("2026-10-19T07:16:00.000Z"));
+    await selectAndQuery();
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("오래된 정보입니다(11분 전 조회)");
+    fireEvent.click(within(alert).getByRole("button", { name: "다시 조회" }));
+    await waitFor(() => expect(compareCalls).toBe(2));
+  });
+
+  it("10분 이내면 오래된 정보 표시가 없다", async () => {
+    vi.setSystemTime(new Date("2026-10-19T07:15:00.000Z"));
+    await selectAndQuery();
+    await screen.findByRole("region", { name: "경로 비교" });
+    expect(screen.queryByText(/오래된 정보/)).toBeNull();
   });
 });

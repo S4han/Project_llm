@@ -3,6 +3,8 @@ import type { MockBehavior } from "../../api/_lib/providers/mock";
 import { MockRouteProvider } from "../../api/_lib/providers/mock";
 import { DEFAULT_BUDGETS, MemoryQuotaStore, QuotaGuard } from "../../api/_lib/policies/quota";
 import { RateLimiter } from "../../api/_lib/policies/rateLimit";
+import { TtlCache } from "../../api/_lib/policies/ttlCache";
+import { createMockTrafficProvider } from "../../api/_lib/providers/mockTraffic";
 import { handleRouteCompare, selectRouteProvider, type RoutesDeps } from "../../api/_lib/routes";
 import type { RouteCompareRequest, RouteOption } from "../../shared/contracts/route";
 import type { RouteQuery, RouteResult } from "../../shared/rules/route";
@@ -15,7 +17,7 @@ const CROSS = { origin: AIRPORT, destination: SEOGWIPO };
 const SAME_SIDE = { origin: AIRPORT, destination: SEONGSAN };
 
 function route(id: string, durationSeconds: number, distanceMeters: number): RouteOption {
-  return { id, provider: "kakao", label: id, durationSeconds, distanceMeters, geometry: [], observedAt: NOW.toISOString(), trafficStatus: "unknown" };
+  return { id, provider: "kakao", label: id, durationSeconds, distanceMeters, geometry: [], observedAt: NOW.toISOString(), trafficStatus: "unknown", segments: [], incidentIds: [] };
 }
 
 // 실호출 요약값(공항→서귀포시청)을 본뜬 합성 값
@@ -24,7 +26,15 @@ const ROUTES = [route("recommend", 4166, 52300), route("distance", 4770, 43000),
 function setup(routes: RouteOption[] = ROUTES) {
   const provider = new MockRouteProvider(routes);
   const guard = new QuotaGuard(new MemoryQuotaStore(), DEFAULT_BUDGETS, () => NOW);
-  const deps: RoutesDeps = { provider, guard, limiter: new RateLimiter(10, 60_000, () => NOW.getTime()), now: () => NOW };
+  const traffic = createMockTrafficProvider(() => NOW);
+  const deps: RoutesDeps = {
+    provider,
+    traffic,
+    incidentCache: new TtlCache(60_000, () => NOW.getTime()),
+    guard,
+    limiter: new RateLimiter(10, 60_000, () => NOW.getTime()),
+    now: () => NOW,
+  };
   const post = (body: unknown, ip = "1.1.1.1") =>
     handleRouteCompare(
       new Request("http://localhost/api/routes/compare", {
@@ -34,7 +44,7 @@ function setup(routes: RouteOption[] = ROUTES) {
       }),
       deps,
     );
-  return { provider, guard, post };
+  return { provider, traffic, guard, post };
 }
 
 describe("POST /api/routes/compare", () => {
@@ -155,6 +165,52 @@ describe("POST /api/routes/compare", () => {
       expect(res.status).toBe(400);
       expect((await res.json()).error.message).toContain(text);
     }
+  });
+});
+
+describe("교통 사건 연결 (제주 ITS, 모의)", () => {
+  // 평화로 부근 모의 사건(33.4366, 126.4242)을 지나는 경로와 지나지 않는 경로
+  const near = { ...route("recommend", 4166, 52300), geometry: [{ lat: 33.45, lng: 126.43 }, { lat: 33.42, lng: 126.418 }] };
+  const far = { ...route("distance", 4770, 43000), geometry: [{ lat: 33.45, lng: 126.55 }, { lat: 33.3, lng: 126.56 }] };
+
+  it("200m 이내 사건만 해당 경로에 연결하고, 연결된 사건만 응답에 담는다 (AC-005-01·02)", async () => {
+    const { post } = setup([near, far]);
+    const body = await (await post(SAME_SIDE)).json();
+    const byId = Object.fromEntries(body.routes.map((r: RouteOption) => [r.id, r.incidentIds]));
+    expect(byId).toEqual({ recommend: ["mock-event-1"], distance: [] });
+    expect(body.incidents.map((i: { id: string }) => i.id)).toEqual(["mock-event-1"]);
+    expect(body.incidentsStatus).toBe("ok");
+    expect(body.incidentsObservedAt).toBe(NOW.toISOString());
+  });
+
+  it("60초 안의 두 번째 조회는 캐시를 쓴다(ITS 호출 1회, 사용량 3)", async () => {
+    const { post, traffic, guard } = setup([near]);
+    await post(SAME_SIDE);
+    await post(SAME_SIDE);
+    expect(traffic.calls).toBe(1);
+    expect((await guard.status("jejuIts")).used).toBe(3);
+  });
+
+  it("ITS 실패면 경로는 그대로 주고 incidentsStatus unavailable (AC-005-04)", async () => {
+    const { post, traffic } = setup([near]);
+    traffic.fetchIncidents = async () => {
+      throw new Error("down");
+    };
+    const res = await post(SAME_SIDE);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.routes).toHaveLength(1);
+    expect(body.incidentsStatus).toBe("unavailable");
+    expect(body.incidents).toEqual([]);
+    expect(body.incidentsObservedAt).toBeNull();
+  });
+
+  it("ITS 한도면 quotaBlocked, ITS 호출 0회", async () => {
+    const { post, traffic, guard } = setup([near]);
+    await guard.reserve("jejuIts", { cost: 2000 });
+    const body = await (await post(SAME_SIDE)).json();
+    expect(body.incidentsStatus).toBe("quotaBlocked");
+    expect(traffic.calls).toBe(0);
   });
 });
 

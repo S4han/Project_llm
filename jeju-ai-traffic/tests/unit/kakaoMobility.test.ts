@@ -9,7 +9,7 @@ const RECOMMEND: RouteQuery = { kind: "recommend", label: "카카오 추천" };
 const REQUEST = { origin: { lat: 33.5066, lng: 126.4929 }, destination: { lat: 33.2541, lng: 126.5601 } };
 
 describe("normalizeKakaoDirections", () => {
-  it("요약값을 그대로 쓰고 vertexes를 좌표로 바꾼다", () => {
+  it("요약값을 그대로 쓰고 vertexes를 좌표로, 도로별 traffic_state를 구간 혼잡으로 바꾼다", () => {
     expect(normalizeKakaoDirections(DIRECTIONS_OK, RECOMMEND, AT)).toEqual({
       ok: true,
       route: {
@@ -25,7 +25,12 @@ describe("normalizeKakaoDirections", () => {
           { lat: 33.2541, lng: 126.5601 },
         ],
         observedAt: AT,
-        trafficStatus: "unknown",
+        trafficStatus: "smooth",
+        segments: [
+          { startIndex: 0, endIndex: 1, status: "smooth", distanceMeters: 30000 },
+          { startIndex: 1, endIndex: 3, status: "slow", distanceMeters: 22300 },
+        ],
+        incidentIds: [],
       },
     });
   });

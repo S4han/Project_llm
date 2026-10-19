@@ -9,8 +9,8 @@ export const DIRECTIONS_OK = {
       sections: [
         {
           roads: [
-            { name: "가상로", vertexes: [126.4929, 33.5066, 126.49, 33.45] },
-            { name: "가상로2", vertexes: [126.52, 33.35, 126.5601, 33.2541] },
+            { name: "가상로", distance: 30000, traffic_state: 4, vertexes: [126.4929, 33.5066, 126.49, 33.45] },
+            { name: "가상로2", distance: 22300, traffic_state: 2, vertexes: [126.52, 33.35, 126.5601, 33.2541] },
           ],
         },
       ],

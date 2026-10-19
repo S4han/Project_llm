@@ -1,5 +1,5 @@
 import type { Freshness, IsoDateTime } from "./common.js";
-import type { TrafficStatus } from "./traffic.js";
+import type { IncidentsStatus, TrafficIncident, TrafficSegment, TrafficStatus } from "./traffic.js";
 
 export interface Coordinate {
   lat: number;
@@ -20,7 +20,12 @@ export interface RouteOption {
   distanceMeters: number;
   geometry: Coordinate[];
   observedAt: IsoDateTime;
+  /** 거리 기준으로 가장 많은 구간의 혼잡 상태. */
   trafficStatus: TrafficStatus;
+  /** 구간별 혼잡(카카오 traffic_state). */
+  segments: TrafficSegment[];
+  /** 이 경로 200m 이내로 확인된 사건 ID(응답의 incidents 참조). */
+  incidentIds: string[];
 }
 
 export interface RouteCompareRequest {
@@ -34,4 +39,9 @@ export interface RouteCompareResponse extends Freshness {
   recommendedRouteId: string | null;
   /** 추천 경로와 예상시간(초)이 같은 경로 ID들(추천 포함). 동률이 없으면 빈 배열. */
   tiedRouteIds: string[];
+  /** 어느 경로에든 연결된 확인 사건. */
+  incidents: TrafficIncident[];
+  incidentsStatus: IncidentsStatus;
+  /** 교통 사건을 조회한 시각. 조회하지 못했으면 null. */
+  incidentsObservedAt: IsoDateTime | null;
 }

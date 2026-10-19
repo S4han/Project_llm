@@ -1,5 +1,7 @@
 import type { Coordinate, RouteCompareRequest } from "../../../shared/contracts/route.js";
+import type { TrafficSegment } from "../../../shared/contracts/traffic.js";
 import type { RouteQuery, RouteResult } from "../../../shared/rules/route.js";
+import { dominantStatus, kakaoTrafficStatus } from "../../../shared/rules/traffic.js";
 import { ProviderError } from "../errors.js";
 import type { RouteProvider } from "./types.js";
 
@@ -7,6 +9,8 @@ const BASE = "https://apis-navi.kakaomobility.com/v1";
 const TIMEOUT_MS = 8000;
 
 interface KakaoRoad {
+  distance?: unknown;
+  traffic_state?: unknown;
   vertexes?: unknown;
 }
 interface KakaoRoute {
@@ -19,25 +23,37 @@ function xy(c: Coordinate): string {
   return `${c.lng},${c.lat}`;
 }
 
-/** vertexes [x1, y1, x2, y2, ...] → 좌표 목록. */
-function toGeometry(route: KakaoRoute): Coordinate[] {
-  const points: Coordinate[] = [];
+/** roads의 vertexes [x1, y1, x2, y2, ...]를 이어 좌표 목록을 만들고, 도로(블록)마다 혼잡 구간을 기록한다. */
+function toGeometry(route: KakaoRoute): { geometry: Coordinate[]; segments: TrafficSegment[] } {
+  const geometry: Coordinate[] = [];
+  const segments: TrafficSegment[] = [];
   for (const section of route.sections ?? []) {
     for (const road of section.roads ?? []) {
+      const startIndex = Math.max(0, geometry.length - 1);
       const v = Array.isArray(road.vertexes) ? road.vertexes : [];
       for (let i = 0; i + 1 < v.length; i += 2) {
         const lng = Number(v[i]);
         const lat = Number(v[i + 1]);
-        if (Number.isFinite(lat) && Number.isFinite(lng)) points.push({ lat, lng });
+        if (Number.isFinite(lat) && Number.isFinite(lng)) geometry.push({ lat, lng });
+      }
+      const endIndex = geometry.length - 1;
+      const distance = Number(road.distance);
+      if (endIndex > startIndex) {
+        segments.push({
+          startIndex,
+          endIndex,
+          status: kakaoTrafficStatus(road.traffic_state),
+          distanceMeters: Number.isFinite(distance) ? distance : 0,
+        });
       }
     }
   }
-  return points;
+  return { geometry, segments };
 }
 
 /**
  * 카카오모빌리티 길찾기 응답 → RouteResult. result_code가 0이 아니면 경로 없음(102 출발지, 103 도착지 주변 도로 없음).
- * 형식이 맞지 않으면 공급자 장애로 본다. 교통 상태는 TASK-006에서 연결하므로 unknown.
+ * 형식이 맞지 않으면 공급자 장애로 본다. 혼잡은 도로(블록) 평균 traffic_state로, 사건 연결은 처리 단계에서 한다.
  */
 export function normalizeKakaoDirections(body: unknown, query: RouteQuery, observedAt: string): RouteResult {
   const routes = (body as { routes?: unknown } | null)?.routes;
@@ -52,6 +68,7 @@ export function normalizeKakaoDirections(body: unknown, query: RouteQuery, obser
   if (!Number.isFinite(distance) || !Number.isFinite(duration) || duration <= 0) {
     throw new ProviderError("unavailable", "kakao: summary 형식 오류");
   }
+  const { geometry, segments } = toGeometry(route);
   return {
     ok: true,
     route: {
@@ -60,9 +77,11 @@ export function normalizeKakaoDirections(body: unknown, query: RouteQuery, obser
       label: query.label,
       durationSeconds: duration,
       distanceMeters: distance,
-      geometry: toGeometry(route),
+      geometry,
       observedAt,
-      trafficStatus: "unknown",
+      trafficStatus: dominantStatus(segments),
+      segments,
+      incidentIds: [],
     },
   };
 }
