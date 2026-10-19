@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { shot, uniqueClient } from "./client";
+import { newClientContext, shot, uniqueClient } from "./client";
 
 const AIRPORT = { latitude: 33.5066, longitude: 126.4929 };
 
@@ -184,3 +184,33 @@ test.describe("추천 이유", () => {
     await shot(page, "TASK-007-02-ai");
   });
 });
+
+test.describe("길 안내 시작 (FR-008)", () => {
+  test("카카오맵 링크·네이버지도 앱 미실행 감지·목적지 복사", async ({ browser }) => {
+    const context = await newClientContext(browser, {
+      permissions: ["geolocation", "clipboard-read", "clipboard-write"],
+      geolocation: { ...AIRPORT, accuracy: 15 },
+    });
+    const page = await context.newPage();
+    await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
+    await setup(page, "서귀포", "서귀포시청 제1청사");
+    await page.getByRole("button", { name: "경로 조회" }).click();
+    await page.getByRole("button", { name: "길 안내 시작" }).click();
+    await expect(page.getByText(/외부 내비의 경로는 이 화면에서 고른 경로와 다를 수 있습니다/)).toBeVisible();
+
+    const kakao = page.getByRole("link", { name: "카카오맵으로 열기" });
+    await expect(kakao).toHaveAttribute("href", /^https:\/\/map\.kakao\.com\/link\/to\/.+,33\.254100,126\.560100$/);
+
+    // Chromium에는 nmap:// 처리기가 없으므로 1.5초 뒤 대체 안내가 나와야 한다
+    await page.getByRole("button", { name: "네이버지도 앱으로 열기" }).click();
+    await expect(page.getByText("앱이 열리지 않았나요? 카카오맵 웹 링크 또는 목적지 복사를 이용하세요.")).toBeVisible({ timeout: 4000 });
+
+    await page.getByRole("button", { name: "목적지 복사" }).click();
+    await expect(page.getByText(/목적지를 복사했습니다/)).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("서귀포시청 제1청사\n제주특별자치도 서귀포시 중앙로 105");
+    await page.getByRole("button", { name: "길 안내 시작" }).scrollIntoViewIfNeeded();
+    await shot(page, "TASK-008-01-nav");
+    await context.close();
+  });
+});
+

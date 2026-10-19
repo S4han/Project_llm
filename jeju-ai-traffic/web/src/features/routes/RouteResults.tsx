@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ApiError } from "../../../../shared/contracts/common";
+import type { Place } from "../../../../shared/contracts/place";
 import type { RouteCompareResponse, RouteOption } from "../../../../shared/contracts/route";
 import type { IncidentsStatus, TrafficIncident } from "../../../../shared/contracts/traffic";
 import { durationDiffSeconds } from "../../../../shared/rules/route";
@@ -7,13 +8,14 @@ import { isStale, trafficShares } from "../../../../shared/rules/traffic";
 import { errorMessage, formatKstTime } from "../trip/format";
 import { formatDiff, formatDistance, formatDuration } from "./format";
 import { ExplanationCard } from "./ExplanationCard";
+import { NavigationPanel } from "./NavigationPanel";
 import { RouteMap } from "./RouteMap";
 import { INCIDENT_LABEL, STATUS_ORDER, STATUS_STYLE } from "./trafficStyle";
 
 export type CompareState =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "done"; data: RouteCompareResponse }
+  | { kind: "done"; data: RouteCompareResponse; destination: Place }
   | { kind: "error"; error: ApiError };
 
 function Badge({ tone, children }: { tone: "blue" | "amber"; children: string }) {
@@ -114,7 +116,7 @@ function useNow(intervalMs = 30_000): Date {
   return now;
 }
 
-function Results({ data, onRetry }: { data: RouteCompareResponse; onRetry: () => void }) {
+function Results({ data, destination, onRetry }: { data: RouteCompareResponse; destination: Place; onRetry: () => void }) {
   const { routes, recommendedRouteId, tiedRouteIds, observedAt, incidents, incidentsStatus, incidentsObservedAt } = data;
   const [selectedId, setSelectedId] = useState(recommendedRouteId ?? routes[0]?.id ?? "");
   const select = useCallback((id: string) => setSelectedId(id), []);
@@ -163,6 +165,7 @@ function Results({ data, onRetry }: { data: RouteCompareResponse; onRetry: () =>
           예상시간이 같은 경로가 있어 거리가 짧은 경로를 추천합니다.
         </p>
       )}
+      <NavigationPanel destination={destination} />
       <ExplanationCard data={data} />
       <ul aria-label="경로 목록" className="flex flex-col gap-2">
         {ordered.map((route) => (
@@ -210,5 +213,5 @@ export function RouteResults({ state, onRetry }: Props) {
     );
   }
   // 새 응답마다 선택 상태를 추천 경로로 초기화한다.
-  return <Results key={state.data.observedAt} data={state.data} onRetry={onRetry} />;
+  return <Results key={state.data.observedAt} data={state.data} destination={state.destination} onRetry={onRetry} />;
 }
