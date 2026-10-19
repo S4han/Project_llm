@@ -94,3 +94,4 @@
 | 2026-10-19 | TASK-007 | 기타 | (실행 종료) | `진행 중` → `결과 검토` | `reports/TASK-007-RESULT.md` 작성. lint·typecheck·test(160/160)·build·Playwright(17/17) 통과. main 반영 전 Production AI 결정 필요. 사용자 승인이 아닌 AGENTS.md 규칙 5에 따른 전환. 완료 승인 대기 |
 | 2026-10-19 | TASK-007 | 완료 승인 | "완료 승인: TASK-007" | TASK-007 `결과 검토` → `완료`, TASK-008 `미착수` → `대기` | TASK-008 자동 시작 안 함 |
 | 2026-10-19 | — | 실호출 승인 | "Production AI 실호출 승인" | — | **공개 Production에서 Cloudflare Workers AI 설명 사용 승인.** 조건: 검증 정책 통과 문장만 표시(실패 시 규칙 설명), 내부 일일 200건, IP별 분당 10회, 결제수단 미등록(무료 일 10,000 Neurons 초과 시 오류). main 반영 시 적용 |
+| 2026-10-19 | — | 기타 | "main에 합쳐줘" | — | 작업 브랜치 `claude/adoring-sagan-harjwg`를 main에 fast-forward로 반영(TASK-007 AI 설명·규칙 대체·완료 승인 포함). Production 자동 배포 → 공개 사이트에서 Workers AI 설명 사용 시작(Production AI 실호출 승인). 임시 확인 함수 없음 |
