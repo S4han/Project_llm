@@ -43,7 +43,7 @@ export async function GET(): Promise<Response> {
   opens += 1;
 
   const redact = (v: string) => v.split(token).join("[TOKEN]").split(accountId).join("[ACCOUNT]");
-  let usage: unknown = null;
+  let usage: unknown;
   const capturingFetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
     const res = await fetch(url, init);
     const body = await res.clone().json().catch(() => null);
