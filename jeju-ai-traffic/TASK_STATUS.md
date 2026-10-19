@@ -13,7 +13,7 @@
 | 승인 범위 | C단계 표본 실호출. 결제수단 연결 금지, 무료 플랜만, 공급자당 20건 이내 |
 | 차단 요인 | 제주 ITS API: ① 제주 ITS 발급 키(`code`) 없음 ② `api.jejuits.go.kr` 허용 도메인 미등록 ③ jejuits.go.kr 웹 방화벽이 해외 IP 차단 → `reports/TASK-001-RESULT.md` C-2 |
 | 결과 보고서 | `reports/TASK-001-RESULT.md` (A·B단계 + C단계 2026-10-19) |
-| 다음 행동 | 사용자 결정: 제주 ITS 검증을 계속할지(키 신청·도메인 추가), 카카오 소통 정보로 대체하고 TASK-001을 결과 검토로 넘길지 |
+| 다음 행동 | 사용자: 제주 ITS 키 신청·등록, `api.jejuits.go.kr` 허용 도메인 추가 (`docs/C_STAGE_SETUP.md` 8절) → 새 세션에서 Claude가 제주 ITS 표본 호출 → 결과 재보고 |
 | 최종 갱신 | 2026-10-19 |
 
 ## 상태 정의
