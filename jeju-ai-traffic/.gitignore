@@ -1,0 +1,4 @@
+# 비밀정보 (AGENTS.md: 키·토큰을 커밋에 남기지 않는다)
+.env
+.env.*
+!.env.example
