@@ -1,4 +1,4 @@
-# IMPLEMENTATION_PLAN — v0.7 (TASK-006 지도·교통 반영, 2026-10-19)
+# IMPLEMENTATION_PLAN — v0.8 (TASK-007 AI 설명 반영, 2026-10-19)
 
 ## 1. 기준선과 목표
 - 단일 제품 요구사항 기준: `PRD.md` (구글 드라이브 원본 `제주_AI_교통_경로_추천_웹서비스_PRD_v1.0.md`의 사본; 원본 수정 금지).
@@ -15,7 +15,7 @@
 - 장소 검색: **카카오 로컬 키워드 검색**(서버 경유, TASK-004 승인). 내부 일일 한도 3,000건, IP별 분당 20회. 실호출 전 카카오 앱의 카카오맵 무료 쿼터(계정당 첫 활성화 앱) 확인 필요.
 - 지도: **Leaflet + OpenStreetMap 타일**(TASK-006 승인). 키·비용 없음, 출처 표시. 선택 경로는 구간 혼잡 색, 대체 경로는 회색. 지도 실패 시 텍스트 목록 유지.
 - 교통: 구간 혼잡도는 카카오 응답 `traffic_state`(블록 평균; 4 원활, 2·3 서행, 1·6 정체, 0 미확보). **제주 ITS 오픈API**(`http://api.jejuits.go.kr/api/<기능>?code=`)의 돌발·통제·공사를 경로 좌표선 **200m 이내** 매칭으로 표시(TASK-006 구현). 교통기상·VMS는 미포함. 항목 필드: `ocrr_id`, `latitude`, `longitude`, `link_id`, 돌발 `code`, 공사 `text`. **시각 필드 없음** → 조회 시각 표시. 미제공 구간은 `unknown`. 경로·혼잡은 조회 10분 경과 시 '오래된 정보'.
-- AI: 무료 한도 및 청구 차단을 검증한 공급자만 후보. 검증 실패 시 출시 차단 이슈로 보고하고 제품 승인 없이 요구사항 축소 금지.
+- AI: **Cloudflare Workers AI(Free, 일 10,000 Neurons, 초과 시 오류)** — TASK-007 승인. Vercel 함수에서 REST 호출, 기본 모델 `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. 실측(2026-10-19, 4건): 1건 약 14 Neurons(토큰 약 300~360), 응답 1.0~1.5초. 내부 일일 한도 200건. Claude API는 무료 사용량이 없어 월 0원 정책과 불일치로 제외.
 - DB: MVP에서는 도입하지 않는 방안 우선. **단, 공유·원자적 사용량 제한 및 다중 인스턴스 통제**가 필요하면 무료 영속 저장소/공급자 제공 제어수단 검증 후 결정.
 - 테스트: Vitest(규칙·계약), Playwright(브라우저 흐름, TASK-004 이후). 실행 명령은 `README.md`(TASK-002 실측).
 - 쿼터 예산(참고): 추천 1건당 카카오 약 3회 → 일 약 3,300건. 5분 재평가 예산은 TASK-003·009에서 산정.
@@ -51,7 +51,7 @@ tests/unit/, tests/fixtures/, tests/e2e/   # 생성(e2e는 Playwright, TASK-004)
 - `GET /api/places?q=` (구현, TASK-004): 검색어 1~50자 → `{query, places[], observedAt}`. 제주 범위 + '제주특별자치도' 주소만. IP별 분당 20회, `kakaoLocal` 일일 3,000건. 기본 모의 공급자, `PLACES_PROVIDER=kakao`일 때만 실호출.
 - `POST /api/routes/compare` (구현, TASK-005): `{origin, destination}` → `{routes[], recommendedRouteId, tiedRouteIds, observedAt, stale}`. 2회(+횡단 시 경유 2회) 호출, 중복 합치기(거리 1%·시간 120초), 일부 실패 시 성공분, 경로 없음은 400(102 출발지·103 도착지 주변 도로 없음). IP별 분당 10회. 저장·캐시 안 함. 기본 모의, `ROUTES_PROVIDER=kakao`일 때만 실호출.
 - 교통 사건 연결(구현, TASK-006): 별도 엔드포인트 없이 `POST /api/routes/compare` 응답에 `segments`·`incidentIds`·`incidents`·`incidentsStatus`·`incidentsObservedAt`을 넣는다. ITS 실패·한도여도 경로 비교는 유지(AC-005-04).
-- `POST /api/explanations`: 확인된 경로/사건 → 설명, `source: ai|rules`, 근거 목록.
+- `POST /api/explanations` (구현, TASK-007): `ExplanationFacts`(숫자 요약, 좌표 없음, 경로 이름 화이트리스트) → `{explanation, aiStatus}`. 경로 표시 후 별도 요청, AI 4초 제한, IP별 분당 10회. **검증 정책:** 숫자는 입력 계산값과 일치, 경로·도로 이름은 입력 이름만, 정체·서행·공사·통제는 해당 데이터 있을 때만, '사고' 금지, 미확보 30% 초과 시 원활 단정 금지, 3문장·180자. 실패 시 규칙 설명(`source: rules`).
 - `POST /api/routes/reevaluate`: 현 위치/선택 경로 → 잔여시간 비교, 절감 초, 변경 후보, 데이터 시각.
 - 공통 타입: `shared/contracts/`(`RouteOption`, `TrafficStatus`·`TrafficIncident`, `Explanation`, `ApiError`, `Freshness{observedAt, stale}`).
 - 공통 오류(확정, TASK-003): `INVALID_INPUT` 400, `LOCATION_UNAVAILABLE` 422, `QUOTA_BLOCKED` 429(`retryAfter` = 다음 KST 0시, `Retry-After` 헤더), `PROVIDER_UNAVAILABLE` 503, `STALE_DATA` 200 + `stale: true`. 구현 `api/_lib/errors.ts`.

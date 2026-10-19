@@ -89,3 +89,6 @@
 | 2026-10-19 | TASK-007 | 기타 | "2. 승인" | — | **AI 검증 정책:** 숫자(분·km·%·건수)는 입력 계산값과 일치, 경로 이름은 입력 이름만, 조건부 단어(정체·서행·공사·통제는 해당 데이터 있을 때만, 사고 항상 금지, 원활·막힘 없음·정상 소통은 미확보 30% 초과 시 금지), 한국어 3문장·180자 이내. 하나라도 어기면 규칙 설명 |
 | 2026-10-19 | TASK-007 | 기타 | "3. 승인" | — | AI 내부 일일 한도 200건(잠정, 실측 후 조정 보고), 같은 결과 재요청 안 함, `/api/explanations` IP별 분당 10회 |
 | 2026-10-19 | TASK-007 | 실호출 승인 | "4. 승인" | — | Cloudflare Workers AI 실호출 **20건 이내**(Vercel Preview), 결제수단 미등록, 응답 원문 미저장(요약만). 계정·토큰 생성과 Preview 환경 변수 등록은 사용자 수행 |
+| 2026-10-19 | TASK-007 | 기타 | (사용자 수행) Cloudflare 계정·Workers AI 토큰 생성, Vercel 환경 변수 추가 | — | `AI_PROVIDER`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_TOKEN`을 **Production과 Preview**에 추가(승인 범위는 Preview). 카카오·ITS 변수도 Production·Preview로 확인. 처음 두 번은 변수 추가 전 빌드된 배포라 미적용 → 진단 코드 푸시(`2a84260`) 후 정상 |
+| 2026-10-19 | TASK-007 | 기타 | (AI 실호출 결과 전달) | — | Workers AI 4건/20건, 모델 llama-3.3-70b-instruct-fp8-fast, 3건 검증 통과·1건 거부(미확보 45%에서 원활 단정), 평균 약 14.3 Neurons/건, 1.0~1.5초. 임시 함수 삭제 |
+| 2026-10-19 | TASK-007 | 기타 | (실행 종료) | `진행 중` → `결과 검토` | `reports/TASK-007-RESULT.md` 작성. lint·typecheck·test(160/160)·build·Playwright(17/17) 통과. main 반영 전 Production AI 결정 필요. 사용자 승인이 아닌 AGENTS.md 규칙 5에 따른 전환. 완료 승인 대기 |
