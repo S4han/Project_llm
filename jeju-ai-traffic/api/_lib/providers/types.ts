@@ -1,6 +1,6 @@
-import type { Explanation } from "../../../shared/contracts/explanation.js";
+import type { ExplanationFacts } from "../../../shared/contracts/explanation.js";
 import type { Place } from "../../../shared/contracts/place.js";
-import type { RouteCompareRequest, RouteOption } from "../../../shared/contracts/route.js";
+import type { RouteCompareRequest } from "../../../shared/contracts/route.js";
 import type { TrafficIncident } from "../../../shared/contracts/traffic.js";
 import type { RouteQuery, RouteResult } from "../../../shared/rules/route.js";
 
@@ -25,14 +25,8 @@ export interface TrafficProvider {
   fetchIncidents(): Promise<TrafficIncident[]>;
 }
 
-/** AI 설명 입력. 확인된 구조화 데이터만 담는다. */
-export interface ExplanationInput {
-  routes: RouteOption[];
-  recommendedRouteId: string;
-  incidents: TrafficIncident[];
-}
-
+/** AI 설명 공급자. 확인된 사실(숫자 요약)만 받아 문장 하나를 돌려준다. 검증은 호출한 쪽이 한다. */
 export interface ExplanationProvider {
   readonly id: "ai";
-  explain(input: ExplanationInput): Promise<Pick<Explanation, "text">>;
+  explain(facts: ExplanationFacts, signal?: AbortSignal): Promise<string>;
 }

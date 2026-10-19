@@ -1,79 +1,52 @@
-import type { Explanation } from "../../../shared/contracts/explanation.js";
-import type { RouteOption } from "../../../shared/contracts/route.js";
+import type { AiStatus, Explanation, ExplanationFacts } from "../../../shared/contracts/explanation.js";
+import { buildRulesExplanation } from "../../../shared/rules/explanation.js";
+import { checkAiExplanation, type CheckResult } from "../../../shared/rules/explanationCheck.js";
+import { AppError } from "../errors.js";
 import { guardedCall } from "../policies/guardedCall.js";
 import type { QuotaGuard } from "../policies/quota.js";
-import type { ExplanationInput, ExplanationProvider } from "../providers/types.js";
+import type { ExplanationProvider } from "../providers/types.js";
 
-function minutes(seconds: number): number {
-  return Math.round(seconds / 60);
-}
-
-function routeEvidence(route: RouteOption): string {
-  return `${route.provider} ${route.label}: 예상 ${minutes(route.durationSeconds)}분, 기준 시각 ${route.observedAt}`;
-}
-
-/**
- * 규칙 기반 설명. 입력에 있는 경로 예상시간과 확인된 사건 수만 사용하고 새 사실을 만들지 않는다(AC-006-03·06).
- */
-export function buildRulesExplanation(input: ExplanationInput, now: Date): Explanation {
-  const recommended = input.routes.find((r) => r.id === input.recommendedRouteId);
-  if (!recommended) throw new Error("recommendedRouteId가 routes에 없습니다.");
-
-  const others = input.routes
-    .filter((r) => r.id !== recommended.id)
-    .sort((a, b) => a.durationSeconds - b.durationSeconds);
-  const parts = [`${recommended.label} 경로의 예상 소요시간은 ${minutes(recommended.durationSeconds)}분입니다.`];
-  const next = others[0];
-  if (next) {
-    const diff = minutes(next.durationSeconds - recommended.durationSeconds);
-    if (diff > 0) parts.push(`다음으로 빠른 ${next.label} 경로보다 약 ${diff}분 빠릅니다.`);
-    else if (diff < 0) parts.push(`${next.label} 경로가 약 ${-diff}분 더 빠릅니다.`);
-    else parts.push(`${next.label} 경로와 예상 소요시간 차이가 1분 미만입니다.`);
-  } else {
-    parts.push("비교할 대체 경로가 없습니다.");
-  }
-  if (input.incidents.length > 0) {
-    parts.push(`경로 주변에서 확인된 교통 사건이 ${input.incidents.length}건 있습니다.`);
-  }
-
-  return {
-    text: parts.join(" "),
-    source: "rules",
-    evidence: [
-      ...[recommended, ...others].map(routeEvidence),
-      ...input.incidents.map((i) => `jejuIts ${i.kind}: ${i.description}, 기준 시각 ${i.observedAt}`),
-    ],
-    generatedAt: now.toISOString(),
-  };
-}
+/** AI 응답 제한 시간. 넘으면 규칙 기반 설명(AC-006-04). */
+export const AI_TIMEOUT_MS = 4000;
 
 export interface ExplainDeps {
   guard: QuotaGuard;
   ai?: ExplanationProvider;
-  /**
-   * AI 문장 사실 검증. 통과한 문장만 source "ai"로 쓴다.
-   * 검증 규칙은 TASK-007에서 정하며, 그 전까지 기본값은 모두 거부한다.
-   */
-  verify?: (text: string, input: ExplanationInput) => boolean;
+  /** AI 문장 검증. 기본은 승인된 검증 정책(checkAiExplanation). */
+  verify?: (text: string, facts: ExplanationFacts) => CheckResult;
   now?: () => Date;
+  timeoutMs?: number;
+}
+
+export interface ExplainResult {
+  explanation: Explanation;
+  aiStatus: AiStatus;
+  /** 검증 실패 이유(rejected일 때). 화면에는 쓰지 않고 시험·로그용. */
+  rejectReasons?: string[];
 }
 
 /**
- * 설명 생성. AI가 없거나, 한도로 차단되거나, 실패하거나, 검증에 실패하면 규칙 기반 설명으로 대체한다(AC-006-04·05).
- * 이 함수는 오류를 던지지 않으므로 경로 비교 응답을 막지 않는다.
+ * 설명 생성. AI가 없거나, 한도로 차단되거나, 실패·지연되거나, 검증에 실패하면 규칙 기반 설명을 돌려준다(AC-006-04·05).
+ * 오류를 던지지 않는다.
  */
-export async function explain(input: ExplanationInput, deps: ExplainDeps): Promise<Explanation> {
+export async function explain(facts: ExplanationFacts, deps: ExplainDeps): Promise<ExplainResult> {
   const now = deps.now ?? (() => new Date());
-  const rules = buildRulesExplanation(input, now());
+  const rules = buildRulesExplanation(facts, now());
   const ai = deps.ai;
-  if (!ai) return rules;
+  if (!ai) return { explanation: rules, aiStatus: "notConfigured" };
 
-  const verify = deps.verify ?? (() => false);
+  const verify = deps.verify ?? checkAiExplanation;
   try {
-    const { text } = await guardedCall(deps.guard, "ai", () => ai.explain(input));
-    if (!verify(text, input)) return rules;
-    return { text, source: "ai", evidence: rules.evidence, generatedAt: now().toISOString() };
-  } catch {
-    return rules;
+    const signal = AbortSignal.timeout(deps.timeoutMs ?? AI_TIMEOUT_MS);
+    const text = await guardedCall(deps.guard, "ai", () => ai.explain(facts, signal));
+    const check = verify(text, facts);
+    if (!check.ok) return { explanation: rules, aiStatus: "rejected", rejectReasons: check.reasons };
+    return {
+      explanation: { text: text.trim(), source: "ai", evidence: rules.evidence, generatedAt: now().toISOString() },
+      aiStatus: "used",
+    };
+  } catch (err) {
+    const quota = err instanceof AppError && err.code === "QUOTA_BLOCKED";
+    return { explanation: rules, aiStatus: quota ? "quotaBlocked" : "failed" };
   }
 }

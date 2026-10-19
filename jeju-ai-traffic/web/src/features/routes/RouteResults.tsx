@@ -6,6 +6,7 @@ import { durationDiffSeconds } from "../../../../shared/rules/route";
 import { isStale, trafficShares } from "../../../../shared/rules/traffic";
 import { errorMessage, formatKstTime } from "../trip/format";
 import { formatDiff, formatDistance, formatDuration } from "./format";
+import { ExplanationCard } from "./ExplanationCard";
 import { RouteMap } from "./RouteMap";
 import { INCIDENT_LABEL, STATUS_ORDER, STATUS_STYLE } from "./trafficStyle";
 
@@ -162,6 +163,7 @@ function Results({ data, onRetry }: { data: RouteCompareResponse; onRetry: () =>
           예상시간이 같은 경로가 있어 거리가 짧은 경로를 추천합니다.
         </p>
       )}
+      <ExplanationCard data={data} />
       <ul aria-label="경로 목록" className="flex flex-col gap-2">
         {ordered.map((route) => (
           <RouteCard

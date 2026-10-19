@@ -29,18 +29,26 @@ const FOUR: RouteCompareResponse = {
 
 let compare: () => Response;
 let compareCalls = 0;
+let explanation: () => Response;
+let explanationCalls = 0;
 beforeEach(() => {
   // Date만 고정(조회 1분 후). 타이머는 실제로 둔다.
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-10-19T07:06:00.000Z"));
   compareCalls = 0;
   compare = () => Response.json(FOUR);
+  explanationCalls = 0;
+  explanation = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: string) => {
       if (input.startsWith("/api/routes/compare")) {
         compareCalls += 1;
         return compare();
+      }
+      if (input.startsWith("/api/explanations")) {
+        explanationCalls += 1;
+        return explanation();
       }
       const q = decodeURIComponent(new URL(input, "http://t").searchParams.get("q") ?? "");
       return Response.json({ query: q, places: MOCK_PLACES.filter((p) => p.name.includes(q)), observedAt: OBSERVED });
@@ -228,3 +236,52 @@ describe("지도·혼잡·교통 사건", () => {
     expect(screen.queryByText(/오래된 정보/)).toBeNull();
   });
 });
+
+describe("추천 이유 (FR-006)", () => {
+  it("규칙 기반 설명을 바로 보여 주고 출처를 표시한다 (AC-006-06·07)", async () => {
+    await selectAndQuery();
+    const card = await screen.findByRole("region", { name: "추천 이유" });
+    expect(within(card).getByText("규칙 기반")).toBeTruthy();
+    expect(card.textContent).toContain("카카오 추천 경로가 예상 69분으로 가장 빠릅니다.");
+    expect(card.textContent).toContain("다음으로 빠른 516도로 경유 경로보다 약 7분 빠릅니다.");
+    await waitFor(() => expect(explanationCalls).toBe(1));
+  });
+
+  it("서버가 검증 통과한 AI 설명을 주면 'AI 생성'으로 바꾼다", async () => {
+    explanation = () =>
+      Response.json({
+        explanation: { text: "AI가 쓴 검증된 문장입니다.", source: "ai", evidence: ["근거1"], generatedAt: OBSERVED },
+        aiStatus: "used",
+      });
+    await selectAndQuery();
+    const card = await screen.findByRole("region", { name: "추천 이유" });
+    await waitFor(() => expect(within(card).getByText("AI 생성")).toBeTruthy());
+    expect(card.textContent).toContain("AI가 쓴 검증된 문장입니다.");
+    expect(within(card).getByText("근거1")).toBeTruthy();
+  });
+
+  it("AI가 거부되거나 실패해도 규칙 설명과 경로 비교를 유지한다 (AC-006-04, AC-011-06)", async () => {
+    explanation = () =>
+      Response.json({
+        explanation: { text: "규칙 문장", source: "rules", evidence: [], generatedAt: OBSERVED },
+        aiStatus: "rejected",
+      });
+    await selectAndQuery();
+    const card = await screen.findByRole("region", { name: "추천 이유" });
+    await waitFor(() => expect(explanationCalls).toBe(1));
+    await waitFor(() => expect(within(card).queryByText("AI 설명 확인 중…")).toBeNull());
+    expect(within(card).getByText("규칙 기반")).toBeTruthy();
+    expect(card.textContent).toContain("카카오 추천 경로가 예상 69분으로 가장 빠릅니다.");
+    expect(screen.getByRole("list", { name: "경로 목록" })).toBeTruthy();
+  });
+
+  it("카드를 바꿔 선택해도 설명을 다시 요청하지 않는다", async () => {
+    await selectAndQuery();
+    await screen.findByRole("region", { name: "추천 이유" });
+    await waitFor(() => expect(explanationCalls).toBe(1));
+    fireEvent.click(screen.getByRole("button", { name: /최단거리/ }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(explanationCalls).toBe(1);
+  });
+});
+

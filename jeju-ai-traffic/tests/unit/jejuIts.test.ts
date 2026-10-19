@@ -6,7 +6,7 @@ import { ITS_EMPTY, ITS_EVENTS, ITS_NOT_REGISTERED, ITS_WORKS } from "../fixture
 const AT = "2026-10-19T07:00:00.000Z";
 
 describe("normalizeItsResponse", () => {
-  it("돌발: ocrr_id를 ID로, code를 설명으로(534 정지차량·258 지정체구간·그 외 코드 표기), 시각 필드가 없어 sourceTime null", () => {
+  it("돌발: ocrr_id를 ID로, code를 설명으로(534 정지차량·258 지정체구간·그 외 '기타(코드 N)'), 시각 필드가 없어 sourceTime null", () => {
     const events = normalizeItsResponse(ITS_EVENTS, "event", AT);
     expect(events[0]).toEqual({
       id: "event-RA_0000000001",
@@ -17,7 +17,7 @@ describe("normalizeItsResponse", () => {
       sourceTime: null,
       source: "jejuIts",
     });
-    expect(events.map((e) => e.description)).toEqual(["정지차량", "정지차량", "지정체구간", "돌발 상황(코드 999)"]);
+    expect(events.map((e) => e.description)).toEqual(["정지차량", "정지차량", "지정체구간", "기타(코드 999)"]);
   });
 
   it("공사: text를 설명으로 쓰고 무효 좌표(90, 180)는 버린다", () => {

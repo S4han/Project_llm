@@ -2,7 +2,8 @@ import type { RouteCompareRequest, RouteOption } from "../../../shared/contracts
 import type { TrafficIncident } from "../../../shared/contracts/traffic.js";
 import type { RouteQuery, RouteResult } from "../../../shared/rules/route.js";
 import { ProviderError } from "../errors.js";
-import type { ExplanationInput, ExplanationProvider, RouteProvider, TrafficProvider } from "./types.js";
+import type { ExplanationFacts } from "../../../shared/contracts/explanation.js";
+import type { ExplanationProvider, RouteProvider, TrafficProvider } from "./types.js";
 
 /** 모의 공급자 동작: 정상 응답, 한도 초과(429), 장애. */
 export type MockBehavior = "ok" | "rate_limited" | "unavailable";
@@ -63,9 +64,9 @@ export class MockExplanationProvider implements ExplanationProvider {
     this.text = text;
   }
 
-  async explain(_input: ExplanationInput): Promise<{ text: string }> {
+  async explain(_facts: ExplanationFacts): Promise<string> {
     this.calls += 1;
     fail(this.behavior);
-    return { text: this.text };
+    return this.text;
   }
 }

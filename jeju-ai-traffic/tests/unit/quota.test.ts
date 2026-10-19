@@ -19,12 +19,12 @@ async function blocked(p: Promise<unknown>): Promise<AppError> {
 }
 
 describe("승인된 기본 예산", () => {
-  it("카카오 8,000 / 재평가 6,000, 장소 검색 3,000, ITS 2,000, AI 0", () => {
+  it("카카오 8,000 / 재평가 6,000, 장소 검색 3,000, ITS 2,000, AI 200", () => {
     expect(DEFAULT_BUDGETS).toEqual({
       kakao: { dailyLimit: 8000, reevaluationCutoff: 6000 },
       kakaoLocal: { dailyLimit: 3000 },
       jejuIts: { dailyLimit: 2000 },
-      ai: { dailyLimit: 0 },
+      ai: { dailyLimit: 200 },
     });
   });
 });
@@ -57,8 +57,9 @@ describe("QuotaGuard", () => {
     await blocked(guard.reserve("kakao"));
   });
 
-  it("AI는 기본 한도 0이라 첫 호출부터 차단된다", async () => {
+  it("AI는 하루 200건까지(TASK-007)", async () => {
     const { guard } = setup();
+    await guard.reserve("ai", { cost: 200 });
     await blocked(guard.reserve("ai"));
   });
 

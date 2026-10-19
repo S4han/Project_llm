@@ -23,7 +23,7 @@ const KIND_LABEL: Record<IncidentKind, string> = {
   weather: "교통기상",
 };
 
-/** 돌발 유형 코드(제주 ITS 오픈API 안내 페이지 기준, TASK-001). 그 밖의 코드는 "돌발 상황(코드 N)". */
+/** 돌발 유형 코드(제주 ITS 오픈API 안내 페이지 기준, TASK-001). 그 밖의 코드는 "기타(코드 N)"(화면에서 "돌발 기타(코드 N)"). */
 const EVENT_CODES: Record<number, string> = {
   534: "정지차량",
   258: "지정체구간",
@@ -40,7 +40,7 @@ function describe(item: Record<string, unknown>, kind: IncidentKind): string {
   const text = typeof item.text === "string" ? item.text.trim() : "";
   if (text) return text;
   if (kind === "event" && typeof item.code === "number") {
-    return EVENT_CODES[item.code] ?? `${KIND_LABEL.event}(코드 ${item.code})`;
+    return EVENT_CODES[item.code] ?? `기타(코드 ${item.code})`;
   }
   return KIND_LABEL[kind];
 }
