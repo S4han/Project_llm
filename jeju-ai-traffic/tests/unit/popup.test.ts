@@ -13,7 +13,7 @@ describe("지도 팝업 (TASK-014)", () => {
     const el = popupContent("CCTV · 신광사거리", { href: JEJU_ITS_SITE, label: "제주 ITS 교통정보센터 열기 ↗", note: "영상 보기: 사이트 왼쪽 'CCTV' 메뉴 → 지도에서 '신광사거리' 카메라 선택" });
     expect(el.querySelector(".popup-note")?.textContent).toBe("영상 보기: 사이트 왼쪽 'CCTV' 메뉴 → 지도에서 '신광사거리' 카메라 선택");
     const a = el.querySelector("a")!;
-    expect(a.getAttribute("href")).toBe("https://www.jejuits.go.kr/");
+    expect(a.getAttribute("href")).toBe("https://www.jejuits.go.kr/main/mainView.do");
     expect(a.target).toBe("_blank");
     expect(a.rel).toBe("noopener noreferrer");
     expect(a.textContent).toBe("제주 ITS 교통정보센터 열기 ↗");

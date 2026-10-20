@@ -66,8 +66,11 @@ export function useLeafletMap() {
   return { attach, mapRef, layerRef, mapReady, failed, tilesFailed };
 }
 
-/** 제주 ITS 교통정보센터(공식 사이트). CCTV 영상 API가 없어 영상은 이 사이트로 연결한다(TASK-014). */
-export const JEJU_ITS_SITE = "https://www.jejuits.go.kr/";
+/**
+ * 제주 ITS 교통정보센터 지도 화면(공식 사이트, CCTV 메뉴가 있는 화면). CCTV 영상 API가 없고
+ * 카메라를 골라도 주소가 바뀌지 않아(사용자 확인) 카메라별 링크는 만들 수 없다(TASK-014).
+ */
+export const JEJU_ITS_SITE = "https://www.jejuits.go.kr/main/mainView.do";
 
 /**
  * 팝업 내용을 DOM으로 만든다. 원천 데이터(도로명·설치 위치 등)를 HTML로 해석하지 않도록 글자로만 넣는다.
