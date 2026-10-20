@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TrafficIncident, TrafficIncidentsResponse } from "../../shared/contracts/traffic";
+import type { TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
+import { encodePolyline } from "../../shared/rules/polyline";
 import { REFRESH_MS, TrafficDashboard } from "../../web/src/features/traffic/TrafficDashboard";
 
 const AT = "2026-10-20T00:33:00.000Z"; // KST 09:33
@@ -15,7 +16,12 @@ const OK: TrafficIncidentsResponse = {
   retryAfter: null,
 };
 
+const line = encodePolyline([{ lat: 33.5, lng: 126.5 }, { lat: 33.49, lng: 126.51 }]);
+const LINKS: TrafficLinksResponse = { links: [["4050000001", "노형로", line], ["4050000002", "연북로", line], ["4050000003", "평화로", line], ["4050000009", "속도없음로", line]], builtAt: AT, source: "vworld" };
+const SPEEDS: TrafficSpeedsResponse = { status: "ok", observedAt: "2026-10-20T00:30:00.000Z", speeds: { "4050000001": [45, 60], "4050000002": [20, 130], "4050000003": [8, 400] }, source: "jejuIts", retryAfter: null };
+
 let respond: () => Response;
+let speedsRespond: () => Response;
 let calls = 0;
 let visibility: DocumentVisibilityState = "visible";
 
@@ -24,11 +30,14 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-10-20T00:34:00.000Z"));
   calls = 0;
   respond = () => Response.json(OK);
+  speedsRespond = () => Response.json(SPEEDS);
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => {
+    vi.fn(async (url: string) => {
+      if (url.startsWith("/api/traffic/speeds")) return speedsRespond();
+      if (url.startsWith("/api/traffic/links")) return Response.json(LINKS);
       calls += 1;
       return respond();
     }),
@@ -83,7 +92,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     respond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "네트워크 연결을 확인한 뒤 다시 시도하세요." } }, { status: 503 });
     await act(async () => vi.advanceTimersByTime(REFRESH_MS));
     expect(calls).toBe(2);
-    expect((await screen.findByRole("alert")).textContent).toBe("갱신 실패: 네트워크 연결을 확인한 뒤 다시 시도하세요. · 마지막 성공 10월 20일 09:33");
+    expect((await screen.findAllByRole("alert"))[0]!.textContent).toBe("갱신 실패: 네트워크 연결을 확인한 뒤 다시 시도하세요. · 마지막 성공 10월 20일 09:33");
     expect(screen.getByText("감지된 사건 5건")).toBeTruthy();
 
     visibility = "hidden";
@@ -97,7 +106,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
   it("한도·장애면 '정보 미확보(사유)', 사건 0건과 구분", async () => {
     respond = () => Response.json({ incidents: [], status: "quotaBlocked", observedAt: null, retryAfter: "2026-10-20T15:00:00.000Z" });
     render(<TrafficDashboard />);
-    expect((await screen.findByRole("alert")).textContent).toBe("교통 사건 정보 미확보(오늘 조회 한도 도달, 10월 21일 00:00 이후 다시 사용 가능)");
+    expect((await screen.findAllByRole("alert"))[0]!.textContent).toBe("교통 사건 정보 미확보(오늘 조회 한도 도달, 10월 21일 00:00 이후 다시 사용 가능)");
     expect(counts()).toEqual(["전체–", "돌발–", "통제–", "공사–"]);
     expect(screen.queryByText(/감지된 돌발·통제·공사가 없습니다/)).toBeNull();
   });
@@ -106,5 +115,27 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     respond = () => Response.json({ ...OK, incidents: [] });
     render(<TrafficDashboard />);
     expect(await screen.findByText(/현재 제주 ITS에 감지된 돌발·통제·공사가 없습니다/)).toBeTruthy();
+  });
+
+  it("도로 소통: 속도가 있는 구간만 원활·서행·정체로 세고, 끄고 켤 수 있다", async () => {
+    render(<TrafficDashboard />);
+    const counts = await screen.findByRole("list", { name: "구간 소통 건수" });
+    await within(counts).findByText("원활 1구간");
+    expect(counts.textContent).toBe("원활 1구간서행 1구간정체 1구간");
+    expect(screen.getByText(/10월 20일 09:30 기준/)).toBeTruthy();
+    const map = screen.getByRole("region", { name: "교통 현황 지도" });
+    expect(map.getAttribute("data-speed-lines")).toBe("3");
+    const toggle = screen.getByRole("button", { name: "지도에 표시 중" });
+    fireEvent.click(toggle);
+    expect(map.getAttribute("data-speed-lines")).toBe("0");
+    expect(screen.getByRole("button", { name: "지도에 표시" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("구간 속도 한도면 미확보 안내, 사건 정보는 그대로", async () => {
+    speedsRespond = () => Response.json({ status: "quotaBlocked", observedAt: null, speeds: {}, source: "jejuIts", retryAfter: "2026-10-20T15:00:00.000Z" });
+    render(<TrafficDashboard />);
+    expect(await screen.findByText("구간 속도 정보 미확보(오늘 조회 한도 도달, 10월 21일 00:00 이후 다시 사용 가능)")).toBeTruthy();
+    expect(screen.getByText("감지된 사건 5건")).toBeTruthy();
+    expect(screen.getByRole("list", { name: "구간 소통 건수" }).textContent).toBe("원활 –서행 –정체 –");
   });
 });

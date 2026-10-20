@@ -1,5 +1,5 @@
 import type { Coordinate } from "../contracts/route.js";
-import type { TrafficIncident, TrafficSegment, TrafficStatus } from "../contracts/traffic.js";
+import type { SpeedStatus, TrafficIncident, TrafficSegment, TrafficStatus } from "../contracts/traffic.js";
 
 /** 사건-경로 매칭 거리(m). DECISIONS 2026-10-19 TASK-006 "2. 승인". */
 export const INCIDENT_MATCH_METERS = 200;
@@ -80,4 +80,15 @@ export function dedupeIncidents(incidents: TrafficIncident[]): TrafficIncident[]
 /** 조회 후 10분이 지났는지. */
 export function isStale(observedAt: string, now: Date): boolean {
   return now.getTime() - Date.parse(observedAt) > STALE_AFTER_SECONDS * 1000;
+}
+
+/** 구간 속도 색 기준(km/h). DECISIONS 2026-10-20 TASK-012 "3. (a)". */
+export const SMOOTH_MIN_KMH = 30;
+export const SLOW_MIN_KMH = 15;
+
+/** 평균속도 → 원활(30 이상)·서행(15~30)·정체(15 미만). */
+export function speedStatus(kmh: number): SpeedStatus {
+  if (kmh >= SMOOTH_MIN_KMH) return "smooth";
+  if (kmh >= SLOW_MIN_KMH) return "slow";
+  return "congested";
 }

@@ -2,8 +2,9 @@ import { useCallback, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Coordinate } from "../../../../shared/contracts/route";
-import type { TrafficIncident } from "../../../../shared/contracts/traffic";
-import { INCIDENT_LABEL } from "../routes/trafficStyle";
+import type { SpeedStatus, TrafficIncident } from "../../../../shared/contracts/traffic";
+import { formatDuration } from "../routes/format";
+import { INCIDENT_LABEL, STATUS_STYLE } from "../routes/trafficStyle";
 import { formatKstTime } from "../trip/format";
 
 export const toLatLng = (c: Coordinate): L.LatLngTuple => [c.lat, c.lng];
@@ -94,4 +95,42 @@ export function addIncidentMarkers(layer: L.LayerGroup, incidents: TrafficIncide
     if (current) marker.openPopup();
   }
   return incidents.find((i) => i.id === focus?.currentId);
+}
+
+let canvasOk: boolean | undefined;
+/** 캔버스로 그릴 수 있는지(그릴 수 없는 환경에서는 SVG로 그린다). */
+function canvasSupported(): boolean {
+  if (canvasOk === undefined) {
+    try {
+      canvasOk = Boolean(document.createElement("canvas").getContext("2d"));
+    } catch {
+      canvasOk = false;
+    }
+  }
+  return canvasOk;
+}
+
+/** 속도를 입힌 구간 하나(TASK-012). */
+export interface SpeedLine {
+  id: string;
+  name: string;
+  points: Coordinate[];
+  kmh: number;
+  travelSeconds: number;
+  status: SpeedStatus;
+}
+
+/**
+ * 구간 속도 선을 그린다. 수천 개라 SVG 대신 캔버스로 그리고, 사건 점보다 아래 칸(pane)에 둔다.
+ * 선을 누르면 "도로명 · 평균 34km/h · 통행 2분 · HH:MM 기준" 팝업.
+ */
+export function addSpeedLines(map: L.Map, layer: L.LayerGroup, lines: SpeedLine[], observedAt: string | null) {
+  if (!map.getPane("speeds")) map.createPane("speeds").style.zIndex = "350";
+  const renderer = canvasSupported() ? L.canvas({ pane: "speeds", padding: 0.5, tolerance: 6 }) : L.svg({ pane: "speeds" });
+  const at = observedAt ? ` · ${formatKstTime(observedAt)} 기준` : "";
+  for (const line of lines) {
+    L.polyline(line.points.map(toLatLng), { renderer, pane: "speeds", color: STATUS_STYLE[line.status].color, weight: 4, opacity: 0.85 })
+      .bindPopup(`${line.name || "도로명 없음"} · 평균 ${line.kmh}km/h · 통행 ${formatDuration(line.travelSeconds)}${at}`)
+      .addTo(layer);
+  }
 }

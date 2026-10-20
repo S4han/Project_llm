@@ -72,6 +72,8 @@ tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
 
 - `POST /api/explanations` `ExplanationFacts`(경로별 시간·거리·혼잡 %·사건 종류, 좌표 없음) → `{ explanation: { text, source: "ai"|"rules", evidence, generatedAt }, aiStatus }`.
 - `GET /api/traffic/incidents` → `{ incidents[], status: "ok"|"unavailable"|"quotaBlocked", observedAt, retryAfter }`(TASK-012). 제주 전체 돌발·통제·공사. 경로 조회와 같은 제주 ITS 어댑터·60초 캐시·일일 한도를 쓰고, IP별 분당 20회. 실패·한도는 200 + `status`로 알린다.
+- `GET /api/traffic/speeds` → `{ status, observedAt, speeds: { link_id: [평균속도 km/h, 통행시간 초] }, source, retryAfter }`(TASK-012). 제주 ITS 실시간 교통정보(`getFrafficInfo`, 약 12,000개 구간, 약 5분 단위). 전용 키 `JEJU_ITS_TRAFFIC_API_KEY`. 60초 캐시, 제주 ITS 일일 한도 공유.
+- `GET /api/traffic/links` → `{ links: [[link_id, 도로명, polyline]], builtAt, source }`(TASK-012). 브이월드 교통링크(`LT_L_MOCTLINK`, 제주 범위 약 37,000개 중 속도가 있는 구간)를 3m 단순화해 Google polyline으로. 키 `VWORLD_API_KEY`. 인스턴스 메모리 24시간 + CDN 30일 보관(`s-maxage`).
 - 화면 주소: `/` 경로 추천, `/traffic` 교통 현황 대시보드(TASK-012). Vercel은 `vercel.json` `rewrites`로 `/traffic`에도 같은 `index.html`을 준다. 대시보드는 화면이 켜져 있을 때만 1분마다 다시 조회한다.
   - 경로 표시 후 화면이 따로 요청한다. 경로 이름은 정해진 4개만 받는다(지시문 주입 방지). IP별 분당 10회.
   - AI 문장은 검증(숫자·도로 이름·조건부 단어·3문장·180자)을 통과해야 쓰고, 아니면 규칙 기반 설명. AI 4초 제한, 일일 200건.

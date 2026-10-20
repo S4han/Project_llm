@@ -17,6 +17,8 @@ export const DEFAULT_BUDGETS: Record<ProviderId, ProviderBudget> = {
   kakaoLocal: { dailyLimit: 3000 },
   jejuIts: { dailyLimit: 6000 },
   ai: { dailyLimit: 200 },
+  // 브이월드 교통링크(제주 범위 약 38쪽). 결과를 하루 보관하고 CDN이 30일 보관하므로 평소에는 거의 부르지 않는다(TASK-012).
+  vworld: { dailyLimit: 400 },
 };
 
 /**

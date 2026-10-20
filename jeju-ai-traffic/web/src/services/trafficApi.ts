@@ -1,5 +1,5 @@
 import type { ApiError, ApiErrorBody } from "../../../shared/contracts/common";
-import type { TrafficIncidentsResponse } from "../../../shared/contracts/traffic";
+import type { TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../shared/contracts/traffic";
 
 export type TrafficIncidentsResult = { ok: true; data: TrafficIncidentsResponse } | { ok: false; error: ApiError };
 
@@ -20,4 +20,29 @@ export async function fetchTrafficIncidents(signal?: AbortSignal): Promise<Traff
   if (res.ok && body && "incidents" in body) return { ok: true, data: body };
   if (body && "error" in body) return { ok: false, error: body.error };
   return { ok: false, error: NETWORK_ERROR };
+}
+
+type Result<T> = { ok: true; data: T } | { ok: false; error: ApiError };
+
+async function getJson<T>(url: string, isBody: (b: object) => boolean, signal?: AbortSignal): Promise<Result<T>> {
+  let res: Response;
+  try {
+    res = await fetch(url, { signal });
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+  const body = (await res.json().catch(() => null)) as (T & object) | ApiErrorBody | null;
+  if (res.ok && body && isBody(body)) return { ok: true, data: body as T };
+  if (body && "error" in body) return { ok: false, error: body.error };
+  return { ok: false, error: NETWORK_ERROR };
+}
+
+/** GET /api/traffic/speeds(TASK-012): 구간별 평균속도. */
+export function fetchTrafficSpeeds(signal?: AbortSignal): Promise<Result<TrafficSpeedsResponse>> {
+  return getJson<TrafficSpeedsResponse>("/api/traffic/speeds", (b) => "speeds" in b, signal);
+}
+
+/** GET /api/traffic/links(TASK-012): 구간 모양(CDN 30일 보관). 화면을 열 때 한 번만 부른다. */
+export function fetchTrafficLinks(signal?: AbortSignal): Promise<Result<TrafficLinksResponse>> {
+  return getJson<TrafficLinksResponse>("/api/traffic/links", (b) => "links" in b, signal);
 }

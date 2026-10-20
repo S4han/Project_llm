@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import L from "leaflet";
 import type { TrafficIncident } from "../../../../shared/contracts/traffic";
-import { addIncidentMarkers, FOCUS_ZOOM, toLatLng, useLeafletMap, type IncidentFocus } from "../map/leafletMap";
+import { addIncidentMarkers, addSpeedLines, FOCUS_ZOOM, toLatLng, useLeafletMap, type IncidentFocus, type SpeedLine } from "../map/leafletMap";
 
 /** 제주도 전체가 보이는 범위. */
 const JEJU_BOUNDS: [[number, number], [number, number]] = [
@@ -13,11 +14,24 @@ interface Props {
   focus: IncidentFocus | null;
   /** 바뀌면 제주 전체 화면으로 다시 맞춘다(종류 필터 등). 1분 자동 갱신으로는 사용자가 옮긴 화면을 건드리지 않는다. */
   viewKey: string;
+  /** 구간 속도 선(TASK-012). 비어 있으면 그리지 않는다. */
+  speedLines?: SpeedLine[];
+  speedObservedAt?: string | null;
 }
 
 /** 제주 전체 교통 사건 지도(TASK-012). */
-export function IncidentMap({ incidents, focus, viewKey }: Props) {
+export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null }: Props) {
   const { attach, mapRef, layerRef, mapReady, failed, tilesFailed } = useLeafletMap();
+  const speedLayer = useRef<L.LayerGroup | null>(null);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    // 지도가 새로 만들어졌으면 층도 새로 만든다.
+    if (!speedLayer.current || !map.hasLayer(speedLayer.current)) speedLayer.current = L.layerGroup().addTo(map);
+    speedLayer.current.clearLayers();
+    addSpeedLines(map, speedLayer.current, speedLines, speedObservedAt);
+  }, [mapReady, mapRef, speedLines, speedObservedAt]);
 
   useEffect(() => {
     const layer = layerRef.current;
@@ -45,7 +59,7 @@ export function IncidentMap({ incidents, focus, viewKey }: Props) {
   }
   return (
     <div className="flex flex-col gap-1">
-      <div ref={attach} role="region" aria-label="교통 현황 지도" className="h-80 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100" />
+      <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} className="h-80 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100" />
       {tilesFailed && <p className="text-xs text-slate-600">지도 배경을 불러오지 못했습니다. 사건 표시와 아래 목록은 그대로 확인할 수 있습니다.</p>}
     </div>
   );

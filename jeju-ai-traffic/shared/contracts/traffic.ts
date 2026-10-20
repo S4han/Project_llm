@@ -39,3 +39,29 @@ export interface TrafficIncidentsResponse {
   /** status가 quotaBlocked일 때 다시 쓸 수 있는 시각. */
   retryAfter: IsoDateTime | null;
 }
+
+/** 구간 속도 상태(TASK-012). 기준: 원활 30km/h 이상, 서행 15~30, 정체 15 미만(DECISIONS 2026-10-20 "3. (a)"). */
+export type SpeedStatus = "smooth" | "slow" | "congested";
+
+/**
+ * GET /api/traffic/speeds 응답. 제주 ITS 실시간 교통정보(구간별 평균속도·통행시간, 약 5분 단위 갱신).
+ * speeds[link_id] = [평균속도 km/h, 통행시간 초].
+ */
+export interface TrafficSpeedsResponse {
+  status: IncidentsStatus;
+  /** 원천 가공 시각(prcn_dt, KST를 ISO로). 조회하지 못했으면 null. */
+  observedAt: IsoDateTime | null;
+  speeds: Record<string, [number, number]>;
+  source: "jejuIts" | "mock";
+  retryAfter: IsoDateTime | null;
+}
+
+/**
+ * GET /api/traffic/links 응답. 브이월드 국가 교통링크 중 제주 ITS 속도가 있는 구간의 모양.
+ * links[i] = [link_id, 도로명, Google polyline(정밀도 1e5)].
+ */
+export interface TrafficLinksResponse {
+  links: [string, string, string][];
+  builtAt: IsoDateTime;
+  source: "vworld" | "mock";
+}

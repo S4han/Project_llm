@@ -19,6 +19,8 @@ Vercel → 프로젝트 → Settings → Environment Variables. Production·Prev
 | `TRAFFIC_PROVIDER=jejuIts` | 교통 사건 실호출 켜기 | 모의 사건 |
 | `AI_PROVIDER=cloudflare` | AI 설명 켜기 | 규칙 기반 설명만 |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_TOKEN` | Workers AI (토큰은 Workers AI 권한만, Sensitive) | 규칙 기반 설명만 |
+| `JEJU_ITS_TRAFFIC_API_KEY` | 제주 ITS 실시간 교통정보(구간 속도) 전용 키 (Sensitive, TASK-012) | `/traffic` 구간 속도 모의 |
+| `VWORLD_API_KEY` | 브이월드 2D 데이터 API 키 (Sensitive, 서비스 주소 `https://jeju-its-probe.vercel.app` 등록, TASK-012). `VWORLD_DOMAIN`으로 등록 주소 변경 가능 | `/traffic` 구간 모양 모의 |
 | `CF_AI_MODEL` (선택) | 모델 이름 | 기본 `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
 
 **긴급 차단**: 공급자 변수(`ROUTES_PROVIDER` 등)를 지우거나 다른 값으로 바꾸고 재배포하면 해당 공급자 호출이 0이 된다(경로·장소는 모의 데이터로 바뀌므로 공개 서비스에서는 사실상 점검 상태가 된다). AI는 `AI_PROVIDER`만 지우면 규칙 설명으로 계속 동작한다.
@@ -28,7 +30,8 @@ Vercel → 프로젝트 → Settings → Environment Variables. Production·Prev
 |---|---|---|---|
 | 카카오모빌리티 길찾기 | 일 10,000건 | 429 차단(비즈월렛 미연결 시) | 8,000건, 6,000건부터 자동 재평가 차단 |
 | 카카오 로컬 검색 | 앱 1개 무료 쿼터 | 429 차단(비즈월렛 미연결 시) | 3,000건 |
-| 제주 ITS | 공개 기준 없음 | — | 6,000건 (경로 조회·`/traffic` 대시보드 공통, 함수별로 따로 셈) |
+| 제주 ITS | 공개 기준 없음 | — | 6,000건 (경로 조회·`/traffic` 사건·구간 속도 공통, 함수별로 따로 셈) |
+| 브이월드 데이터 API | 키별 일일 한도(브이월드 콘솔에서 확인) | 오류로 차단 | 400건 (구간 모양 1회 생성에 약 38건, 결과는 CDN 30일 보관) |
 | Cloudflare Workers AI | 일 10,000 Neurons (UTC 0시) | Free 플랜은 오류로 차단 | 200건 (1건 약 14 Neurons) |
 
 - 내부 한도는 **KST 자정**에 초기화되고, 공급자가 429를 주면 그 공급자를 다음 KST 자정까지 막는다.
