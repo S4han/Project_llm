@@ -18,4 +18,11 @@ describe("지도 팝업 (TASK-014)", () => {
     expect(a.rel).toBe("noopener noreferrer");
     expect(a.textContent).toBe("제주 ITS 교통정보센터 열기 ↗");
   });
+
+  it("주정차 단속 팝업: 여러 줄(주소·CCTV 수·운영 시간)을 줄바꿈 그대로 글자로", () => {
+    const el = popupContent("주정차 단속 CCTV · 시청 부근\n제주시 이도2동 1179-24\n회전형 1대 · 검지 4대\n운영 07시30분 ~ 23시");
+    const p = el.querySelector("p")!;
+    expect(p.style.whiteSpace).toBe("pre-line");
+    expect(p.textContent?.split("\n")).toHaveLength(4);
+  });
 });

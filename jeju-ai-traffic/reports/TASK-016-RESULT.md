@@ -1,0 +1,77 @@
+# TASK-016-RESULT.md — 주정차 단속 CCTV 지도 표시 결과 보고
+
+- 보고일: 2026-10-20 / 실행 주체: Claude
+- 승인 근거: 사용자 "계획 승인: TASK-016 1. (a) 2. (a) 3. 승인 키 등록 완료" (2026-10-20, `DECISIONS.md`)
+- 상태: **결과 검토** (완료 승인 대기, `main` 미반영)
+
+## 1. 변경 파일
+| 파일 | 변경 |
+|---|---|
+| `api/_lib/providers/jejuCityEnforcement.ts` | 신규. 제주시 주정차 단속 CCTV 조회, 응답 정규화, 인증키 처리(인코딩 키는 그대로), 모의 3곳 |
+| `api/_lib/trafficEnforcement.ts`, `api/traffic/enforcement.ts` | 신규. `GET /api/traffic/enforcement`, 서버 하루·CDN 7일 보관, 빈도 제한 10회/분 |
+| `shared/contracts/traffic.ts`, `shared/contracts/common.ts` | `TrafficEnforcementResponse`, 공급자 `dataGoKr` |
+| `api/_lib/policies/quota.ts` | 내부 일일 한도 `dataGoKr` 500건 |
+| `web/src/features/traffic/facilityStyle.ts` | 유형 `ENF`(주정차 단속, 검정 점) 추가 |
+| `web/src/features/map/leafletMap.ts` | 시설물 팝업 여러 줄(`detail`), 팝업 글자 줄바꿈 유지 |
+| `web/src/services/trafficApi.ts` | `fetchTrafficEnforcement` |
+| `web/src/features/traffic/TrafficDashboard.tsx` | 교통시설물 카드에 "주정차 단속" 유형, 불러오기·실패 안내·다시 시도, 출처 문구 |
+| `tests/unit/trafficEnforcement.test.ts`(신규), `TrafficDashboard.test.tsx`, `popup.test.ts`, `quota.test.ts`, `tests/e2e/traffic.spec.ts` | 신규·수정 |
+| `reports/screenshots/TASK-016-01-enforcement.png` | 주정차 단속 켠 화면(PC 폭, 모의) |
+| `.env.example`, `README.md`, `docs/OPERATIONS.md`, `TASK_STATUS.md`, `tasks/TASK-016.md`, `DECISIONS.md` | 수정 |
+| `api/enforcement-probe.ts` | 시험용 함수 추가 후 삭제(`main`에 들어가지 않음) |
+
+## 2. 시험 호출 결과 (누적 3건 / 승인 5건)
+- 1건(403): 오류 본문을 표시하지 않아 원인을 알 수 없었다. 함수를 고쳤다.
+- 2건: 등록된 키가 인코딩 키(`%` 포함, 100자)였다.
+  - 한 번 더 인코딩해 붙이면 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`가 났다.
+  - 그대로 붙이면 200 `NORMAL_SERVICE`였다.
+- 받은 내용: totalCount 370, 1쪽에 모두. 좌표 370곳 모두 제주 안. 회전형 수 1·2, 검지 수 1~6 또는 빈 값. 운영 시간은 줄바꿈이 섞인 글자.
+
+## 3. 구현 요약
+- **위치(1.(a))**: 교통시설물 카드의 8번째 유형 "주정차 단속"(건수 표시). 기본은 꺼짐이고, 누르면 지도에 검정 점이 켜진다.
+- **팝업(2.(a))**: 예시는 다음과 같다. 수가 비어 있으면 그 항목은 뺀다.
+  ```
+  주정차 단속 CCTV · 인제 신설오름 부근(고마로, 고마로17길)(특)
+  제주시 일도2동 377-23
+  회전형 1대 · 검지 2대
+  운영 평일 07시30분 ~ 22시
+  공휴일 09시 ~ 18시
+  (특) 07:30 ~ 23시
+  ```
+  장소 앞 번호("1. ")는 뗐다. 원천 글자는 HTML로 해석하지 않는다.
+- **키(3.)**: `DATA_GO_KR_API_KEY`. 인코딩 키는 그대로, 일반 키는 인코딩해서 붙인다. 키가 없으면 모의 데이터.
+- **실패해도 동작**: 주정차 단속만 "불러오지 못했습니다 / 다시 시도"가 나오고, 제주 ITS 시설물은 그대로 보인다.
+- **안내**: 카드 설명과 화면 하단 출처에 다음을 적었다.
+  - 제주시 자료(공공데이터포털)
+  - 서귀포시는 없음
+  - 위치와 운영 시간만 있음
+
+## 4. 테스트·빌드
+| 명령 | 결과 |
+|---|---|
+| `npm run check:release` | 통과 — 단위 **273건**, lint·typecheck·build, 비밀정보 의심 없음, 취약점 0건 |
+| `npx playwright test` | **40건** 통과(모의 공급자) |
+
+신규 테스트는 다음과 같다.
+- 정규화: 번호 제거, 빈 수, 줄 정리, 제주 밖 제외, 항목 1개, 키 오류
+- 인증키 처리
+- 다음 쪽 받기
+- 보관 헤더, 사용량 1건, 실패 503
+- 공급자 선택
+- 카드 유형, 켜기, 실패와 다시 시도
+- 여러 줄 팝업
+- e2e 켜고 끄기
+
+## 5. 비용·보안
+- 시험 호출은 3건이다. 운영에서는 하루 몇 건 수준(서버 하루·CDN 7일 보관)이고 내부 한도는 500건이다. 비용은 0원이다(무료 API).
+- 키 값은 출력·기록하지 않았다. 확인 함수는 키 길이와 `%` 유무만 보였고 응답에서 키를 가렸다.
+
+## 6. 남은 이슈
+1. 실제 키로는 확인 함수에서만 받아 봤다. 화면 전체는 Preview에서 확인이 필요하다.
+2. 제주시 자료만 있다(서귀포시 없음). 원천 등록일은 2026-07-15이고, 갱신 주기는 포털 표기상 "실시간"이다.
+3. 지도 점을 눌러 팝업을 여는 동작은 단위 테스트로만 확인했다. 브라우저 테스트에서 캔버스 점을 누르는 것은 하지 않았다.
+4. 운영계정 트래픽 증가 신청(활용사례 등록)은 하지 않았다. 지금 사용량으로는 필요 없다.
+
+## 7. 확인 요청
+- Preview에서 교통시설물의 "주정차 단속"을 켜고 점을 눌러 팝업 내용을 봐 주세요.
+- 괜찮으면 `완료 승인: TASK-016`, Production 반영은 `main 반영`으로 지시해 주세요.

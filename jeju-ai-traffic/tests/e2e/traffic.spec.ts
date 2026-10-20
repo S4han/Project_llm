@@ -119,15 +119,15 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await page.goto("/");
     const list = page.getByRole("list", { name: "교통시설물 유형" });
     const buttons = list.getByRole("button");
-    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1"]);
+    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속3"]);
     const map = page.getByRole("region", { name: "교통 현황 지도" });
     await expect(map).toHaveAttribute("data-facilities", "0");
-    await list.getByRole("button", { name: /CCTV/ }).click();
+    await list.getByRole("button", { name: /^CCTV/ }).click();
     await list.getByRole("button", { name: /VMS/ }).click();
     await expect(map).toHaveAttribute("data-facilities", "5");
-    await expect(list.getByRole("button", { name: /CCTV/ })).toHaveAttribute("aria-pressed", "true");
+    await expect(list.getByRole("button", { name: /^CCTV/ })).toHaveAttribute("aria-pressed", "true");
     await shot(page, "TASK-013-01-facilities");
-    await list.getByRole("button", { name: /CCTV/ }).click();
+    await list.getByRole("button", { name: /^CCTV/ }).click();
     await expect(map).toHaveAttribute("data-facilities", "2");
   });
   test("정체·서행 카드를 누르면 실시간 정체구간 목록, 누르면 지도 강조 (TASK-015, 개발 서버 모의)", async ({ page }) => {
@@ -153,6 +153,21 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
 
     await speedCards.filter({ hasText: "서행" }).click();
     await expect(page.getByRole("list", { name: "실시간 서행구간 목록" }).getByRole("button")).toHaveText(["모의 평화로서행모의 노형 → 모의 어승생22km/h지도 ›"]);
+  });
+
+  test("주정차 단속 CCTV: 교통시설물 유형으로 켜고 끈다 (TASK-016, 개발 서버 모의)", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    const list = page.getByRole("list", { name: "교통시설물 유형" });
+    const enf = list.getByRole("button", { name: /주정차 단속/ });
+    await expect(enf).toHaveText("주정차 단속3");
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+    await enf.click();
+    await expect(map).toHaveAttribute("data-facilities", "3");
+    await shot(page, "TASK-016-01-enforcement");
+    await expect(page.getByText(/제주시 자료\(공공데이터포털\)로 서귀포시는 없고/)).toBeVisible();
+    await enf.click();
+    await expect(map).toHaveAttribute("data-facilities", "0");
   });
 });
 

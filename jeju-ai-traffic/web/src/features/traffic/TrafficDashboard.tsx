@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FacilityType, IncidentKind, SpeedStatus, TrafficFacilitiesResponse, TrafficIncident, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../../shared/contracts/traffic";
+import type { IncidentKind, SpeedStatus, TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficIncident, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../../shared/contracts/traffic";
 import { isStale } from "../../../../shared/rules/traffic";
-import { fetchTrafficFacilities, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds } from "../../services/trafficApi";
+import { fetchTrafficEnforcement, fetchTrafficFacilities, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds } from "../../services/trafficApi";
 import type { FacilityPoint, SpeedLine } from "../map/leafletMap";
-import { FACILITY_ORDER, FACILITY_STYLE } from "./facilityStyle";
+import { FACILITY_ORDER, FACILITY_STYLE, type FacilityKey } from "./facilityStyle";
 import { IncidentFocusBar, IncidentGroupList } from "../routes/IncidentFocus";
 import { groupIncidents, useIncidentFocus } from "../routes/incidents";
 import { INCIDENT_LABEL, STATUS_STYLE } from "../routes/trafficStyle";
@@ -43,6 +43,11 @@ interface DashboardState {
 
 const EMPTY_LINES: SpeedLine[] = [];
 
+/** "회전형 1대 · 검지 4대". 원천이 비어 있으면 그 항목은 뺀다. */
+function enforcementCounts(rotate: number | null, audit: number | null): string {
+  return [rotate !== null && `회전형 ${rotate}대`, audit !== null && `검지 ${audit}대`].filter(Boolean).join(" · ");
+}
+
 /** 넓은 화면에서 정보 패널 칸(위쪽 전체 폭 → PC는 오른쪽 칸). */
 const PANEL = "md:col-span-2 xl:col-span-1 xl:col-start-2";
 const EMPTY_IDS: string[] = [];
@@ -63,7 +68,11 @@ export function TrafficDashboard() {
   const [facilities, setFacilities] = useState<TrafficFacilitiesResponse | null>(null);
   const [facilitiesLoading, setFacilitiesLoading] = useState(true);
   const [facilitiesProblem, setFacilitiesProblem] = useState(false);
-  const [facilityTypes, setFacilityTypes] = useState<Set<FacilityType>>(() => new Set());
+  const [facilityTypes, setFacilityTypes] = useState<Set<FacilityKey>>(() => new Set());
+  // 제주시 주정차 단속 CCTV(TASK-016): 교통시설물 카드의 한 유형으로, 따로 받는다.
+  const [enforcement, setEnforcement] = useState<TrafficEnforcementResponse | null>(null);
+  const [enforcementLoading, setEnforcementLoading] = useState(true);
+  const [enforcementProblem, setEnforcementProblem] = useState(false);
   const [showSpeeds, setShowSpeeds] = useState(true);
   // 도로 소통 상태 카드·도로 목록(TASK-012 소통대시보드)
   const [speedFilter, setSpeedFilter] = useState<SpeedStatus | "all">("all");
@@ -144,15 +153,30 @@ export function TrafficDashboard() {
     setFacilitiesProblem(!r.ok);
     if (r.ok) setFacilities(r.data);
   }, []);
+  const fetchEnforcement = useCallback(async () => {
+    const r = await fetchTrafficEnforcement();
+    if (!alive.current) return;
+    setEnforcementLoading(false);
+    setEnforcementProblem(!r.ok);
+    if (r.ok) setEnforcement(r.data);
+  }, []);
   const retryFacilities = () => {
     setFacilitiesLoading(true);
     setFacilitiesProblem(false);
     void fetchFacilities();
   };
+  const retryEnforcement = () => {
+    setEnforcementLoading(true);
+    setEnforcementProblem(false);
+    void fetchEnforcement();
+  };
   useEffect(() => {
-    const first = setTimeout(() => void fetchFacilities(), 0);
+    const first = setTimeout(() => {
+      void fetchFacilities();
+      void fetchEnforcement();
+    }, 0);
     return () => clearTimeout(first);
-  }, [fetchFacilities]);
+  }, [fetchFacilities, fetchEnforcement]);
 
   // 도로 모양을 받는 동안 경과 시간(초)을 1초마다 갱신한다.
   useEffect(() => {
@@ -200,18 +224,31 @@ export function TrafficDashboard() {
   const highlightIds = roadIdsKey ? roadIdsKey.split(",") : EMPTY_IDS;
   const speedStale = speeds?.observedAt ? now.getTime() - Date.parse(speeds.observedAt) > SPEED_STALE_MS : false;
   const facilityCounts = useMemo(() => {
-    const counts = Object.fromEntries(FACILITY_ORDER.map((t) => [t, 0])) as Record<FacilityType, number>;
+    const counts = Object.fromEntries(FACILITY_ORDER.map((t) => [t, 0])) as Record<FacilityKey, number>;
     for (const f of facilities?.facilities ?? []) counts[f[1]] += 1;
+    counts.ENF = enforcement?.cameras.length ?? 0;
     return counts;
-  }, [facilities]);
+  }, [facilities, enforcement]);
   const facilityPoints = useMemo<FacilityPoint[]>(
-    () =>
-      (facilities?.facilities ?? [])
+    () => [
+      ...(facilities?.facilities ?? [])
         .filter((f) => facilityTypes.has(f[1]))
-        .map(([id, type, name, model, lat, lng]) => ({ id, type, name, model, lat, lng })),
-    [facilities, facilityTypes],
+        .map(([id, type, name, model, lat, lng]): FacilityPoint => ({ id, type, name, model, lat, lng })),
+      ...(facilityTypes.has("ENF") ? (enforcement?.cameras ?? []) : []).map(
+        ([id, place, address, rotate, audit, oper, lat, lng]): FacilityPoint => ({
+          id: `ENF-${id}`,
+          type: "ENF",
+          name: place,
+          model: "",
+          lat,
+          lng,
+          detail: [address, enforcementCounts(rotate, audit), oper && `운영 ${oper}`].filter(Boolean).join("\n"),
+        }),
+      ),
+    ],
+    [facilities, facilityTypes, enforcement],
   );
-  const toggleFacility = (t: FacilityType) =>
+  const toggleFacility = (t: FacilityKey) =>
     setFacilityTypes((prev) => {
       const next = new Set(prev);
       if (next.has(t)) next.delete(t);
@@ -488,10 +525,11 @@ export function TrafficDashboard() {
               교통시설물
             </h2>
             <p className="text-xs text-grey-600">
-              제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV·웹카메라 점을 누르면 제주 ITS 교통정보센터(새 창)로 연결되며, 사이트의 CCTV 메뉴에서 같은 위치를 고르면 영상을 볼 수 있습니다.
+              제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV·웹카메라 점을 누르면 제주 ITS 교통정보센터(새 창)로 연결되며, 사이트의 CCTV 메뉴에서 같은 위치를 고르면 영상을 볼 수 있습니다. 주정차 단속은
+              제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다{enforcement?.source === "mock" && "(모의 데이터)"}.
             </p>
           </div>
-          {facilitiesLoading && (
+          {(facilitiesLoading || enforcementLoading) && (
             <p role="status" aria-label="교통시설물 처리 현황" className="rounded-2xl bg-brand-50 p-2 text-sm text-brand-900">
               <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
               교통시설물 불러오는 중…
@@ -505,7 +543,7 @@ export function TrafficDashboard() {
               </button>
             </div>
           )}
-          {facilities && (
+          {(facilities || enforcement) && (
             <ul aria-label="교통시설물 유형" className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
               {FACILITY_ORDER.map((t) => {
                 const on = facilityTypes.has(t);
@@ -532,6 +570,14 @@ export function TrafficDashboard() {
           )}
           {facilities && facilities.failedTypes.length > 0 && (
             <p className="text-xs text-amber-800">일부 유형({facilities.failedTypes.map((t) => FACILITY_STYLE[t].short).join(", ")})은 받지 못했습니다. 잠시 뒤 다시 확인됩니다.</p>
+          )}
+          {enforcementProblem && (
+            <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
+              <span>주정차 단속 CCTV를 불러오지 못했습니다.</span>
+              <button type="button" onClick={retryEnforcement} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
+                다시 시도
+              </button>
+            </div>
           )}
         </section>
 
@@ -608,7 +654,7 @@ export function TrafficDashboard() {
       <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
         <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
         <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 이 화면은 위치정보를 사용하지 않습니다.</p>
-        <p>지도 © OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크)</p>
+        <p>지도 © OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시(공공데이터포털)</p>
       </footer>
     </div>
   );

@@ -25,6 +25,7 @@ describe("승인된 기본 예산", () => {
       kakaoLocal: { dailyLimit: 3000 },
       jejuIts: { dailyLimit: 6000 },
       vworld: { dailyLimit: 400 },
+      dataGoKr: { dailyLimit: 500 },
       ai: { dailyLimit: 200 },
     });
   });

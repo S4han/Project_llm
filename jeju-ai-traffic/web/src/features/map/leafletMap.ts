@@ -2,9 +2,9 @@ import { useCallback, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Coordinate } from "../../../../shared/contracts/route";
-import type { FacilityType, SpeedStatus, TrafficIncident } from "../../../../shared/contracts/traffic";
+import type { SpeedStatus, TrafficIncident } from "../../../../shared/contracts/traffic";
 import { formatDuration } from "../routes/format";
-import { FACILITY_STYLE } from "../traffic/facilityStyle";
+import { FACILITY_STYLE, type FacilityKey } from "../traffic/facilityStyle";
 import { INCIDENT_LABEL, STATUS_STYLE } from "../routes/trafficStyle";
 import { formatKstTime } from "../trip/format";
 
@@ -79,6 +79,8 @@ export const JEJU_ITS_SITE = "https://www.jejuits.go.kr/main/mainView.do";
 export function popupContent(text: string, link?: { href: string; label: string; note?: string }): HTMLElement {
   const el = document.createElement("div");
   const p = document.createElement("p");
+  // 줄바꿈(주정차 단속 운영 시간 등)을 그대로 보인다.
+  p.style.whiteSpace = "pre-line";
   p.textContent = text;
   el.append(p);
   if (link?.note) {
@@ -197,9 +199,11 @@ export function updateSpeedLineWeights(map: L.Map, polylines: L.Polyline[]) {
 /** 지도에 찍을 교통시설물 하나(TASK-013). */
 export interface FacilityPoint {
   id: string;
-  type: FacilityType;
+  type: FacilityKey;
   name: string;
   model: string;
+  /** 팝업 둘째 줄부터(주정차 단속: 주소·CCTV 수·운영 시간, TASK-016). */
+  detail?: string;
   lat: number;
   lng: number;
 }
@@ -213,7 +217,7 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
     L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: 5, color: "#fff", weight: 1.5, fillColor: style.color, fillOpacity: 1 })
       .bindPopup(
         popupContent(
-          `${style.label} · ${p.name || "위치 이름 없음"}${p.model ? ` · 모델 ${p.model}` : ""}`,
+          `${style.label} · ${p.name || "위치 이름 없음"}${p.model ? ` · 모델 ${p.model}` : ""}${p.detail ? `\n${p.detail}` : ""}`,
           // CCTV·웹카메라는 영상 API가 없고 사이트에 카메라별 주소도 없어(영상은 사이트 안 팝업), 공식 사이트 첫 화면으로 연결하고 찾는 방법을 안내한다(TASK-014).
           p.type === "FTY02" || p.type === "FTY03"
             ? {

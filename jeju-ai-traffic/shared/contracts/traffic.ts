@@ -81,3 +81,13 @@ export interface TrafficFacilitiesResponse {
   builtAt: IsoDateTime;
   source: "jejuIts" | "mock";
 }
+
+/**
+ * GET /api/traffic/enforcement 응답(TASK-016). 제주시 주정차 단속 CCTV(공공데이터포털 15109175, 제주시만).
+ * cameras[i] = [데이터 코드, 설치 장소, 설치 주소, 회전형 CCTV 수, 검지 CCTV 수, 운영 시간(줄바꿈 포함), 위도, 경도]. 수를 모르면 null.
+ */
+export interface TrafficEnforcementResponse {
+  cameras: [string, string, string, number | null, number | null, string, number, number][];
+  builtAt: IsoDateTime;
+  source: "dataGoKr" | "mock";
+}
