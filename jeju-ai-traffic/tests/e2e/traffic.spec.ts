@@ -83,7 +83,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
 
   test("구간이 1만 개가 넘어도 상태 카드 숫자가 한 줄 (좁은 휴대폰 폭 360px, 응답 대체)", async ({ page }) => {
     const ids = Array.from({ length: 11906 }, (_, i) => String(4050000000 + i));
-    await page.route("**/api/traffic/links", (route) =>
+    await page.route("**/api/traffic/links?*", (route) =>
       route.fulfill({ json: { links: ids.map((id) => [id, "도로", "_p~iF~ps|U_ulLnnqC"]), builtAt: new Date().toISOString(), source: "vworld" } }),
     );
     await page.route("**/api/traffic/speeds", (route) =>
@@ -99,7 +99,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
   });
 
   test("도로 모양을 늦게 받으면 처리 현황과 지도 안내, 받은 뒤 사라짐 (응답 지연)", async ({ page }) => {
-    await page.route("**/api/traffic/links", async (route) => {
+    await page.route("**/api/traffic/links?*", async (route) => {
       const res = await route.fetch();
       await new Promise((r) => setTimeout(r, 2500));
       await route.fulfill({ response: res });
@@ -129,6 +129,24 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await shot(page, "TASK-013-01-facilities");
     await list.getByRole("button", { name: /CCTV/ }).click();
     await expect(map).toHaveAttribute("data-facilities", "2");
+  });
+  test("실시간 정체구간: 정체 먼저, A → B, 누르면 지도 강조 (TASK-015, 개발 서버 모의)", async ({ page }) => {
+    await page.goto("/");
+    const region = page.getByRole("region", { name: "실시간 정체구간" });
+    await expect(region.getByText("정체 1")).toBeVisible();
+    await expect(region.getByText("서행 1")).toBeVisible();
+    const rows = region.getByRole("list", { name: "실시간 정체구간 목록" }).locator(":scope > li").getByRole("button");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0)).toContainText("모의 평화로정체모의 어승생 → 모의 서귀포9km/h");
+    await expect(rows.nth(1)).toContainText("모의 평화로서행모의 노형 → 모의 어승생22km/h");
+    await shot(page, "TASK-015-01-list");
+    await rows.nth(0).click();
+    await expect(rows.nth(0)).toHaveAttribute("aria-pressed", "true");
+    const bar = page.getByRole("status").filter({ hasText: "모의 서귀포 표시 중" });
+    await expect(bar).toHaveText(/모의 평화로 정체 · 모의 어승생 → 모의 서귀포 표시 중/);
+    await shot(page, "TASK-015-02-focus");
+    await bar.getByRole("button", { name: "전체 보기" }).click();
+    await expect(rows.nth(0)).toHaveAttribute("aria-pressed", "false");
   });
 });
 

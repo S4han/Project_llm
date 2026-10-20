@@ -58,10 +58,12 @@ export interface TrafficSpeedsResponse {
 
 /**
  * GET /api/traffic/links 응답. 브이월드 국가 교통링크 중 제주 ITS 속도가 있는 구간의 모양.
- * links[i] = [link_id, 도로명, Google polyline(정밀도 1e5)].
+ * links[i] = [link_id, 도로명, Google polyline(정밀도 1e5), 시작 지점 이름, 끝 지점 이름].
+ * 지점 이름은 브이월드 교통노드에서 붙이며(TASK-015) 모르면 "". named가 false면 교통노드를 받지 못한 것.
  */
 export interface TrafficLinksResponse {
-  links: [string, string, string][];
+  links: [string, string, string, string, string][];
+  named: boolean;
   builtAt: IsoDateTime;
   source: "vworld" | "mock";
 }

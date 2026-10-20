@@ -17,7 +17,17 @@ const OK: TrafficIncidentsResponse = {
 };
 
 const line = encodePolyline([{ lat: 33.5, lng: 126.5 }, { lat: 33.49, lng: 126.51 }]);
-const LINKS: TrafficLinksResponse = { links: [["4050000001", "노형로", line], ["4050000002", "연북로", line], ["4050000003", "평화로", line], ["4050000009", "속도없음로", line]], builtAt: AT, source: "vworld" };
+const LINKS: TrafficLinksResponse = {
+  links: [
+    ["4050000001", "노형로", line, "노형오거리", "제주시청"],
+    ["4050000002", "연북로", line, "", ""],
+    ["4050000003", "평화로", line, "어승생삼거리", "광평교차로"],
+    ["4050000009", "속도없음로", line, "", ""],
+  ],
+  named: true,
+  builtAt: AT,
+  source: "vworld",
+};
 const SPEEDS: TrafficSpeedsResponse = { status: "ok", observedAt: "2026-10-20T00:30:00.000Z", speeds: { "4050000001": [45, 60], "4050000002": [20, 130], "4050000003": [8, 400] }, source: "jejuIts", retryAfter: null };
 
 const FACILITIES: TrafficFacilitiesResponse = {
@@ -189,6 +199,33 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     fireEvent.click(within(counts).getByRole("button", { name: /전체/ }));
     expect(map.getAttribute("data-speed-lines")).toBe("3");
     expect(screen.queryByRole("list", { name: /도로 목록/ })).toBeNull();
+  });
+
+  it("실시간 정체구간: 정체 먼저, 도로명·배지·A → B, 누르면 지도 강조, 다시 누르거나 전체 보기로 닫음 (TASK-015)", async () => {
+    render(<TrafficDashboard />);
+    const region = await screen.findByRole("region", { name: "실시간 정체구간" });
+    const list = await within(region).findByRole("list", { name: "실시간 정체구간 목록" });
+    expect(within(region).getByText("정체 1")).toBeTruthy();
+    expect(within(region).getByText("서행 1")).toBeTruthy();
+    const rows = within(list).getAllByRole("button");
+    expect(rows.map((r) => r.textContent)).toEqual(["평화로정체어승생삼거리 → 광평교차로8km/h지도 ›", "연북로서행1구간20km/h지도 ›"]);
+    // 도로 소통 카드 바로 아래(교통시설물보다 위)
+    const speedsRegion = screen.getByRole("region", { name: "도로 소통" });
+    const facilities = screen.getByRole("region", { name: "교통시설물" });
+    expect(speedsRegion.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(region.compareDocumentPosition(facilities) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // 원활만 보고 있다가 정체 줄을 누르면 지도는 전체 상태로 돌아가 그 구간을 강조한다.
+    fireEvent.click(within(screen.getByRole("list", { name: "구간 소통 건수" })).getByRole("button", { name: /원활/ }));
+    fireEvent.click(rows[0]!);
+    expect(rows[0]!.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("region", { name: "교통 현황 지도" }).getAttribute("data-speed-lines")).toBe("3");
+    expect(screen.getByText("평화로 정체 · 어승생삼거리 → 광평교차로 표시 중")).toBeTruthy();
+    fireEvent.click(rows[0]!);
+    expect(screen.queryByText(/광평교차로 표시 중/)).toBeNull();
+    fireEvent.click(rows[1]!);
+    fireEvent.click(screen.getByRole("button", { name: "전체 보기" }));
+    expect(rows[1]!.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("도로 소통 카드가 사건 카드보다 위에 있고, 구간 속도도 1분마다 다시 조회한다", async () => {

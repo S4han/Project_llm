@@ -5,7 +5,7 @@ import { quotaGuard, type QuotaGuard } from "./policies/quota.js";
 import { RateLimiter } from "./policies/rateLimit.js";
 import { TtlCache } from "./policies/ttlCache.js";
 import { createJejuItsSpeedProvider, createMockSpeedProvider, type SpeedProvider, type SpeedSnapshot } from "./providers/jejuItsSpeeds.js";
-import { createMockLinkProvider, createVworldLinkProvider, type LinkProvider, type LinkShape } from "./providers/vworldLinks.js";
+import { createMockLinkProvider, createVworldLinkProvider, type LinkBuild, type LinkProvider } from "./providers/vworldLinks.js";
 
 /** 구간 속도 캐시. 원천이 약 5분 단위라 1분이면 충분하다(TASK-012). */
 export const SPEEDS_CACHE_TTL_MS = 60_000;
@@ -13,6 +13,8 @@ export const SPEEDS_CACHE_TTL_MS = 60_000;
 export const LINKS_CACHE_TTL_MS = 24 * 60 * 60_000;
 /** 구간 모양 응답의 CDN 보관(초). 도로 모양은 거의 바뀌지 않는다(사용자 승인 "30일 캐시"). */
 export const LINKS_CDN_SECONDS = 30 * 24 * 60 * 60;
+/** 지점 이름(교통노드)을 받지 못한 응답은 1시간만 보관해 곧 다시 만든다(TASK-015). */
+export const LINKS_PARTIAL_CDN_SECONDS = 60 * 60;
 
 export const TRAFFIC_SPEEDS_PER_MINUTE = 20;
 export const TRAFFIC_LINKS_PER_MINUTE = 10;
@@ -30,7 +32,7 @@ export interface TrafficSpeedsDeps extends SpeedDeps {
 
 export interface TrafficLinksDeps extends SpeedDeps {
   links: LinkProvider;
-  linkCache: TtlCache<LinkShape[]>;
+  linkCache: TtlCache<LinkBuild>;
   limiter: RateLimiter;
 }
 
@@ -83,14 +85,14 @@ export async function handleTrafficSpeeds(request: Request, deps: TrafficSpeedsD
 }
 
 /**
- * GET /api/traffic/links: 속도가 있는 구간의 모양. 성공하면 CDN에 30일 보관한다.
+ * GET /api/traffic/links: 속도가 있는 구간의 모양·양 끝 지점 이름. 성공하면 CDN에 30일 보관한다(지점 이름이 없으면 1시간).
  * 속도나 모양을 받지 못하면 오류(보관하지 않음) — 화면은 구간 색 없이 사건만 보여 준다.
  */
 export async function handleTrafficLinks(request: Request, deps: TrafficLinksDeps): Promise<Response> {
   const now = deps.now ?? (() => new Date());
   try {
     limit(deps, request);
-    const links = await deps.linkCache.getOrLoad("links", async () => {
+    const build = await deps.linkCache.getOrLoad("links", async () => {
       const ids = new Set(Object.keys((await loadSpeeds(deps)).speeds));
       return guardedCall(deps.guard, "vworld", () =>
         deps.links.fetchLinks(ids, async (calls) => {
@@ -98,10 +100,11 @@ export async function handleTrafficLinks(request: Request, deps: TrafficLinksDep
         }),
       );
     });
-    const body: TrafficLinksResponse = { links, builtAt: now().toISOString(), source: deps.links.source };
-    return Response.json(body, {
-      headers: { "Cache-Control": `public, max-age=86400, s-maxage=${LINKS_CDN_SECONDS}, stale-while-revalidate=604800` },
-    });
+    const body: TrafficLinksResponse = { links: build.links, named: build.named, builtAt: now().toISOString(), source: deps.links.source };
+    const cache = build.named
+      ? `public, max-age=86400, s-maxage=${LINKS_CDN_SECONDS}, stale-while-revalidate=604800`
+      : `public, max-age=${LINKS_PARTIAL_CDN_SECONDS}, s-maxage=${LINKS_PARTIAL_CDN_SECONDS}`;
+    return Response.json(body, { headers: { "Cache-Control": cache } });
   } catch (err) {
     return toErrorResponse(err, now());
   }
@@ -121,7 +124,7 @@ export const defaultTrafficLinksDeps: TrafficLinksDeps = {
   speeds,
   speedCache,
   links: selectLinkProvider(process.env),
-  linkCache: new TtlCache<LinkShape[]>(LINKS_CACHE_TTL_MS),
+  linkCache: new TtlCache<LinkBuild>(LINKS_CACHE_TTL_MS),
   guard: quotaGuard,
   limiter: new RateLimiter(TRAFFIC_LINKS_PER_MINUTE, 60_000),
 };

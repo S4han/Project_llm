@@ -152,6 +152,9 @@ export interface SpeedLine {
   kmh: number;
   travelSeconds: number;
   status: SpeedStatus;
+  /** 구간 시작·끝 지점 이름(TASK-015). 모르면 "" 또는 없음. */
+  from?: string;
+  to?: string;
 }
 
 /** 확대 수준에 따른 구간 선 두께. 섬 전체(9~10)에서는 가늘게 그려 선이 뭉쳐 보이지 않게 한다(TASK-012 "3. (a)"). */

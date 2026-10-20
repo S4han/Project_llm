@@ -42,9 +42,9 @@ export function fetchTrafficSpeeds(signal?: AbortSignal): Promise<Result<Traffic
   return getJson<TrafficSpeedsResponse>("/api/traffic/speeds", (b) => "speeds" in b, signal);
 }
 
-/** GET /api/traffic/links(TASK-012): 구간 모양(CDN 30일 보관). 화면을 열 때 한 번만 부른다. */
+/** GET /api/traffic/links(TASK-012): 구간 모양·지점 이름(CDN 30일 보관). 화면을 열 때 한 번만 부른다. v=2는 지점 이름이 붙은 응답(TASK-015)으로, 이전 CDN 보관본을 피한다. */
 export function fetchTrafficLinks(signal?: AbortSignal): Promise<Result<TrafficLinksResponse>> {
-  return getJson<TrafficLinksResponse>("/api/traffic/links", (b) => "links" in b, signal);
+  return getJson<TrafficLinksResponse>("/api/traffic/links?v=2", (b) => "links" in b, signal);
 }
 
 /** GET /api/traffic/facilities(TASK-013): 교통시설물 위치(서버 하루·CDN 7일 보관). 화면을 열 때 한 번만 부른다. */

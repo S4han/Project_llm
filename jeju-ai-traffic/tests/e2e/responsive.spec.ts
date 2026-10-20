@@ -51,7 +51,16 @@ for (const vp of WIDTHS) {
         expect(kinds.y).toBeGreaterThan(p.y);
         expect(m.y).toBeGreaterThan(kinds.y);
       }
+      // 실시간 정체구간(TASK-015): 도로 소통 카드 바로 아래. PC·아이패드 가로는 오른쪽 패널.
+      const chains = (await page.getByRole("region", { name: "실시간 정체구간" }).boundingBox())!;
+      const speedsBox = (await page.getByRole("region", { name: "도로 소통" }).boundingBox())!;
+      expect(chains.y).toBeGreaterThan(speedsBox.y + speedsBox.height - 1);
+      expect(chains.y).toBeLessThan(speedsBox.y + speedsBox.height + 40);
+      if (vp.width >= 1280) expect(chains.x).toBeGreaterThanOrEqual(m.x + m.width);
       await shot(page, `TASK-012-05-traffic-${vp.width}`);
+      if (process.env.SCREENSHOTS && "TASK-015".startsWith(process.env.SCREENSHOTS)) {
+        await page.getByRole("region", { name: "실시간 정체구간" }).screenshot({ path: `reports/screenshots/TASK-015-03-card-${vp.width}.png` });
+      }
     });
 
     test("경로 추천: 배치와 가로 스크롤 없음", async ({ page }) => {
