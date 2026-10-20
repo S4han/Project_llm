@@ -166,7 +166,7 @@ export function TrafficDashboard() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 bg-slate-50 p-4 md:max-w-5xl xl:max-w-[96rem]">
       {/*
-        반응형(TASK-012 반응형): 휴대폰은 세로 한 줄. 태블릿(md)은 카드를 넓게, 지도를 크게, 그 아래 도로 소통·사건 목록 2단.
+        반응형(TASK-012 반응형): 휴대폰은 세로 한 줄. 태블릿(md)은 도로 소통·사건 카드를 넓게, 그 아래 큰 지도와 사건 목록.
         PC·아이패드 가로(xl)는 왼쪽에 화면 높이의 지도를 고정하고 오른쪽에 정보 패널.
       */}
       <main className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_auto_auto_auto_auto_1fr]">
@@ -178,10 +178,9 @@ export function TrafficDashboard() {
         </div>
         <div className={`flex items-center justify-between gap-2 ${PANEL}`}>
           <p className="text-sm text-slate-600">
-            제주 ITS 돌발·통제·공사
+            제주 ITS 도로 소통·돌발·통제·공사
             {state.snapshot && ` · ${formatKstTime(state.snapshot.observedAt)} 조회`}
             {state.snapshot?.incidents.some((i) => i.source === "mock") && " · 모의 데이터"}
-            <span className="block text-xs">화면이 켜져 있을 때 1분마다 자동 갱신</span>
           </p>
           <button
             type="button"
@@ -207,30 +206,16 @@ export function TrafficDashboard() {
           )}
         </div>
 
-        <ul aria-label="종류별 건수" className={`grid grid-cols-4 gap-2 ${PANEL}`}>
-          {(["all", ...KINDS] as const).map((k) => {
-            const count = k === "all" ? all.length : all.filter((i) => i.kind === k).length;
-            return (
-              <li key={k}>
-                <button
-                  type="button"
-                  onClick={() => chooseKind(k)}
-                  aria-pressed={kind === k}
-                  className={`flex min-h-16 w-full flex-col items-center justify-center rounded-xl border p-2 ${kind === k ? "border-blue-600 bg-blue-50 ring-2 ring-blue-600/30" : "border-slate-200 bg-white"}`}
-                >
-                  <span className="text-xs text-slate-600">{k === "all" ? "전체" : INCIDENT_LABEL[k]}</span>
-                  <span className="text-xl font-bold text-slate-900">{state.snapshot ? count : "–"}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-
-        <section aria-labelledby="speeds-heading" className="flex flex-col gap-2 self-start rounded-xl border border-slate-200 bg-white p-3 md:order-3 xl:col-start-2">
+        <section aria-labelledby="speeds-heading" className={`flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 ${PANEL}`}>
           <div className="flex items-center justify-between gap-2">
-            <h2 id="speeds-heading" className="font-bold text-slate-900">
-              도로 소통
-            </h2>
+            <div>
+              <h2 id="speeds-heading" className="font-bold text-slate-900">
+                도로 소통
+              </h2>
+              <p className="text-xs text-slate-600">
+                화면이 켜져 있을 때 1분마다 자동 갱신{speeds && ` · 마지막 조회 ${formatKstTime(now.toISOString())}`}
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => setShowSpeeds((v) => !v)}
@@ -314,7 +299,27 @@ export function TrafficDashboard() {
           )}
         </section>
 
-        <div ref={mapBox} className="flex flex-col gap-2 md:order-2 md:col-span-2 xl:sticky xl:top-4 xl:col-span-1 xl:col-start-1 xl:row-span-6 xl:row-start-1 xl:self-start">
+        <ul aria-label="종류별 건수" className={`grid grid-cols-4 gap-2 ${PANEL}`}>
+          {(["all", ...KINDS] as const).map((k) => {
+            const count = k === "all" ? all.length : all.filter((i) => i.kind === k).length;
+            return (
+              <li key={k}>
+                <button
+                  type="button"
+                  onClick={() => chooseKind(k)}
+                  aria-pressed={kind === k}
+                  className={`flex min-h-16 w-full flex-col items-center justify-center rounded-xl border p-2 ${kind === k ? "border-blue-600 bg-blue-50 ring-2 ring-blue-600/30" : "border-slate-200 bg-white"}`}
+                >
+                  <span className="text-xs text-slate-600">{k === "all" ? "전체" : INCIDENT_LABEL[k]}</span>
+                  <span className="text-xl font-bold text-slate-900">{state.snapshot ? count : "–"}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+
+        <div ref={mapBox} className="flex flex-col gap-2 md:col-span-2 xl:sticky xl:top-4 xl:col-span-1 xl:col-start-1 xl:row-span-6 xl:row-start-1 xl:self-start">
           <IncidentMap
             incidents={shown}
             focus={incidentFocus.focus}
@@ -338,7 +343,7 @@ export function TrafficDashboard() {
         </div>
 
         {state.snapshot && groups.length > 0 && (
-          <section aria-labelledby="groups-heading" className="flex flex-col gap-2 self-start rounded-xl border border-slate-200 bg-white pt-4 md:order-4 xl:col-start-2">
+          <section aria-labelledby="groups-heading" className={`flex flex-col gap-2 self-start rounded-xl border border-slate-200 bg-white pt-4 ${PANEL}`}>
             <h2 id="groups-heading" className="px-4 font-bold text-slate-900">
               감지된 사건 {shown.length}건
             </h2>
@@ -346,7 +351,7 @@ export function TrafficDashboard() {
           </section>
         )}
         {state.snapshot && shown.length === 0 && (
-          <p className="self-start md:order-4 xl:col-start-2 rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
+          <p className={`self-start rounded-lg bg-slate-100 p-3 text-sm text-slate-700 ${PANEL}`}>
             {kind === "all" ? "현재 제주 ITS에 감지된 돌발·통제·공사가 없습니다." : `현재 제주 ITS에 감지된 ${INCIDENT_LABEL[kind]} 정보가 없습니다.`} 모든 도로의 사건이
             제공되지는 않으므로, 도로에 이상이 없다는 뜻은 아닙니다.
           </p>

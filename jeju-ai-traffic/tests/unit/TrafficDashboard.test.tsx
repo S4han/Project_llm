@@ -22,6 +22,7 @@ const SPEEDS: TrafficSpeedsResponse = { status: "ok", observedAt: "2026-10-20T00
 
 let respond: () => Response;
 let speedsRespond: () => Response;
+let speedCalls = 0;
 let calls = 0;
 let visibility: DocumentVisibilityState = "visible";
 
@@ -31,12 +32,16 @@ beforeEach(() => {
   calls = 0;
   respond = () => Response.json(OK);
   speedsRespond = () => Response.json(SPEEDS);
+  speedCalls = 0;
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
-      if (url.startsWith("/api/traffic/speeds")) return speedsRespond();
+      if (url.startsWith("/api/traffic/speeds")) {
+        speedCalls += 1;
+        return speedsRespond();
+      }
       if (url.startsWith("/api/traffic/links")) return Response.json(LINKS);
       calls += 1;
       return respond();
@@ -162,5 +167,17 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     fireEvent.click(within(counts).getByRole("button", { name: /전체/ }));
     expect(map.getAttribute("data-speed-lines")).toBe("3");
     expect(screen.queryByRole("list", { name: /도로 목록/ })).toBeNull();
+  });
+
+  it("도로 소통 카드가 사건 카드보다 위에 있고, 구간 속도도 1분마다 다시 조회한다", async () => {
+    render(<TrafficDashboard />);
+    const speedsRegion = await screen.findByRole("region", { name: "도로 소통" });
+    await within(speedsRegion).findByText(/마지막 조회/);
+    expect(within(speedsRegion).getByText(/화면이 켜져 있을 때 1분마다 자동 갱신/)).toBeTruthy();
+    const kinds = screen.getByRole("list", { name: "종류별 건수" });
+    expect(speedsRegion.compareDocumentPosition(kinds) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(speedCalls).toBe(1);
+    await act(async () => vi.advanceTimersByTime(REFRESH_MS));
+    expect(speedCalls).toBe(2);
   });
 });

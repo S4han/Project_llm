@@ -37,16 +37,19 @@ for (const vp of WIDTHS) {
         expect(m.x + m.width).toBeLessThanOrEqual(p.x);
         expect(m.height).toBeGreaterThan(vp.height * 0.7);
       } else if (vp.width >= 768) {
-        // 지도를 크게(화면 높이 약 60%), 도로 소통·사건 목록은 지도 아래 2단
+        // 도로 소통 카드가 맨 위, 그 아래 사건 카드, 큰 지도(화면 높이 약 60%), 사건 목록
         expect(m.height).toBeGreaterThan(vp.height * 0.5);
         const speeds = (await page.getByRole("region", { name: "도로 소통" }).boundingBox())!;
+        const kinds = (await page.getByRole("list", { name: "종류별 건수" }).boundingBox())!;
         const groups = (await page.getByRole("region", { name: /감지된 사건/ }).boundingBox())!;
-        expect(speeds.y).toBeGreaterThan(m.y + m.height - 1);
-        expect(Math.abs(speeds.y - groups.y)).toBeLessThan(2);
-        expect(groups.x).toBeGreaterThan(speeds.x + speeds.width - 1);
+        expect(speeds.y).toBeLessThan(kinds.y);
+        expect(kinds.y).toBeLessThan(m.y);
+        expect(groups.y).toBeGreaterThan(m.y + m.height - 1);
       } else {
-        // 휴대폰: 세로 한 줄(도로 소통 → 지도)
-        expect(m.y).toBeGreaterThan(p.y);
+        // 휴대폰: 세로 한 줄(도로 소통 → 사건 카드 → 지도)
+        const kinds = (await page.getByRole("list", { name: "종류별 건수" }).boundingBox())!;
+        expect(kinds.y).toBeGreaterThan(p.y);
+        expect(m.y).toBeGreaterThan(kinds.y);
       }
       await shot(page, `TASK-012-05-traffic-${vp.width}`);
     });
@@ -89,8 +92,9 @@ test.describe("넓은 화면 간격", () => {
     await page.goto("/traffic");
     await expect(page.getByRole("list", { name: "구간 소통 건수" }).getByRole("button").first()).toHaveText("전체4");
     const title = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
-    const cards = (await page.getByRole("list", { name: "종류별 건수" }).boundingBox())!;
-    expect(cards.y - (title.y + title.height)).toBeLessThan(120);
+    // 맨 위 카드(도로 소통)는 제목·갱신 안내 바로 아래
+    const first = (await page.getByRole("region", { name: "도로 소통" }).boundingBox())!;
+    expect(first.y - (title.y + title.height)).toBeLessThan(140);
   });
 
   test("경로 추천 왼쪽 출발지는 결과가 길어도 제목 바로 아래", async ({ page }) => {
