@@ -7,6 +7,7 @@ import { IncidentFocusBar, IncidentGroupList } from "../routes/IncidentFocus";
 import { groupIncidents, useIncidentFocus } from "../routes/incidents";
 import { INCIDENT_LABEL, STATUS_STYLE } from "../routes/trafficStyle";
 import { formatKstTime } from "../trip/format";
+import { revealMap } from "../map/revealMap";
 import { IncidentMap } from "./IncidentMap";
 import { groupByRoad, joinSpeedLines } from "./speedLines";
 
@@ -37,6 +38,9 @@ interface DashboardState {
 }
 
 const EMPTY_LINES: SpeedLine[] = [];
+
+/** 넓은 화면에서 정보 패널 칸(위쪽 전체 폭 → PC는 오른쪽 칸). */
+const PANEL = "md:col-span-2 xl:col-span-1 xl:col-start-2";
 const EMPTY_IDS: string[] = [];
 
 /** 제주 ITS 실시간 교통 현황(TASK-012). 화면이 켜져 있을 때만 1분마다 다시 조회한다. */
@@ -146,7 +150,7 @@ export function TrafficDashboard() {
   const focusRoad = (key: string) => {
     setRoadKey((k) => (k === key ? null : key));
     clearFocus();
-    mapBox.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    revealMap(mapBox.current);
   };
 
   const chooseKind = (k: IncidentKind | "all") => {
@@ -156,19 +160,23 @@ export function TrafficDashboard() {
   const focusGroup = (key: string) => {
     incidentFocus.toggle(key);
     setRoadKey(null);
-    mapBox.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    revealMap(mapBox.current);
   };
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 bg-slate-50 p-4">
-      <main className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-2">
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 bg-slate-50 p-4 md:max-w-5xl xl:max-w-[96rem]">
+      {/*
+        반응형(TASK-012 반응형): 휴대폰은 세로 한 줄. 태블릿(md)은 카드를 넓게, 지도를 크게, 그 아래 도로 소통·사건 목록 2단.
+        PC·아이패드 가로(xl)는 왼쪽에 화면 높이의 지도를 고정하고 오른쪽에 정보 패널.
+      */}
+      <main className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_auto_auto_auto_auto_1fr]">
+        <div className={`flex items-center justify-between gap-2 ${PANEL}`}>
           <h1 className="text-2xl font-bold text-slate-900">제주 실시간 교통 현황</h1>
           <a href="/" className="shrink-0 text-sm font-semibold text-blue-700">
             ← 경로 추천
           </a>
         </div>
-        <div className="flex items-center justify-between gap-2">
+        <div className={`flex items-center justify-between gap-2 ${PANEL}`}>
           <p className="text-sm text-slate-600">
             제주 ITS 돌발·통제·공사
             {state.snapshot && ` · ${formatKstTime(state.snapshot.observedAt)} 조회`}
@@ -185,7 +193,7 @@ export function TrafficDashboard() {
           </button>
         </div>
 
-        <div aria-live="polite" className="flex flex-col gap-2 text-sm">
+        <div aria-live="polite" className={`flex flex-col gap-2 text-sm ${PANEL}`}>
           {state.problem && (
             <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-800">
               {state.problem}
@@ -199,7 +207,7 @@ export function TrafficDashboard() {
           )}
         </div>
 
-        <ul aria-label="종류별 건수" className="grid grid-cols-4 gap-2">
+        <ul aria-label="종류별 건수" className={`grid grid-cols-4 gap-2 ${PANEL}`}>
           {(["all", ...KINDS] as const).map((k) => {
             const count = k === "all" ? all.length : all.filter((i) => i.kind === k).length;
             return (
@@ -218,7 +226,7 @@ export function TrafficDashboard() {
           })}
         </ul>
 
-        <section aria-labelledby="speeds-heading" className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3">
+        <section aria-labelledby="speeds-heading" className="flex flex-col gap-2 self-start rounded-xl border border-slate-200 bg-white p-3 md:order-3 xl:col-start-2">
           <div className="flex items-center justify-between gap-2">
             <h2 id="speeds-heading" className="font-bold text-slate-900">
               도로 소통
@@ -306,13 +314,14 @@ export function TrafficDashboard() {
           )}
         </section>
 
-        <div ref={mapBox} className="flex flex-col gap-2">
+        <div ref={mapBox} className="flex flex-col gap-2 md:order-2 md:col-span-2 xl:sticky xl:top-4 xl:col-span-1 xl:col-start-1 xl:row-span-6 xl:row-start-1 xl:self-start">
           <IncidentMap
             incidents={shown}
             focus={incidentFocus.focus}
             viewKey={kind}
             speedLines={showSpeeds ? filteredLines : EMPTY_LINES}
             speedObservedAt={speeds?.observedAt ?? null}
+            heightClass="h-80 md:h-[60vh] xl:h-[calc(100dvh-7rem)]"
             highlightIds={showSpeeds ? highlightIds : EMPTY_IDS}
           />
           <IncidentFocusBar state={incidentFocus} />
@@ -329,7 +338,7 @@ export function TrafficDashboard() {
         </div>
 
         {state.snapshot && groups.length > 0 && (
-          <section aria-labelledby="groups-heading" className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white pt-4">
+          <section aria-labelledby="groups-heading" className="flex flex-col gap-2 self-start rounded-xl border border-slate-200 bg-white pt-4 md:order-4 xl:col-start-2">
             <h2 id="groups-heading" className="px-4 font-bold text-slate-900">
               감지된 사건 {shown.length}건
             </h2>
@@ -337,7 +346,7 @@ export function TrafficDashboard() {
           </section>
         )}
         {state.snapshot && shown.length === 0 && (
-          <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
+          <p className="self-start md:order-4 xl:col-start-2 rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
             {kind === "all" ? "현재 제주 ITS에 감지된 돌발·통제·공사가 없습니다." : `현재 제주 ITS에 감지된 ${INCIDENT_LABEL[kind]} 정보가 없습니다.`} 모든 도로의 사건이
             제공되지는 않으므로, 도로에 이상이 없다는 뜻은 아닙니다.
           </p>

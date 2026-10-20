@@ -70,7 +70,7 @@ export function RouteMap({ routes, selectedId, incidents, onSelect, focus = null
   }
   return (
     <div className="flex flex-col gap-1">
-      <div ref={attach} role="region" aria-label="경로 지도" className="h-64 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100" />
+      <div ref={attach} role="region" aria-label="경로 지도" className="h-64 w-full md:h-[45vh] lg:h-[60vh] overflow-hidden rounded-xl border border-slate-200 bg-slate-100" />
       {tilesFailed && (
         <p className="text-xs text-slate-600">지도 배경을 불러오지 못했습니다. 경로 선과 아래 목록은 그대로 확인할 수 있습니다.</p>
       )}

@@ -19,12 +19,14 @@ interface Props {
   speedObservedAt?: string | null;
   /** 도로 목록에서 고른 구간(TASK-012 소통대시보드). 있으면 굵게 강조하고 모두 보이게 확대한다. */
   highlightIds?: string[];
+  /** 지도 높이(반응형 클래스). */
+  heightClass?: string;
 }
 
 const NO_IDS: string[] = [];
 
 /** 제주 전체 교통 사건 지도(TASK-012). */
-export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS }: Props) {
+export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80" }: Props) {
   const { attach, mapRef, layerRef, mapReady, failed, tilesFailed } = useLeafletMap();
   const speedLayer = useRef<L.LayerGroup | null>(null);
   const polylines = useRef<L.Polyline[]>([]);
@@ -87,7 +89,7 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
   }
   return (
     <div className="flex flex-col gap-1">
-      <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} className="h-80 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100" />
+      <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} className={`${heightClass} w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100`} />
       {tilesFailed && <p className="text-xs text-slate-600">지도 배경을 불러오지 못했습니다. 사건 표시와 아래 목록은 그대로 확인할 수 있습니다.</p>}
     </div>
   );

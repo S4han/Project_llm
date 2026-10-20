@@ -10,6 +10,7 @@ import { formatDiff, formatDistance, formatDuration } from "./format";
 import { ExplanationCard } from "./ExplanationCard";
 import { MonitorPanel } from "../monitor/MonitorPanel";
 import { NavigationPanel } from "./NavigationPanel";
+import { revealMap } from "../map/revealMap";
 import { RouteMap } from "./RouteMap";
 import { groupIncidents, useIncidentFocus } from "./incidents";
 import { IncidentFocusBar, IncidentGroupList } from "./IncidentFocus";
@@ -127,75 +128,87 @@ function Results({ data, destination, onRetry }: { data: RouteCompareResponse; d
 
   const focusGroup = (key: string) => {
     incidentFocus.toggle(key);
-    mapBox.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    revealMap(mapBox.current);
   };
   const ordered = [recommended, ...routes.filter((r) => r !== recommended).sort((a, b) => a.durationSeconds - b.durationSeconds)];
   const mock = routes.some((r) => r.provider === "mock");
   const stale = isStale(observedAt, now);
 
+  // 반응형(TASK-012 반응형): 휴대폰은 세로 한 줄(순서는 order로 유지). 넓은 화면(lg)은 왼쪽에 조회 정보·안내·재평가·경로 카드,
+  // 오른쪽에 지도·범례·추천 이유를 고정한다. 두 묶음은 휴대폰에서는 상자 없이(contents) 한 줄로 섞인다.
   return (
-    <section aria-labelledby="routes-heading" className="flex flex-col gap-3">
-      <div>
-        <h2 id="routes-heading" className="text-lg font-bold text-slate-900">
-          경로 비교
-        </h2>
-        <p className="text-sm text-slate-600">
-          {formatKstTime(observedAt)} 조회 기준 · {mock ? "모의 데이터" : "카카오모빌리티 예상시간"}
-        </p>
-      </div>
-      {stale && (
-        <div role="alert" className="flex items-center justify-between gap-2 rounded-lg bg-amber-100 p-3 text-sm text-amber-900">
-          <span>오래된 정보입니다({Math.floor((now.getTime() - Date.parse(observedAt)) / 60_000)}분 전 조회). 다시 조회하세요.</span>
-          <button type="button" onClick={onRetry} className="min-h-12 shrink-0 rounded-lg bg-amber-700 px-3 font-semibold text-white">
-            다시 조회
-          </button>
+    <section aria-labelledby="routes-heading" className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
+      <div className="contents lg:col-start-1 lg:row-start-1 lg:flex lg:flex-col lg:gap-3">
+        <div>
+          <h2 id="routes-heading" className="text-lg font-bold text-slate-900">
+            경로 비교
+          </h2>
+          <p className="text-sm text-slate-600">
+            {formatKstTime(observedAt)} 조회 기준 · {mock ? "모의 데이터" : "카카오모빌리티 예상시간"}
+          </p>
         </div>
-      )}
-      <div ref={mapBox} className="flex flex-col gap-2">
-        <RouteMap routes={routes} selectedId={selectedId} incidents={incidents} onSelect={select} focus={incidentFocus.focus} />
-        <IncidentFocusBar state={incidentFocus} />
-      </div>
-      <ul aria-label="혼잡 범례" className="flex flex-wrap gap-3 text-xs text-slate-700">
-        {STATUS_ORDER.map((s) => (
-          <li key={s} className="flex items-center gap-1">
-            <span className={`inline-block h-1.5 w-5 rounded ${STATUS_STYLE[s].bar}`} aria-hidden="true" />
-            {STATUS_STYLE[s].label}
-          </li>
-        ))}
-      </ul>
-      <p className="text-xs text-slate-600">
-        혼잡도는 카카오모빌리티 구간 평균값입니다. {incidentsNote(incidentsStatus, incidentsObservedAt, incidents.length)}
-      </p>
-      {routes.length === 1 && (
-        <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">카카오 추천 경로(실시간 교통 반영)를 보여 줍니다. 다른 경로와는 비교하지 않습니다.</p>
-      )}
-      {tiedRouteIds.length > 0 && (
-        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-          예상시간이 같은 경로가 있어 거리가 짧은 경로를 추천합니다.
-        </p>
-      )}
-      <NavigationPanel destination={destination} />
-      <MonitorPanel
-        destination={destination.location}
-        selectedId={selectedId}
-        onFollowChange={(id) => routes.some((r) => r.id === id) && select(id)}
-      />
-      <ExplanationCard data={data} />
-      <ul aria-label="경로 목록" className="flex flex-col gap-2">
-        {ordered.map((route) => (
-          <RouteCard
-            key={route.id}
-            route={route}
-            recommended={recommended}
-            tied={tiedRouteIds.includes(route.id)}
-            selected={route.id === selectedId}
-            incidents={incidents}
-            onSelect={() => select(route.id)}
-            focusedKey={route.id === selectedId ? incidentFocus.focusedKey : null}
-            onFocus={focusGroup}
+        {stale && (
+          <div role="alert" className="flex items-center justify-between gap-2 rounded-lg bg-amber-100 p-3 text-sm text-amber-900">
+            <span>오래된 정보입니다({Math.floor((now.getTime() - Date.parse(observedAt)) / 60_000)}분 전 조회). 다시 조회하세요.</span>
+            <button type="button" onClick={onRetry} className="min-h-12 shrink-0 rounded-lg bg-amber-700 px-3 font-semibold text-white">
+              다시 조회
+            </button>
+          </div>
+        )}
+        {routes.length === 1 && (
+          <p className="order-2 rounded-lg bg-slate-100 lg:order-none p-3 text-sm text-slate-700">카카오 추천 경로(실시간 교통 반영)를 보여 줍니다. 다른 경로와는 비교하지 않습니다.</p>
+        )}
+        {tiedRouteIds.length > 0 && (
+          <p className="order-2 rounded-lg bg-amber-50 lg:order-none p-3 text-sm text-amber-900">
+            예상시간이 같은 경로가 있어 거리가 짧은 경로를 추천합니다.
+          </p>
+        )}
+        <div className="order-2 lg:order-none">
+          <NavigationPanel destination={destination} />
+        </div>
+        <div className="order-2 lg:order-none">
+          <MonitorPanel
+            destination={destination.location}
+            selectedId={selectedId}
+            onFollowChange={(id) => routes.some((r) => r.id === id) && select(id)}
           />
-        ))}
-      </ul>
+        </div>
+        <ul aria-label="경로 목록" className="order-4 flex flex-col gap-2 lg:order-none">
+          {ordered.map((route) => (
+            <RouteCard
+              key={route.id}
+              route={route}
+              recommended={recommended}
+              tied={tiedRouteIds.includes(route.id)}
+              selected={route.id === selectedId}
+              incidents={incidents}
+              onSelect={() => select(route.id)}
+              focusedKey={route.id === selectedId ? incidentFocus.focusedKey : null}
+              onFocus={focusGroup}
+            />
+          ))}
+        </ul>
+      </div>
+      <div className="contents lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1 lg:flex lg:flex-col lg:gap-3">
+        <div ref={mapBox} className="order-1 flex flex-col gap-2 lg:order-none">
+          <RouteMap routes={routes} selectedId={selectedId} incidents={incidents} onSelect={select} focus={incidentFocus.focus} />
+          <IncidentFocusBar state={incidentFocus} />
+        </div>
+        <ul aria-label="혼잡 범례" className="order-1 flex flex-wrap gap-3 text-xs text-slate-700 lg:order-none">
+          {STATUS_ORDER.map((s) => (
+            <li key={s} className="flex items-center gap-1">
+              <span className={`inline-block h-1.5 w-5 rounded ${STATUS_STYLE[s].bar}`} aria-hidden="true" />
+              {STATUS_STYLE[s].label}
+            </li>
+          ))}
+        </ul>
+        <p className="order-1 text-xs text-slate-600 lg:order-none">
+          혼잡도는 카카오모빌리티 구간 평균값입니다. {incidentsNote(incidentsStatus, incidentsObservedAt, incidents.length)}
+        </p>
+        <div className="order-3 lg:order-none">
+          <ExplanationCard data={data} />
+        </div>
+      </div>
     </section>
   );
 }
