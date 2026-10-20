@@ -99,6 +99,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** 브라우저 위치를 흉내 낸다. null이면 권한 거부. 호출 횟수를 셀 수 있게 돌려준다. */
+function stubLocation(at: { lat: number; lng: number } | null) {
+  const getCurrentPosition = vi.fn((ok: PositionCallback, fail?: PositionErrorCallback | null) => {
+    if (at) ok({ coords: { latitude: at.lat, longitude: at.lng, accuracy: 30 } } as GeolocationPosition);
+    else fail?.({ code: 1 } as GeolocationPositionError);
+  });
+  Object.defineProperty(navigator, "geolocation", { value: { getCurrentPosition }, configurable: true });
+  return getCurrentPosition;
+}
+
 const counts = () => within(screen.getByRole("list", { name: "종류별 건수" })).getAllByRole("button").map((b) => b.textContent);
 
 describe("교통 현황 대시보드 (TASK-012)", () => {
@@ -312,21 +322,51 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(map.getAttribute("data-facilities")).toBe("1");
   });
 
-  it("주정차 단속 CCTV(TASK-016): 교통시설물 카드의 한 유형, 기본 꺼짐, 누르면 지도에. 실패하면 안내와 다시 시도", async () => {
+  it("주정차 단속 CCTV(TASK-016): 교통시설물 카드의 한 유형, 기본 꺼짐. 켜면 현재 위치를 확인해 반경 5km 안만 지도에", async () => {
+    const ask = stubLocation({ lat: 33.5, lng: 126.53 });
     render(<TrafficDashboard />);
     const list = await screen.findByRole("list", { name: "교통시설물 유형" });
     const enf = await within(list).findByRole("button", { name: /주정차 단속2/ });
     expect(enf.getAttribute("aria-pressed")).toBe("false");
+    expect(ask).not.toHaveBeenCalled();
     const map = screen.getByRole("region", { name: "교통 현황 지도" });
     fireEvent.click(enf);
+    expect(await screen.findByText("내 위치 반경 5km 안 주정차 단속 CCTV 2곳")).toBeTruthy();
     expect(map.getAttribute("data-facilities")).toBe("2");
-    expect(screen.getByText(/제주시 자료\(공공데이터포털\)로 서귀포시는 없고/)).toBeTruthy();
+    expect(map.getAttribute("data-nearby")).toBe("1");
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/켜면 현재 위치를 한 번 확인해 반경 5km 안만/)).toBeTruthy();
+    // 끄고 다시 켜면 위치를 다시 묻지 않는다(위치 다시 확인 버튼으로만)
+    fireEvent.click(enf);
+    expect(map.getAttribute("data-nearby")).toBe("0");
+    fireEvent.click(enf);
+    expect(ask).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "위치 다시 확인" }));
+    await waitFor(() => expect(ask).toHaveBeenCalledTimes(2));
+  });
+
+  it("주정차 단속: 반경 밖이면 없다고 안내, 위치 권한이 없으면 끄고 이유를 보인다", async () => {
+    stubLocation({ lat: 33.25, lng: 126.56 });
+    render(<TrafficDashboard />);
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    fireEvent.click(await within(list).findByRole("button", { name: /주정차 단속2/ }));
+    expect(await screen.findByText("내 위치 반경 5km 안에 주정차 단속 CCTV가 없습니다(제주시 자료만 있음).")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "교통 현황 지도" }).getAttribute("data-facilities")).toBe("0");
     cleanup();
 
+    stubLocation(null);
+    render(<TrafficDashboard />);
+    const list2 = await screen.findByRole("list", { name: "교통시설물 유형" });
+    const enf = await within(list2).findByRole("button", { name: /주정차 단속2/ });
+    fireEvent.click(enf);
+    expect(await screen.findByText(/주정차 단속을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
+    expect(enf.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("주정차 단속 자료를 못 받으면 안내와 다시 시도(제주 ITS 시설물은 그대로)", async () => {
     enforcementRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
     render(<TrafficDashboard />);
     const msg = await screen.findByText("주정차 단속 CCTV를 불러오지 못했습니다.");
-    // 제주 ITS 시설물은 그대로, 주정차 단속만 0(누를 수 없음)
     const list2 = await screen.findByRole("list", { name: "교통시설물 유형" });
     expect((within(list2).getByRole("button", { name: /주정차 단속/ }) as HTMLButtonElement).disabled).toBe(true);
     enforcementRespond = () => Response.json(ENFORCEMENT);

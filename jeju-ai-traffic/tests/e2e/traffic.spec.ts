@@ -155,7 +155,13 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await expect(page.getByRole("list", { name: "실시간 서행구간 목록" }).getByRole("button")).toHaveText(["모의 평화로서행모의 노형 → 모의 어승생22km/h지도 ›"]);
   });
 
-  test("주정차 단속 CCTV: 교통시설물 유형으로 켜고 끈다 (TASK-016, 개발 서버 모의)", async ({ page }) => {
+});
+
+test.describe("주정차 단속 CCTV 반경 5km (TASK-016, 개발 서버 모의)", () => {
+  // 모의 단속 3곳 중 2곳(시청·신설오름 부근)만 5km 안, 노형 부근은 밖인 위치
+  test.use({ permissions: ["geolocation"], geolocation: { latitude: 33.51, longitude: 126.56, accuracy: 30 } });
+
+  test("켜면 현재 위치를 확인해 반경 5km 안만 지도에, 원과 내 위치 표시, 끄면 사라짐", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
     const list = page.getByRole("list", { name: "교통시설물 유형" });
@@ -163,11 +169,13 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await expect(enf).toHaveText("주정차 단속3");
     const map = page.getByRole("region", { name: "교통 현황 지도" });
     await enf.click();
-    await expect(map).toHaveAttribute("data-facilities", "3");
-    await shot(page, "TASK-016-01-enforcement");
-    await expect(page.getByText(/제주시 자료\(공공데이터포털\)로 서귀포시는 없고/)).toBeVisible();
+    await expect(page.getByRole("status", { name: "주정차 단속 조회 범위" })).toContainText("내 위치 반경 5km 안 주정차 단속 CCTV 2곳");
+    await expect(map).toHaveAttribute("data-facilities", "2");
+    await expect(map).toHaveAttribute("data-nearby", "1");
+    await expect(page.getByText(/켜면 현재 위치를 한 번 확인해 반경 5km 안만/)).toBeVisible();
+    await shot(page, "TASK-016-02-nearby");
     await enf.click();
     await expect(map).toHaveAttribute("data-facilities", "0");
+    await expect(map).toHaveAttribute("data-nearby", "0");
   });
 });
-

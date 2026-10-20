@@ -29,6 +29,8 @@ describe("getCurrentLocation", () => {
   it("정확도 200m 초과면 inaccurate", async () => {
     const { geo } = fakeGeo({ coords: { ...AIRPORT, accuracy: 201 } });
     expect(await getCurrentLocation(geo)).toEqual({ kind: "inaccurate", accuracyMeters: 201 });
+    // 주정차 단속 반경 조회(TASK-016)는 1,000m까지 받는다
+    expect((await getCurrentLocation(geo, 1000)).kind).toBe("ok");
   });
 
   it("제주 밖이면 outsideJeju", async () => {

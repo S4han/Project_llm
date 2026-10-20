@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import type { TrafficIncident } from "../../../../shared/contracts/traffic";
-import { addFacilityMarkers, addIncidentMarkers, addSpeedLines, FOCUS_ZOOM, toLatLng, updateSpeedLineWeights, useLeafletMap, type FacilityPoint, type IncidentFocus, type SpeedLine } from "../map/leafletMap";
+import { addFacilityMarkers, addIncidentMarkers, addSpeedLines, FOCUS_ZOOM, popupContent, toLatLng, updateSpeedLineWeights, useLeafletMap, type FacilityPoint, type IncidentFocus, type SpeedLine } from "../map/leafletMap";
 
 /** 제주도 전체가 보이는 범위. */
 const JEJU_BOUNDS: [[number, number], [number, number]] = [
@@ -25,13 +25,15 @@ interface Props {
   overlay?: string | null;
   /** 켜 둔 유형의 교통시설물(TASK-013). */
   facilities?: FacilityPoint[];
+  /** 내 위치와 조회 반경(TASK-016 주정차 단속). 있으면 원과 내 위치 점을 그리고 원이 보이게 맞춘다. */
+  nearby?: { lat: number; lng: number; radiusMeters: number } | null;
 }
 
 const NO_IDS: string[] = [];
 const NO_FACILITIES: FacilityPoint[] = [];
 
 /** 제주 전체 교통 사건 지도(TASK-012). */
-export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null, facilities = NO_FACILITIES }: Props) {
+export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null, facilities = NO_FACILITIES, nearby = null }: Props) {
   const { attach, mapRef, layerRef, mapReady, failed, tilesFailed } = useLeafletMap();
   const speedLayer = useRef<L.LayerGroup | null>(null);
   const polylines = useRef<L.Polyline[]>([]);
@@ -45,6 +47,24 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
     facilityLayer.current.clearLayers();
     addFacilityMarkers(map, facilityLayer.current, facilities);
   }, [mapReady, mapRef, facilities]);
+
+  // 내 위치 반경 원(TASK-016). 좌표는 화면에만 쓰고 보내지 않는다.
+  const nearbyLayer = useRef<L.LayerGroup | null>(null);
+  const nearbyLat = nearby?.lat;
+  const nearbyLng = nearby?.lng;
+  const nearbyRadius = nearby?.radiusMeters;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    if (!nearbyLayer.current || !map.hasLayer(nearbyLayer.current)) nearbyLayer.current = L.layerGroup().addTo(map);
+    nearbyLayer.current.clearLayers();
+    if (nearbyLat === undefined || nearbyLng === undefined || nearbyRadius === undefined) return;
+    const center = toLatLng({ lat: nearbyLat, lng: nearbyLng });
+    L.circle(center, { radius: nearbyRadius, color: "#111827", weight: 1.5, dashArray: "6 6", fillColor: "#facc15", fillOpacity: 0.08, interactive: false }).addTo(nearbyLayer.current);
+    L.circleMarker(center, { radius: 7, color: "#fff", weight: 2, fillColor: "#2272eb", fillOpacity: 1 })
+      .bindPopup(popupContent(`현재 위치 · 반경 ${nearbyRadius / 1000}km`))
+      .addTo(nearbyLayer.current);
+  }, [mapReady, mapRef, nearbyLat, nearbyLng, nearbyRadius]);
 
   // 확대 수준이 바뀌면 선 두께만 바꾼다(다시 그리지 않음).
   useEffect(() => {
@@ -91,8 +111,9 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
     if (!mapReady || !map) return;
     if (currentLat !== undefined && currentLng !== undefined) map.setView(toLatLng({ lat: currentLat, lng: currentLng }), FOCUS_ZOOM);
     else if (highlightBounds) map.fitBounds(highlightBounds, { padding: [24, 24], maxZoom: 15 });
+    else if (nearbyLat !== undefined && nearbyLng !== undefined && nearbyRadius !== undefined) map.fitBounds(L.latLng(nearbyLat, nearbyLng).toBounds(nearbyRadius * 2), { padding: [12, 12] });
     else map.fitBounds(JEJU_BOUNDS);
-  }, [mapReady, mapRef, currentLat, currentLng, viewKey, highlightBounds]);
+  }, [mapReady, mapRef, currentLat, currentLng, viewKey, highlightBounds, nearbyLat, nearbyLng, nearbyRadius]);
 
   if (failed) {
     return (
@@ -104,7 +125,7 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
   return (
     <div className="flex flex-col gap-1">
       <div className="relative">
-        <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} data-facilities={facilities.length} className={`${heightClass} w-full overflow-hidden rounded-[20px] bg-grey-200`} />
+        <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} data-facilities={facilities.length} data-nearby={nearby ? "1" : "0"} className={`${heightClass} w-full overflow-hidden rounded-[20px] bg-grey-200`} />
         {overlay && (
           <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center">
             <p className="rounded-2xl bg-white/85 px-4 py-2 text-sm font-semibold text-grey-700 shadow">{overlay}</p>
