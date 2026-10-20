@@ -66,6 +66,30 @@ export function useLeafletMap() {
   return { attach, mapRef, layerRef, mapReady, failed, tilesFailed };
 }
 
+/** 제주 ITS 교통정보센터(공식 사이트). CCTV 영상 API가 없어 영상은 이 사이트로 연결한다(TASK-014). */
+export const JEJU_ITS_SITE = "https://www.jejuits.go.kr/";
+
+/**
+ * 팝업 내용을 DOM으로 만든다. 원천 데이터(도로명·설치 위치 등)를 HTML로 해석하지 않도록 글자로만 넣는다.
+ * link가 있으면 새 창으로 여는 링크를 덧붙인다.
+ */
+export function popupContent(text: string, link?: { href: string; label: string }): HTMLElement {
+  const el = document.createElement("div");
+  const p = document.createElement("p");
+  p.textContent = text;
+  el.append(p);
+  if (link) {
+    const a = document.createElement("a");
+    a.href = link.href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = link.label;
+    a.className = "popup-link";
+    el.append(a);
+  }
+  return el;
+}
+
 /** 사건 묶음 이름과 같은 규칙(돌발은 내용만, 나머지는 종류 + 내용). */
 function incidentLabel(i: TrafficIncident): string {
   return i.kind === "event" ? i.description : `${INCIDENT_LABEL[i.kind]} ${i.description}`;
@@ -91,7 +115,7 @@ export function addIncidentMarkers(layer: L.LayerGroup, incidents: TrafficIncide
       className: `incident-marker${inFocus ? " incident-focus" : ""}${current ? " incident-current" : ""}`,
     });
     const at = formatKstTime(incident.sourceTime ?? incident.observedAt);
-    marker.bindPopup(`${incidentLabel(incident)}(${incident.source === "mock" ? "모의 데이터" : "제주 ITS 감지"}) · ${incident.sourceTime ? "원천" : "조회"} ${at}`);
+    marker.bindPopup(popupContent(`${incidentLabel(incident)}(${incident.source === "mock" ? "모의 데이터" : "제주 ITS 감지"}) · ${incident.sourceTime ? "원천" : "조회"} ${at}`));
     marker.addTo(layer);
     if (current) marker.openPopup();
   }
@@ -148,7 +172,7 @@ export function addSpeedLines(map: L.Map, layer: L.LayerGroup, lines: SpeedLine[
       opacity: highlightIds.size > 0 && !highlighted ? 0.35 : 0.9,
     });
     (pl as L.Polyline & { highlighted?: boolean }).highlighted = highlighted;
-    pl.bindPopup(`${line.name || "도로명 없음"} · 평균 ${line.kmh}km/h · 통행 ${formatDuration(line.travelSeconds)}${at}`).addTo(layer);
+    pl.bindPopup(popupContent(`${line.name || "도로명 없음"} · 평균 ${line.kmh}km/h · 통행 ${formatDuration(line.travelSeconds)}${at}`)).addTo(layer);
     return pl;
   });
 }
@@ -175,7 +199,13 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
   for (const p of points) {
     const style = FACILITY_STYLE[p.type];
     L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: 5, color: "#fff", weight: 1.5, fillColor: style.color, fillOpacity: 1 })
-      .bindPopup(`${style.label} · ${p.name || "위치 이름 없음"}${p.model ? ` · 모델 ${p.model}` : ""}`)
+      .bindPopup(
+        popupContent(
+          `${style.label} · ${p.name || "위치 이름 없음"}${p.model ? ` · 모델 ${p.model}` : ""}`,
+          // CCTV·웹카메라는 영상 API가 없어 제주 ITS 공식 사이트로 연결한다(TASK-014).
+          p.type === "FTY02" || p.type === "FTY03" ? { href: JEJU_ITS_SITE, label: "제주 ITS 교통정보센터에서 영상 보기 ↗" } : undefined,
+        ),
+      )
       .addTo(layer);
   }
 }

@@ -41,3 +41,11 @@ body {
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
+
+/* 지도 팝업 안 링크(제주 ITS 영상 보기, TASK-014): 손가락으로 누르기 쉽게 */
+.leaflet-popup-content .popup-link {
+  @apply mt-2 inline-flex min-h-11 items-center font-semibold text-brand-700 underline underline-offset-2;
+}
+.leaflet-popup-content p {
+  margin: 0;
+}
