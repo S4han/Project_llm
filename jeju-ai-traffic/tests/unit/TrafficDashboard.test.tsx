@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
 import { encodePolyline } from "../../shared/rules/polyline";
@@ -23,6 +23,8 @@ const SPEEDS: TrafficSpeedsResponse = { status: "ok", observedAt: "2026-10-20T00
 let respond: () => Response;
 let speedsRespond: () => Response;
 let speedCalls = 0;
+let linksRespond: () => Response | Promise<Response>;
+let linksCalls = 0;
 let calls = 0;
 let visibility: DocumentVisibilityState = "visible";
 
@@ -33,6 +35,8 @@ beforeEach(() => {
   respond = () => Response.json(OK);
   speedsRespond = () => Response.json(SPEEDS);
   speedCalls = 0;
+  linksRespond = () => Response.json(LINKS);
+  linksCalls = 0;
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.stubGlobal(
@@ -42,7 +46,10 @@ beforeEach(() => {
         speedCalls += 1;
         return speedsRespond();
       }
-      if (url.startsWith("/api/traffic/links")) return Response.json(LINKS);
+      if (url.startsWith("/api/traffic/links")) {
+        linksCalls += 1;
+        return linksRespond();
+      }
       calls += 1;
       return respond();
     }),
@@ -179,5 +186,47 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(speedCalls).toBe(1);
     await act(async () => vi.advanceTimersByTime(REFRESH_MS));
     expect(speedCalls).toBe(2);
+  });
+
+  it("처리 현황: 도로 모양을 받는 동안 단계·경과 시간과 지도 안내, 끝나면 감춘다", async () => {
+    let release: (r: Response) => void = () => undefined;
+    linksRespond = () => new Promise<Response>((resolve) => (release = resolve));
+    render(<TrafficDashboard />);
+    const progress = await screen.findByRole("status", { name: "도로 소통 처리 현황" });
+    expect(progress.textContent).toContain("① 도로 모양 불러오는 중… 0초");
+    expect(progress.textContent).toContain("처음 한 번은 최대 1분 걸릴 수 있어요.");
+    await within(progress).findByText(/② 구간 속도 ✓/);
+    expect(screen.getByText("도로 소통 불러오는 중…")).toBeTruthy();
+    await act(async () => vi.advanceTimersByTime(3000));
+    expect(progress.textContent).toContain("① 도로 모양 불러오는 중… 3초");
+    await act(async () => release(Response.json(LINKS)));
+    await waitFor(() => expect(screen.queryByRole("status", { name: "도로 소통 처리 현황" })).toBeNull());
+    expect(screen.queryByText("도로 소통 불러오는 중…")).toBeNull();
+    expect(screen.getByRole("region", { name: "교통 현황 지도" }).getAttribute("data-speed-lines")).toBe("3");
+  });
+
+  it("도로 모양 실패 시 다시 시도 버튼으로 다시 받는다", async () => {
+    linksRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
+    render(<TrafficDashboard />);
+    const alert = await screen.findByText("도로 모양을 불러오지 못해 구간 속도 색을 표시할 수 없습니다.");
+    expect(linksCalls).toBe(1);
+    linksRespond = () => Response.json(LINKS);
+    fireEvent.click(within(alert.parentElement!).getByRole("button", { name: "다시 시도" }));
+    await waitFor(() => expect(screen.getByRole("region", { name: "교통 현황 지도" }).getAttribute("data-speed-lines")).toBe("3"));
+    expect(linksCalls).toBe(2);
+    expect(screen.queryByText(/도로 모양을 불러오지 못해/)).toBeNull();
+  });
+
+  it("1분 자동 갱신 중에는 '갱신 중…'만 작게 표시", async () => {
+    render(<TrafficDashboard />);
+    const region = await screen.findByRole("region", { name: "도로 소통" });
+    await within(region).findByText(/마지막 조회/);
+    let release: (r: Response) => void = () => undefined;
+    speedsRespond = () => new Promise<Response>((resolve) => (release = resolve)) as unknown as Response;
+    await act(async () => vi.advanceTimersByTime(REFRESH_MS));
+    expect(within(region).getByText("· 갱신 중…")).toBeTruthy();
+    expect(screen.queryByRole("status", { name: "도로 소통 처리 현황" })).toBeNull();
+    await act(async () => release(Response.json(SPEEDS)));
+    await waitFor(() => expect(within(region).queryByText("· 갱신 중…")).toBeNull());
   });
 });

@@ -21,12 +21,14 @@ interface Props {
   highlightIds?: string[];
   /** 지도 높이(반응형 클래스). */
   heightClass?: string;
+  /** 지도 가운데에 반투명으로 띄울 안내(예: "도로 소통 불러오는 중…"). */
+  overlay?: string | null;
 }
 
 const NO_IDS: string[] = [];
 
 /** 제주 전체 교통 사건 지도(TASK-012). */
-export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80" }: Props) {
+export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null }: Props) {
   const { attach, mapRef, layerRef, mapReady, failed, tilesFailed } = useLeafletMap();
   const speedLayer = useRef<L.LayerGroup | null>(null);
   const polylines = useRef<L.Polyline[]>([]);
@@ -89,7 +91,14 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
   }
   return (
     <div className="flex flex-col gap-1">
-      <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} className={`${heightClass} w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100`} />
+      <div className="relative">
+        <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} className={`${heightClass} w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100`} />
+        {overlay && (
+          <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center">
+            <p className="rounded-lg bg-white/85 px-4 py-2 text-sm font-semibold text-slate-800 shadow">{overlay}</p>
+          </div>
+        )}
+      </div>
       {tilesFailed && <p className="text-xs text-slate-600">지도 배경을 불러오지 못했습니다. 사건 표시와 아래 목록은 그대로 확인할 수 있습니다.</p>}
     </div>
   );

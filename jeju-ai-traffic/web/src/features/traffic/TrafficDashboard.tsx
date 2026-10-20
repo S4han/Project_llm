@@ -49,6 +49,12 @@ export function TrafficDashboard() {
   const [speeds, setSpeeds] = useState<TrafficSpeedsResponse | null>(null);
   const [links, setLinks] = useState<TrafficLinksResponse["links"] | null>(null);
   const [linksProblem, setLinksProblem] = useState<string | null>(null);
+  // 처리 현황(도로 모양은 서버가 새로 만들 때 최대 1분, 구간 속도는 1~2초)
+  const [linksLoading, setLinksLoading] = useState(true);
+  const [linksStartedAt, setLinksStartedAt] = useState(() => Date.now());
+  const [clock, setClock] = useState(() => Date.now());
+  const [speedsBusy, setSpeedsBusy] = useState(true);
+  const [speedsError, setSpeedsError] = useState(false);
   const [showSpeeds, setShowSpeeds] = useState(true);
   // 도로 소통 상태 카드·도로 목록(TASK-012 소통대시보드)
   const [speedFilter, setSpeedFilter] = useState<SpeedStatus | "all">("all");
@@ -68,6 +74,8 @@ export function TrafficDashboard() {
     const speedResult = await speedPromise;
     if (id !== seq.current) return;
     // 속도는 실패해도 마지막으로 받은 값을 두고 상태만 바꾼다.
+    setSpeedsBusy(false);
+    setSpeedsError(!speedResult.ok);
     if (speedResult.ok) setSpeeds((prev) => (speedResult.data.status === "ok" || !prev ? speedResult.data : { ...prev, status: speedResult.data.status, retryAfter: speedResult.data.retryAfter }));
     setNow(new Date());
     setState((s) => {
@@ -85,21 +93,44 @@ export function TrafficDashboard() {
   /** 조회 중 표시를 켜고 다시 조회한다(새로고침·자동 갱신). 처음 조회는 초기 상태가 이미 조회 중이다. */
   const refresh = useCallback(() => {
     setState((s) => ({ ...s, loading: true }));
+    setSpeedsBusy(true);
     void load();
   }, [load]);
 
-  // 구간 모양은 화면을 열 때 한 번만 받는다(서버·CDN이 30일 보관).
-  useEffect(() => {
-    let alive = true;
-    void fetchTrafficLinks().then((r) => {
-      if (!alive) return;
-      if (r.ok) setLinks(r.data.links);
-      else setLinksProblem("도로 모양을 불러오지 못해 구간 속도 색을 표시할 수 없습니다.");
-    });
-    return () => {
-      alive = false;
-    };
+  // 구간 모양은 화면을 열 때 한 번만 받는다(서버·CDN이 30일 보관). 실패하면 "다시 시도"로 다시 받는다.
+  const alive = useRef(true);
+  const fetchLinks = useCallback(async () => {
+    const r = await fetchTrafficLinks();
+    if (!alive.current) return;
+    setLinksLoading(false);
+    if (r.ok) {
+      setLinks(r.data.links);
+      setLinksProblem(null);
+    } else setLinksProblem("도로 모양을 불러오지 못해 구간 속도 색을 표시할 수 없습니다.");
   }, []);
+  const retryLinks = () => {
+    setLinksLoading(true);
+    setLinksProblem(null);
+    setLinksStartedAt(Date.now());
+    setClock(Date.now());
+    void fetchLinks();
+  };
+  useEffect(() => {
+    alive.current = true;
+    // 콜백으로 시작한다(효과 본문에서 상태를 바로 바꾸지 않도록, 첫 조회와 같은 방식).
+    const first = setTimeout(() => void fetchLinks(), 0);
+    return () => {
+      alive.current = false;
+      clearTimeout(first);
+    };
+  }, [fetchLinks]);
+
+  // 도로 모양을 받는 동안 경과 시간(초)을 1초마다 갱신한다.
+  useEffect(() => {
+    if (!linksLoading) return;
+    const id = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [linksLoading]);
 
   useEffect(() => {
     // 첫 조회도 콜백으로 시작한다(효과 본문에서 상태를 바로 바꾸지 않도록).
@@ -134,6 +165,10 @@ export function TrafficDashboard() {
   const roadIdsKey = road?.ids.join(",") ?? "";
   const highlightIds = useMemo(() => (roadIdsKey ? roadIdsKey.split(",") : EMPTY_IDS), [roadIdsKey]);
   const speedStale = speeds?.observedAt ? now.getTime() - Date.parse(speeds.observedAt) > SPEED_STALE_MS : false;
+  const linksSeconds = Math.max(0, Math.floor((clock - linksStartedAt) / 1000));
+  const firstSpeeds = speeds === null && speedsBusy;
+  const showProgress = linksLoading || firstSpeeds;
+  const mapOverlay = showSpeeds && speedLines.length === 0 && showProgress ? "도로 소통 불러오는 중…" : null;
   const speedProblem =
     speeds && speeds.status !== "ok"
       ? speeds.status === "quotaBlocked"
@@ -214,6 +249,7 @@ export function TrafficDashboard() {
               </h2>
               <p className="text-xs text-slate-600">
                 화면이 켜져 있을 때 1분마다 자동 갱신{speeds && ` · 마지막 조회 ${formatKstTime(now.toISOString())}`}
+                {speeds && speedsBusy && <span className="ml-1 font-semibold text-blue-700">· 갱신 중…</span>}
               </p>
             </div>
             <button
@@ -251,9 +287,50 @@ export function TrafficDashboard() {
             {speeds?.observedAt && ` · ${formatKstTime(speeds.observedAt)} 기준`}
             {speeds?.source === "mock" && " · 모의 데이터"}. 속도 정보가 없는 도로는 표시하지 않습니다.
           </p>
-          {(speedProblem || linksProblem || speedStale) && (
+          {showProgress && (
+            <ol role="status" aria-label="도로 소통 처리 현황" className="flex flex-col gap-1 rounded bg-blue-50 p-2 text-sm text-blue-900">
+              <li>
+                {linksLoading ? (
+                  <>
+                    <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-blue-700 border-t-transparent align-middle" aria-hidden="true" />
+                    ① 도로 모양 불러오는 중… {linksSeconds}초
+                    <span className="block text-xs text-blue-800">처음 한 번은 최대 1분 걸릴 수 있어요.</span>
+                  </>
+                ) : (
+                  <>① 도로 모양 {links ? "✓" : "실패"}</>
+                )}
+              </li>
+              <li>
+                {firstSpeeds ? (
+                  <>
+                    <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-blue-700 border-t-transparent align-middle" aria-hidden="true" />
+                    ② 구간 속도 불러오는 중…
+                  </>
+                ) : (
+                  <>② 구간 속도 {speeds ? "✓" : "실패"}</>
+                )}
+              </li>
+            </ol>
+          )}
+          {linksProblem && (
+            <div role="alert" className="flex items-center justify-between gap-2 rounded bg-amber-50 p-2 text-sm text-amber-900">
+              <span>{linksProblem}</span>
+              <button type="button" onClick={retryLinks} className="min-h-12 shrink-0 rounded-lg bg-amber-700 px-3 font-semibold text-white">
+                다시 시도
+              </button>
+            </div>
+          )}
+          {!linksProblem && speedsError && !speeds && !speedsBusy && (
+            <div role="alert" className="flex items-center justify-between gap-2 rounded bg-amber-50 p-2 text-sm text-amber-900">
+              <span>구간 속도를 불러오지 못했습니다. 네트워크 연결을 확인하세요.</span>
+              <button type="button" onClick={refresh} className="min-h-12 shrink-0 rounded-lg bg-amber-700 px-3 font-semibold text-white">
+                다시 시도
+              </button>
+            </div>
+          )}
+          {!linksProblem && (speedProblem || speedStale) && (
             <p role="alert" className="rounded bg-amber-50 p-2 text-sm text-amber-900">
-              {speedProblem ?? linksProblem ?? "오래된 구간 속도입니다(15분 넘게 갱신되지 않음)."}
+              {speedProblem ?? "오래된 구간 속도입니다(15분 넘게 갱신되지 않음)."}
             </p>
           )}
           {speedFilter !== "all" && speedLines.length > 0 && (
@@ -327,6 +404,7 @@ export function TrafficDashboard() {
             speedLines={showSpeeds ? filteredLines : EMPTY_LINES}
             speedObservedAt={speeds?.observedAt ?? null}
             heightClass="h-80 md:h-[60vh] xl:h-[calc(100dvh-7rem)]"
+            overlay={mapOverlay}
             highlightIds={showSpeeds ? highlightIds : EMPTY_IDS}
           />
           <IncidentFocusBar state={incidentFocus} />

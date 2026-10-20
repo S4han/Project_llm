@@ -91,4 +91,22 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     const box = await number.boundingBox();
     expect(box!.height).toBeLessThan(32);
   });
+
+  test("도로 모양을 늦게 받으면 처리 현황과 지도 안내, 받은 뒤 사라짐 (응답 지연)", async ({ page }) => {
+    await page.route("**/api/traffic/links", async (route) => {
+      const res = await route.fetch();
+      await new Promise((r) => setTimeout(r, 2500));
+      await route.fulfill({ response: res });
+    });
+    await page.goto("/traffic");
+    const progress = page.getByRole("status", { name: "도로 소통 처리 현황" });
+    await expect(progress).toContainText("① 도로 모양 불러오는 중…");
+    await expect(progress).toContainText("② 구간 속도 ✓");
+    await expect(page.getByText("도로 소통 불러오는 중…")).toBeVisible();
+    await expect(progress).toContainText(/불러오는 중… [12]초/);
+    await shot(page, "TASK-012-07-progress");
+    await expect(progress).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByRole("region", { name: "교통 현황 지도" })).toHaveAttribute("data-speed-lines", "4");
+  });
 });
+
