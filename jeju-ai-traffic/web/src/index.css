@@ -49,3 +49,6 @@ body {
 .leaflet-popup-content p {
   margin: 0;
 }
+.leaflet-popup-content .popup-note {
+  @apply mt-1 text-xs text-grey-600;
+}

@@ -424,7 +424,7 @@ export function TrafficDashboard() {
               교통시설물
             </h2>
             <p className="text-xs text-grey-600">
-              제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV·웹카메라 점을 누르면 제주 ITS 교통정보센터(새 창)에서 영상을 볼 수 있습니다.
+              제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV·웹카메라 점을 누르면 제주 ITS 교통정보센터(새 창)로 연결되며, 사이트의 CCTV 메뉴에서 같은 위치를 고르면 영상을 볼 수 있습니다.
             </p>
           </div>
           {facilitiesLoading && (

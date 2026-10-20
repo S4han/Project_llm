@@ -73,11 +73,17 @@ export const JEJU_ITS_SITE = "https://www.jejuits.go.kr/";
  * 팝업 내용을 DOM으로 만든다. 원천 데이터(도로명·설치 위치 등)를 HTML로 해석하지 않도록 글자로만 넣는다.
  * link가 있으면 새 창으로 여는 링크를 덧붙인다.
  */
-export function popupContent(text: string, link?: { href: string; label: string }): HTMLElement {
+export function popupContent(text: string, link?: { href: string; label: string; note?: string }): HTMLElement {
   const el = document.createElement("div");
   const p = document.createElement("p");
   p.textContent = text;
   el.append(p);
+  if (link?.note) {
+    const note = document.createElement("p");
+    note.className = "popup-note";
+    note.textContent = link.note;
+    el.append(note);
+  }
   if (link) {
     const a = document.createElement("a");
     a.href = link.href;
@@ -202,8 +208,14 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
       .bindPopup(
         popupContent(
           `${style.label} · ${p.name || "위치 이름 없음"}${p.model ? ` · 모델 ${p.model}` : ""}`,
-          // CCTV·웹카메라는 영상 API가 없어 제주 ITS 공식 사이트로 연결한다(TASK-014).
-          p.type === "FTY02" || p.type === "FTY03" ? { href: JEJU_ITS_SITE, label: "제주 ITS 교통정보센터에서 영상 보기 ↗" } : undefined,
+          // CCTV·웹카메라는 영상 API가 없고 사이트에 카메라별 주소도 없어(영상은 사이트 안 팝업), 공식 사이트 첫 화면으로 연결하고 찾는 방법을 안내한다(TASK-014).
+          p.type === "FTY02" || p.type === "FTY03"
+            ? {
+                href: JEJU_ITS_SITE,
+                label: "제주 ITS 교통정보센터 열기 ↗",
+                note: `영상 보기: 사이트 왼쪽 'CCTV' 메뉴 → 지도에서 '${p.name || "같은 위치"}' 카메라 선택`,
+              }
+            : undefined,
         ),
       )
       .addTo(layer);
