@@ -7,13 +7,13 @@
 ## 현재 작업
 | 항목 | 값 |
 |---|---|
-| 현재 TASK | **TASK-016** — 주정차 단속 CCTV 지도 표시 |
-| 상태 | **결과 검토** |
+| 현재 TASK | **TASK-017** — 주차장 위치·남은 칸 표시 |
+| 상태 | **진행 중** |
 | 실행 주체 | Claude (사용자 지정, 2026-10-18) |
-| 승인 범위 | 제주시 주정차 단속 CCTV 조회(공공데이터포털 15109175) 시험 호출 5건 이내(Preview 임시 함수), `GET /api/traffic/enforcement`(서버 하루·CDN 7일), 1.(a) 교통시설물 카드에 "주정차 단속" 유형(기본 꺼짐) 2.(a) 팝업 설치장소·주소·운영시간·회전형/검지 3. 키 `DATA_GO_KR_API_KEY` (`DECISIONS.md` 2026-10-20) |
+| 승인 범위 | 제주 ITS 주차장 기본정보·주차가능면수 시험 호출 5건 이내(Preview 임시 함수), `GET /api/traffic/parking`(서버 하루·CDN 7일)·`/api/traffic/parking-state`(서버 1분), 1.(a) 교통시설물 카드에 "주차장" 유형 2.(a) 내 위치 반경 1km 3.(a) 실시간 남은 칸 (`DECISIONS.md` 2026-10-20) |
 | 차단 요인 | 없음 |
-| 결과 보고서 | `reports/TASK-016-RESULT.md` |
-| 다음 행동 | 사용자 Preview 확인 → `완료 승인: TASK-016` (main 반영은 별도 지시) |
+| 결과 보고서 | — (TASK-016: `reports/TASK-016-RESULT.md`, 완료) |
+| 다음 행동 | 사용자 Preview에서 `/api/parking-probe` 1회 → 구현 → `reports/TASK-017-RESULT.md` → 결과 검토 |
 | 최종 갱신 | 2026-10-20 |
 
 ## 상태 정의
@@ -45,4 +45,5 @@
 | TASK-013 | 교통시설물 표시 (MVP 이후 추가) | **완료** (2026-10-20) | `reports/TASK-013-RESULT.md` |
 | TASK-014 | CCTV 영상 링크 (MVP 이후 추가) | **완료** (2026-10-20) | `reports/TASK-014-RESULT.md` |
 | TASK-015 | 실시간 정체구간 목록 (MVP 이후 추가) | **완료** (2026-10-20) | `reports/TASK-015-RESULT.md` |
-| TASK-016 | 주정차 단속 CCTV 표시 (MVP 이후 추가) | **결과 검토** | `reports/TASK-016-RESULT.md` |
+| TASK-016 | 주정차 단속 CCTV 표시 (MVP 이후 추가) | **완료** (2026-10-20) | `reports/TASK-016-RESULT.md` |
+| TASK-017 | 주차장 위치·남은 칸 (MVP 이후 추가) | **진행 중** | — |

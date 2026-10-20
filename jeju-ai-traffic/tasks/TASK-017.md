@@ -1,0 +1,14 @@
+# TASK-017 — 주차장 위치·남은 칸 표시
+
+- 상태: **진행 중** (사용자 "완료 승인: TASK-016 계획 승인: TASK-017 1. (a) 2. (a) 3. (a)", 2026-10-20)
+- 근거: 사용자 "다음은 주차장 위치 표시"
+- 선행 작업: TASK-016
+
+## 범위
+- 제주 ITS 주차장 API(공공데이터포털 15099715 안내 문서 v1.1): 기본정보 `http://api.jejuits.go.kr/api/infoParkingInfoList?code=`, 주차가능면수 `http://api.jejuits.go.kr/api/infoParkingStateList?code=`
+- 시험 호출 5건 이내(Preview 임시 함수, 확인 후 삭제, main 미반영)
+- `GET /api/traffic/parking`(기본정보, 서버 하루·CDN 7일), `GET /api/traffic/parking-state`(남은 칸, 서버 1분, 제주 ITS 일일 한도 공유)
+- 1.(a) 교통시설물 카드에 "주차장" 유형 2.(a) 내 위치 반경 1km(주정차 단속과 같은 방식, 위치는 기기 안에서만) 3.(a) 실시간 남은 칸(점 색 여유·혼잡·만차·정보 없음, 팝업 이름·남은 칸/총면수·요금·운영시간, 켜 둔 동안 1분 갱신)
+
+## 사용자 확인 지점
+결과 검토 후 완료 승인. main 반영은 별도 지시.
