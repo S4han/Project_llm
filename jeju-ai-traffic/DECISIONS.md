@@ -174,3 +174,4 @@
 | 2026-10-20 | TASK-013 | 기타 | (시험 3차 결과) | — | 누적 7/10건. `JEJU_ITS_TRAFFIC_API_KEY`로 getFacilityInfo `fcltType` 조회 success: FTY01 VMS 68개, FTY02 CCTV 202개. 항목 fclt_id·fclt_type·fclt_lctn·mdl_nm·x_crdn·y_crdn. **x_crdn=위도, y_crdn=경도**(이름 반대), 일부 좌표 0(무효), 모델명 "-"=없음. 별도 활용 신청 불필요. 확인 함수 삭제 |
 | 2026-10-20 | TASK-013 | 상태 | (구현 완료, 보고서 작성) | 진행 중 → 결과 검토 | `/api/traffic/facilities`·교통시설물 카드·지도 점 구현, `reports/TASK-013-RESULT.md` |
 | 2026-10-20 | — | 기타 | "Main 반영" | — | 작업 브랜치 `claude/adoring-sagan-harjwg`를 main에 fast-forward로 반영(TASK-013 교통시설물 표시, TASK-012 완료 기록 포함). Production 자동 배포. 임시 확인 함수·워크플로 없음. **TASK-013은 결과 검토 상태 유지**(`완료 승인: TASK-013` 미수신). 시설물 실데이터 화면은 미확인 상태로 반영 |
+| 2026-10-20 | TASK-013 | 완료 승인 | "완료 승인: TASK-013" | 결과 검토 → 완료 | 정의된 다음 TASK 없음. 추가 작업은 사용자 요청 시 TASK-014로 등록 |
