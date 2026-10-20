@@ -74,4 +74,21 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await page.clock.fastForward("01:01");
     await expect.poll(() => calls).toBe(before + 1);
   });
+
+  test("구간이 1만 개가 넘어도 상태 카드 숫자가 한 줄 (좁은 휴대폰 폭 360px, 응답 대체)", async ({ page }) => {
+    const ids = Array.from({ length: 11906 }, (_, i) => String(4050000000 + i));
+    await page.route("**/api/traffic/links", (route) =>
+      route.fulfill({ json: { links: ids.map((id) => [id, "도로", "_p~iF~ps|U_ulLnnqC"]), builtAt: new Date().toISOString(), source: "vworld" } }),
+    );
+    await page.route("**/api/traffic/speeds", (route) =>
+      route.fulfill({ json: { status: "ok", observedAt: new Date().toISOString(), speeds: Object.fromEntries(ids.map((id, i) => [id, [i % 3 === 0 ? 10 : i % 3 === 1 ? 20 : 40, 60]])), source: "jejuIts", retryAfter: null } }),
+    );
+    await page.setViewportSize({ width: 360, height: 780 });
+    await page.goto("/traffic");
+    const all = page.getByRole("list", { name: "구간 소통 건수" }).getByRole("button").first();
+    await expect(all).toHaveText("전체11,906");
+    const number = all.locator("span").last();
+    const box = await number.boundingBox();
+    expect(box!.height).toBeLessThan(32);
+  });
 });

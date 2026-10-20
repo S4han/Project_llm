@@ -245,7 +245,10 @@ export function TrafficDashboard() {
                     {s !== "all" && <span className={`inline-block h-1.5 w-3 rounded ${STATUS_STYLE[s].bar}`} aria-hidden="true" />}
                     {s === "all" ? "전체" : STATUS_STYLE[s].label}
                   </span>
-                  <span className="text-lg font-bold text-slate-900">{speedLines.length ? n.toLocaleString("ko-KR") : "–"}</span>
+                  {/* 다섯 자리(11,906)도 휴대폰 폭 카드에서 한 줄에 들어가도록 폭에 맞춰 글자를 줄이고 줄바꿈하지 않는다. */}
+                  <span className="whitespace-nowrap text-[clamp(0.85rem,4vw,1.125rem)] font-bold tabular-nums text-slate-900">
+                    {speedLines.length ? n.toLocaleString("ko-KR") : "–"}
+                  </span>
                 </button>
               </li>
             ))}
