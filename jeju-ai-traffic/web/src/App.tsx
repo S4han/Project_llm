@@ -24,7 +24,12 @@ export function App() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 bg-slate-50 p-4">
       <main className="flex flex-col gap-5">
-        <h1 className="text-2xl font-bold text-slate-900">제주 AI 교통 경로 추천</h1>
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="text-2xl font-bold text-slate-900">제주 AI 교통 경로 추천</h1>
+          <a href="/traffic" className="shrink-0 text-sm font-semibold text-blue-700">
+            교통 현황 →
+          </a>
+        </div>
         <TripForm
           busy={state.kind === "loading"}
           onRequestRoute={(origin, destination) =>

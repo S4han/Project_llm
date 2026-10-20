@@ -29,3 +29,13 @@ export interface TrafficIncident {
 
 /** 교통 사건 조회 상태. ok가 아니면 화면에 '교통 사건 정보 미확보(사유)'로 표시한다. */
 export type IncidentsStatus = "ok" | "unavailable" | "quotaBlocked";
+
+/** GET /api/traffic/incidents 응답(TASK-012 대시보드). 제주 전체 사건이며 경로와 연결하지 않는다. */
+export interface TrafficIncidentsResponse {
+  incidents: TrafficIncident[];
+  status: IncidentsStatus;
+  /** 원천을 조회한 시각(캐시 포함). 조회하지 못했으면 null. */
+  observedAt: IsoDateTime | null;
+  /** status가 quotaBlocked일 때 다시 쓸 수 있는 시각. */
+  retryAfter: IsoDateTime | null;
+}

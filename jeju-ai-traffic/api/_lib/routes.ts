@@ -1,35 +1,23 @@
 import type { RouteCompareRequest, RouteCompareResponse, RouteOption } from "../../shared/contracts/route.js";
-import type { IncidentsStatus, TrafficIncident } from "../../shared/contracts/traffic.js";
 import { checkTrip, type TripProblem } from "../../shared/rules/geo.js";
 import { dedupeRoutes, pickRecommended, planRouteQueries, type NoRouteReason } from "../../shared/rules/route.js";
-import { dedupeIncidents, matchIncidents } from "../../shared/rules/traffic.js";
+import { matchIncidents } from "../../shared/rules/traffic.js";
 import { AppError, ProviderError, toErrorResponse } from "./errors.js";
 import { guardedCall } from "./policies/guardedCall.js";
-import { quotaGuard, type QuotaGuard } from "./policies/quota.js";
+import { quotaGuard } from "./policies/quota.js";
 import { RateLimiter } from "./policies/rateLimit.js";
 import { JEJU_ITS_CACHE_TTL_MS, TtlCache } from "./policies/ttlCache.js";
-import { createJejuItsProvider, ITS_CALLS_PER_LOAD } from "./providers/jejuIts.js";
 import { createKakaoMobilityProvider } from "./providers/kakaoMobility.js";
 import { createMockRouteProvider } from "./providers/mockRoutes.js";
-import { createMockTrafficProvider } from "./providers/mockTraffic.js";
-import type { RouteProvider, TrafficProvider } from "./providers/types.js";
+import type { RouteProvider } from "./providers/types.js";
+import { loadIncidents, selectTrafficProvider, type IncidentDeps, type IncidentSnapshot } from "./incidents.js";
 
 /** 경로 조회 빈도 제한: IP별 분당 10회 (DECISIONS 2026-10-19 TASK-005 "3. 승인"). */
 export const ROUTE_COMPARE_PER_MINUTE = 10;
 
-interface IncidentSnapshot {
-  incidents: TrafficIncident[];
-  observedAt: string;
-}
-
-export interface RoutesDeps {
+export interface RoutesDeps extends IncidentDeps {
   provider: RouteProvider;
-  traffic: TrafficProvider;
-  /** 제주 ITS 결과 60초 공유 캐시(TASK-003 승인). */
-  incidentCache: TtlCache<IncidentSnapshot>;
-  guard: QuotaGuard;
   limiter: RateLimiter;
-  now?: () => Date;
 }
 
 /** ROUTES_PROVIDER=kakao와 KAKAO_REST_API_KEY가 모두 있을 때만 실제 카카오, 그 외에는 모의(외부 호출 없음). */
@@ -37,13 +25,6 @@ export function selectRouteProvider(env: Record<string, string | undefined>): Ro
   const key = env.KAKAO_REST_API_KEY;
   if (env.ROUTES_PROVIDER === "kakao" && key) return createKakaoMobilityProvider(key);
   return createMockRouteProvider();
-}
-
-/** TRAFFIC_PROVIDER=jejuIts와 JEJU_ITS_API_KEY가 모두 있을 때만 실제 제주 ITS, 그 외에는 모의(외부 호출 없음). */
-export function selectTrafficProvider(env: Record<string, string | undefined>): TrafficProvider {
-  const key = env.JEJU_ITS_API_KEY;
-  if (env.TRAFFIC_PROVIDER === "jejuIts" && key) return createJejuItsProvider(key);
-  return createMockTrafficProvider();
 }
 
 const INPUT_MESSAGES: Record<TripProblem, string> = {
@@ -108,24 +89,6 @@ async function fetchAll(deps: RoutesDeps, request: RouteCompareRequest) {
     return { routes, rateLimited };
   };
   return guardedCall(deps.guard, "kakao", run, { cost: queries.length, purpose: request.purpose ?? "user" });
-}
-
-/** 교통 사건 조회. 실패·한도여도 경로 비교를 막지 않도록 오류를 던지지 않고 상태로 돌려준다(AC-005-04). */
-async function loadIncidents(
-  deps: RoutesDeps,
-): Promise<{ status: IncidentsStatus; snapshot: IncidentSnapshot | null }> {
-  const now = deps.now ?? (() => new Date());
-  try {
-    const snapshot = await deps.incidentCache.getOrLoad("jejuIts", async () => {
-      const incidents = await guardedCall(deps.guard, "jejuIts", () => deps.traffic.fetchIncidents(), {
-        cost: ITS_CALLS_PER_LOAD,
-      });
-      return { incidents: dedupeIncidents(incidents), observedAt: now().toISOString() };
-    });
-    return { status: "ok", snapshot };
-  } catch (err) {
-    return { status: err instanceof AppError && err.code === "QUOTA_BLOCKED" ? "quotaBlocked" : "unavailable", snapshot: null };
-  }
 }
 
 /** POST /api/routes/compare: 입력 검사 → 빈도 제한 → 사용량 예약 → 다회 호출 → 중복 합치기 → 최단 추천. 결과는 저장·캐시하지 않는다. */

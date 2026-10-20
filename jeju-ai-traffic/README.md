@@ -26,7 +26,7 @@ web/            React 앱 (Vite root, index.html, src/)
   src/features/routes/ 경로 비교 결과·지도(RouteMap)·혼잡 표시·추천 이유(ExplanationCard)·길 안내 시작(NavigationPanel)
   src/features/monitor/ 5분 재평가 제어기(monitor)와 화면(MonitorPanel)
   src/services/       API 호출(placesApi, routesApi, explanationsApi), 위치(geolocation), 앱 주소 열기(appLink)
-api/            Vercel Functions — 파일 하나가 엔드포인트 (api/health.ts, api/places.ts, api/routes/compare.ts, api/explanations.ts)
+api/            Vercel Functions — 파일 하나가 엔드포인트 (api/health.ts, api/places.ts, api/routes/compare.ts, api/explanations.ts, api/traffic/incidents.ts)
 api/_lib/       함수 공용 코드 (밑줄 폴더는 Vercel이 엔드포인트로 배포하지 않음)
   errors.ts       오류 코드 ↔ HTTP 상태, 공통 오류 응답
   places.ts       장소 검색 처리(입력 검사·빈도 제한·사용량·제주 필터)
@@ -71,6 +71,8 @@ tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
   - 교통 공급자: 기본 모의. `TRAFFIC_PROVIDER=jejuIts`와 `JEJU_ITS_API_KEY`가 **둘 다** 있을 때만 제주 ITS를 호출한다(국외 IP 차단 → Vercel `icn1`에서만 동작).
 
 - `POST /api/explanations` `ExplanationFacts`(경로별 시간·거리·혼잡 %·사건 종류, 좌표 없음) → `{ explanation: { text, source: "ai"|"rules", evidence, generatedAt }, aiStatus }`.
+- `GET /api/traffic/incidents` → `{ incidents[], status: "ok"|"unavailable"|"quotaBlocked", observedAt, retryAfter }`(TASK-012). 제주 전체 돌발·통제·공사. 경로 조회와 같은 제주 ITS 어댑터·60초 캐시·일일 한도를 쓰고, IP별 분당 20회. 실패·한도는 200 + `status`로 알린다.
+- 화면 주소: `/` 경로 추천, `/traffic` 교통 현황 대시보드(TASK-012). Vercel은 `vercel.json` `rewrites`로 `/traffic`에도 같은 `index.html`을 준다. 대시보드는 화면이 켜져 있을 때만 1분마다 다시 조회한다.
   - 경로 표시 후 화면이 따로 요청한다. 경로 이름은 정해진 4개만 받는다(지시문 주입 방지). IP별 분당 10회.
   - AI 문장은 검증(숫자·도로 이름·조건부 단어·3문장·180자)을 통과해야 쓰고, 아니면 규칙 기반 설명. AI 4초 제한, 일일 200건.
   - AI 공급자: `AI_PROVIDER=cloudflare`와 `CLOUDFLARE_ACCOUNT_ID`·`CLOUDFLARE_AI_TOKEN`이 모두 있을 때만 Workers AI(기본 모델 `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, `CF_AI_MODEL`로 변경). 없으면 규칙 기반만.

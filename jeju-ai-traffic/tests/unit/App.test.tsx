@@ -10,6 +10,7 @@ describe("App", () => {
     render(<App />);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("제주 AI 교통 경로 추천");
     expect(screen.getByRole("button", { name: "경로 조회" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "교통 현황 →" }).getAttribute("href")).toBe("/traffic");
   });
 
   it("위치 비저장·참고용 예상시간·데이터 출처를 고지한다 (TASK-011)", () => {
