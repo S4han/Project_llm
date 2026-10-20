@@ -22,12 +22,12 @@ export function App() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 bg-slate-50 p-4 md:max-w-5xl xl:max-w-[96rem]">
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 bg-grey-100 p-4 pb-28 md:max-w-5xl md:pb-4 xl:max-w-[96rem]">
       {/* 반응형(TASK-012 반응형): 넓은 화면(md)은 왼쪽에 제목·출발지·목적지, 오른쪽에 경로 결과. */}
       <main className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] md:grid-rows-[auto_1fr] md:items-start xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
         <div className="flex items-center justify-between gap-2 md:col-start-1">
-          <h1 className="text-2xl font-bold text-slate-900">제주 AI 교통 경로 추천</h1>
-          <a href="/" className="shrink-0 text-sm font-semibold text-blue-700">
+          <h1 className="text-[26px] font-bold tracking-tight text-grey-900">제주 AI 교통 경로 추천</h1>
+          <a href="/" className="shrink-0 text-sm font-semibold text-brand-700">
             ← 교통 현황
           </a>
         </div>
@@ -50,7 +50,7 @@ export function App() {
           />
         </div>
       </main>
-      <footer className="mt-auto flex flex-col gap-1 border-t border-slate-200 pt-3 text-xs text-slate-500">
+      <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
         <p>위치는 경로 조회에만 쓰고 저장하지 않습니다. 예상시간은 참고용입니다.</p>
         <p>지도 © OpenStreetMap 기여자 · 경로 카카오모빌리티 · 교통 제주 ITS · 설명 Cloudflare Workers AI</p>
       </footer>

@@ -24,12 +24,12 @@ interface Props {
 
 function Selected({ title, detail, onClear }: { title: string; detail: string; onClear: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+    <div className="flex items-center justify-between gap-2 rounded-[20px] bg-white p-4">
       <div className="min-w-0">
-        <p className="truncate font-semibold text-slate-900">{title}</p>
-        <p className="truncate text-sm text-slate-600">{detail}</p>
+        <p className="truncate font-semibold text-grey-900">{title}</p>
+        <p className="truncate text-sm text-grey-600">{detail}</p>
       </div>
-      <button type="button" onClick={onClear} className="min-h-12 shrink-0 px-3 text-sm font-semibold text-blue-700">
+      <button type="button" onClick={onClear} className="min-h-12 shrink-0 px-3 text-sm font-semibold text-brand-700">
         변경
       </button>
     </div>
@@ -53,7 +53,7 @@ export function TripForm({ onRequestRoute, onSelectionChange, busy = false, loca
   return (
     <div className="flex flex-col gap-5">
       <section aria-labelledby="origin-heading" className="flex flex-col gap-2">
-        <h2 id="origin-heading" className="text-lg font-bold text-slate-900">
+        <h2 id="origin-heading" className="text-lg font-bold text-grey-900">
           출발지
         </h2>
         {origin ? (
@@ -72,7 +72,7 @@ export function TripForm({ onRequestRoute, onSelectionChange, busy = false, loca
       </section>
 
       <section aria-labelledby="destination-heading" className="flex flex-col gap-2">
-        <h2 id="destination-heading" className="text-lg font-bold text-slate-900">
+        <h2 id="destination-heading" className="text-lg font-bold text-grey-900">
           목적지
         </h2>
         {destination ? (
@@ -88,18 +88,21 @@ export function TripForm({ onRequestRoute, onSelectionChange, busy = false, loca
 
       <div className="flex flex-col gap-2">
         {problem && (origin || destination) && (
-          <p className="text-sm text-slate-600" aria-live="polite">
+          <p className="text-sm text-grey-600" aria-live="polite">
             {PROBLEM_TEXT[problem]}
           </p>
         )}
-        <button
-          type="button"
-          disabled={problem !== null || busy}
-          onClick={() => origin && destination && onRequestRoute(origin, destination)}
-          className="min-h-14 rounded-xl bg-blue-700 text-lg font-bold text-white disabled:bg-slate-300"
-        >
-          경로 조회
-        </button>
+        {/* 휴대폰은 화면 아래 고정 버튼(TASK-012 디자인 4.), 넓은 화면(md)은 제자리 */}
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[1000] bg-gradient-to-t from-grey-100 via-grey-100/95 to-transparent px-4 pt-6 pb-[calc(1rem+env(safe-area-inset-bottom))] md:pointer-events-auto md:static md:z-auto md:bg-none md:p-0">
+          <button
+            type="button"
+            disabled={problem !== null || busy}
+            onClick={() => origin && destination && onRequestRoute(origin, destination)}
+            className="pointer-events-auto mx-auto block min-h-14 w-full max-w-md rounded-2xl bg-brand-700 text-[17px] font-semibold text-white active:bg-brand-800 disabled:bg-grey-300 md:max-w-none"
+          >
+            경로 조회
+          </button>
+        </div>
       </div>
     </div>
   );

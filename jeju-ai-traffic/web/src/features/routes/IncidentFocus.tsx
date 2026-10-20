@@ -44,16 +44,16 @@ export function IncidentFocusBar({ state }: { state: IncidentFocusState }) {
   if (!group) return null;
   const many = group.items.length > 1;
   return (
-    <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg bg-red-50 p-2 text-sm text-red-900">
+    <div role="status" className="flex flex-wrap items-center gap-2 rounded-2xl bg-red-50 p-2 text-sm text-red-900">
       <span className="mr-auto font-semibold">
         {group.label} {many ? `${index + 1}/${group.items.length}번째 지점` : "지점"} 표시 중
       </span>
       {many && (
-        <button type="button" onClick={next} className="min-h-12 rounded-lg bg-red-700 px-3 font-semibold text-white">
+        <button type="button" onClick={next} className="min-h-12 rounded-2xl bg-red-700 px-3 font-semibold text-white">
           다음 지점 ›
         </button>
       )}
-      <button type="button" onClick={clear} className="min-h-12 rounded-lg border border-red-300 bg-white px-3 font-semibold text-red-900">
+      <button type="button" onClick={clear} className="min-h-12 rounded-2xl border border-red-300 bg-white px-3 font-semibold text-red-900">
         전체 보기
       </button>
     </div>

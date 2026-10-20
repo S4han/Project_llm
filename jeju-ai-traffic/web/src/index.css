@@ -1,7 +1,42 @@
 @import "tailwindcss";
 
+/*
+ * 디자인 토큰(TASK-012 디자인): 밝은 회색 배경 위 흰 카드, 큰 글씨, 파란색 한 가지를 주 색으로.
+ * 특정 서비스의 고유 자산(로고·전용 글꼴·아이콘)은 쓰지 않는다. 글꼴은 Pretendard(OFL-1.1, 앱에 포함).
+ */
+@theme {
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+
+  --color-grey-50: #f9fafb;
+  --color-grey-100: #f2f4f6;
+  --color-grey-200: #e5e8eb;
+  --color-grey-300: #d1d6db;
+  --color-grey-400: #b0b8c1;
+  --color-grey-500: #8b95a1;
+  --color-grey-600: #6b7684;
+  --color-grey-700: #4e5968;
+  --color-grey-800: #333d4b;
+  --color-grey-900: #191f28;
+
+  /* 주 색. 흰 글씨 버튼은 700(흰 글씨 대비 약 4.6:1)을 쓴다. */
+  --color-brand-50: #e8f3ff;
+  --color-brand-100: #c9e2ff;
+  --color-brand-200: #90c2ff;
+  --color-brand-300: #64a8ff;
+  --color-brand-500: #4593fc;
+  --color-brand-600: #3182f6;
+  --color-brand-700: #2272eb;
+  --color-brand-800: #1b64da;
+  --color-brand-900: #1957c2;
+
+  /* 소통 상태 */
+  --color-smooth: #03b26c;
+  --color-slow: #fe9800;
+  --color-congested: #f04452;
+}
+
 body {
-  @apply bg-slate-50;
+  @apply bg-grey-100 text-grey-900 antialiased;
   /* 한국어 문장이 단어 중간에서 줄바꿈되지 않도록 */
   word-break: keep-all;
   overflow-wrap: anywhere;

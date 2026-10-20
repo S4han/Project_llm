@@ -84,7 +84,7 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
 
   if (failed) {
     return (
-      <p role="status" className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
+      <p role="status" className="rounded-2xl bg-grey-100 p-3 text-sm text-grey-700">
         지도를 표시할 수 없습니다. 아래 목록에서 사건을 확인하세요.
       </p>
     );
@@ -92,14 +92,14 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
   return (
     <div className="flex flex-col gap-1">
       <div className="relative">
-        <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} className={`${heightClass} w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100`} />
+        <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} className={`${heightClass} w-full overflow-hidden rounded-[20px] bg-grey-200`} />
         {overlay && (
           <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center">
-            <p className="rounded-lg bg-white/85 px-4 py-2 text-sm font-semibold text-slate-800 shadow">{overlay}</p>
+            <p className="rounded-2xl bg-white/85 px-4 py-2 text-sm font-semibold text-grey-700 shadow">{overlay}</p>
           </div>
         )}
       </div>
-      {tilesFailed && <p className="text-xs text-slate-600">지도 배경을 불러오지 못했습니다. 사건 표시와 아래 목록은 그대로 확인할 수 있습니다.</p>}
+      {tilesFailed && <p className="text-xs text-grey-600">지도 배경을 불러오지 못했습니다. 사건 표시와 아래 목록은 그대로 확인할 수 있습니다.</p>}
     </div>
   );
 }

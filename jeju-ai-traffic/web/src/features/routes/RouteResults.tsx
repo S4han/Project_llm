@@ -23,7 +23,7 @@ export type CompareState =
   | { kind: "error"; error: ApiError };
 
 function Badge({ tone, children }: { tone: "blue" | "amber"; children: string }) {
-  const color = tone === "blue" ? "bg-blue-700 text-white" : "bg-amber-100 text-amber-900";
+  const color = tone === "blue" ? "bg-brand-700 text-white" : "bg-amber-100 text-amber-900";
   return <span className={`rounded px-2 py-0.5 text-xs font-bold ${color}`}>{children}</span>;
 }
 
@@ -33,12 +33,12 @@ function TrafficBar({ route }: { route: RouteOption }) {
   const parts = STATUS_ORDER.filter((s) => shares[s] > 0);
   return (
     <div className="mt-2 flex flex-col gap-1">
-      <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+      <div className="flex h-2 w-full overflow-hidden rounded-full bg-grey-200" aria-hidden="true">
         {parts.map((s) => (
           <span key={s} className={STATUS_STYLE[s].bar} style={{ width: `${shares[s] * 100}%` }} />
         ))}
       </div>
-      <p className="text-xs text-slate-600">
+      <p className="text-xs text-grey-600">
         {parts.map((s) => `${STATUS_STYLE[s].label} ${Math.round(shares[s] * 100)}%`).join(" · ")}
       </p>
     </div>
@@ -62,17 +62,17 @@ function RouteCard({ route, recommended, tied, selected, incidents, onSelect, fo
   return (
     <li
       aria-label={route.label}
-      className={`rounded-xl border bg-white ${selected ? "border-blue-600 shadow-sm ring-2 ring-blue-600/30" : "border-slate-200"}`}
+      className={`rounded-[20px] border-2 bg-white ${selected ? "border-brand-600" : "border-transparent"}`}
     >
       <button type="button" onClick={onSelect} aria-pressed={selected} className="w-full p-4 text-left">
         <span className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-slate-900">{route.label}</span>
+          <span className="font-semibold text-grey-900">{route.label}</span>
           {isRecommended && <Badge tone="blue">추천</Badge>}
           {tied && <Badge tone="amber">동률</Badge>}
-          {selected && <span className="ml-auto text-xs font-semibold text-blue-700">지도에 표시 중</span>}
+          {selected && <span className="ml-auto text-xs font-semibold text-brand-700">지도에 표시 중</span>}
         </span>
-        <span className="mt-1 block text-2xl font-bold text-slate-900">{formatDuration(route.durationSeconds)}</span>
-        <span className="block text-sm text-slate-600">
+        <span className="mt-1 block text-[28px] font-bold tracking-tight text-grey-900">{formatDuration(route.durationSeconds)}</span>
+        <span className="block text-sm text-grey-600">
           {formatDistance(route.distanceMeters)}
           {!isRecommended && ` · ${formatDiff(durationDiffSeconds(route, recommended))}`}
         </span>
@@ -140,26 +140,26 @@ function Results({ data, destination, onRetry }: { data: RouteCompareResponse; d
     <section aria-labelledby="routes-heading" className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
       <div className="contents lg:col-start-1 lg:row-start-1 lg:flex lg:flex-col lg:gap-3">
         <div>
-          <h2 id="routes-heading" className="text-lg font-bold text-slate-900">
+          <h2 id="routes-heading" className="text-lg font-bold text-grey-900">
             경로 비교
           </h2>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-grey-600">
             {formatKstTime(observedAt)} 조회 기준 · {mock ? "모의 데이터" : "카카오모빌리티 예상시간"}
           </p>
         </div>
         {stale && (
-          <div role="alert" className="flex items-center justify-between gap-2 rounded-lg bg-amber-100 p-3 text-sm text-amber-900">
+          <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-100 p-3 text-sm text-amber-900">
             <span>오래된 정보입니다({Math.floor((now.getTime() - Date.parse(observedAt)) / 60_000)}분 전 조회). 다시 조회하세요.</span>
-            <button type="button" onClick={onRetry} className="min-h-12 shrink-0 rounded-lg bg-amber-700 px-3 font-semibold text-white">
+            <button type="button" onClick={onRetry} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
               다시 조회
             </button>
           </div>
         )}
         {routes.length === 1 && (
-          <p className="order-2 rounded-lg bg-slate-100 lg:order-none p-3 text-sm text-slate-700">카카오 추천 경로(실시간 교통 반영)를 보여 줍니다. 다른 경로와는 비교하지 않습니다.</p>
+          <p className="order-2 rounded-2xl bg-grey-100 lg:order-none p-3 text-sm text-grey-700">카카오 추천 경로(실시간 교통 반영)를 보여 줍니다. 다른 경로와는 비교하지 않습니다.</p>
         )}
         {tiedRouteIds.length > 0 && (
-          <p className="order-2 rounded-lg bg-amber-50 lg:order-none p-3 text-sm text-amber-900">
+          <p className="order-2 rounded-2xl bg-amber-50 lg:order-none p-3 text-sm text-amber-900">
             예상시간이 같은 경로가 있어 거리가 짧은 경로를 추천합니다.
           </p>
         )}
@@ -194,7 +194,7 @@ function Results({ data, destination, onRetry }: { data: RouteCompareResponse; d
           <RouteMap routes={routes} selectedId={selectedId} incidents={incidents} onSelect={select} focus={incidentFocus.focus} />
           <IncidentFocusBar state={incidentFocus} />
         </div>
-        <ul aria-label="혼잡 범례" className="order-1 flex flex-wrap gap-3 text-xs text-slate-700 lg:order-none">
+        <ul aria-label="혼잡 범례" className="order-1 flex flex-wrap gap-3 text-xs text-grey-700 lg:order-none">
           {STATUS_ORDER.map((s) => (
             <li key={s} className="flex items-center gap-1">
               <span className={`inline-block h-1.5 w-5 rounded ${STATUS_STYLE[s].bar}`} aria-hidden="true" />
@@ -202,7 +202,7 @@ function Results({ data, destination, onRetry }: { data: RouteCompareResponse; d
             </li>
           ))}
         </ul>
-        <p className="order-1 text-xs text-slate-600 lg:order-none">
+        <p className="order-1 text-xs text-grey-600 lg:order-none">
           혼잡도는 카카오모빌리티 구간 평균값입니다. {incidentsNote(incidentsStatus, incidentsObservedAt, incidents.length)}
         </p>
         <div className="order-3 lg:order-none">
@@ -223,7 +223,7 @@ export function RouteResults({ state, onRetry }: Props) {
   if (state.kind === "idle") return null;
   if (state.kind === "loading") {
     return (
-      <p aria-live="polite" className="text-slate-600">
+      <p aria-live="polite" className="text-grey-600">
         경로를 조회하는 중…
       </p>
     );
@@ -231,10 +231,10 @@ export function RouteResults({ state, onRetry }: Props) {
   if (state.kind === "error") {
     const retryable = state.error.code === "PROVIDER_UNAVAILABLE";
     return (
-      <div role="alert" className="flex flex-col gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-800">
+      <div role="alert" className="flex flex-col gap-2 rounded-2xl bg-red-50 p-3 text-sm text-red-800">
         <p>{errorMessage(state.error)}</p>
         {retryable && (
-          <button type="button" onClick={onRetry} className="min-h-12 self-start rounded-lg bg-red-700 px-4 font-semibold text-white">
+          <button type="button" onClick={onRetry} className="min-h-12 self-start rounded-2xl bg-red-700 px-4 font-semibold text-white">
             다시 시도
           </button>
         )}

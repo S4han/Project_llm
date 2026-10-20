@@ -63,16 +63,16 @@ export function RouteMap({ routes, selectedId, incidents, onSelect, focus = null
 
   if (failed) {
     return (
-      <p role="status" className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
+      <p role="status" className="rounded-2xl bg-grey-100 p-3 text-sm text-grey-700">
         지도를 표시할 수 없습니다. 아래 경로 목록에서 경로와 예상시간을 확인하세요.
       </p>
     );
   }
   return (
     <div className="flex flex-col gap-1">
-      <div ref={attach} role="region" aria-label="경로 지도" className="h-64 w-full md:h-[45vh] lg:h-[60vh] overflow-hidden rounded-xl border border-slate-200 bg-slate-100" />
+      <div ref={attach} role="region" aria-label="경로 지도" className="h-64 w-full md:h-[45vh] lg:h-[60vh] overflow-hidden rounded-[20px] bg-grey-200" />
       {tilesFailed && (
-        <p className="text-xs text-slate-600">지도 배경을 불러오지 못했습니다. 경로 선과 아래 목록은 그대로 확인할 수 있습니다.</p>
+        <p className="text-xs text-grey-600">지도 배경을 불러오지 못했습니다. 경로 선과 아래 목록은 그대로 확인할 수 있습니다.</p>
       )}
     </div>
   );

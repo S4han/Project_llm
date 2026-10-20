@@ -50,43 +50,43 @@ export function PlaceSearch({ label, placeholder, onSelect }: Props) {
           maxLength={PLACE_QUERY_MAX_LENGTH}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={placeholder}
-          className="min-h-12 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 focus:border-blue-600 focus:outline-none"
+          className="min-h-12 min-w-0 flex-1 rounded-2xl border-2 border-transparent bg-white px-3 text-base text-grey-900 placeholder:text-grey-400 focus:border-brand-600 focus:outline-none"
         />
         <button
           type="submit"
           disabled={!query.trim() || state.kind === "loading"}
-          className="min-h-12 shrink-0 rounded-lg bg-slate-800 px-4 font-semibold text-white disabled:bg-slate-300"
+          className="min-h-12 shrink-0 rounded-2xl bg-grey-800 px-4 font-semibold text-white disabled:bg-grey-300"
         >
           검색
         </button>
       </form>
 
       <div aria-live="polite">
-        {state.kind === "loading" && <p className="text-sm text-slate-500">검색 중…</p>}
+        {state.kind === "loading" && <p className="text-sm text-grey-500">검색 중…</p>}
         {state.kind === "error" && (
-          <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
+          <p role="alert" className="rounded-2xl bg-red-50 p-3 text-sm text-red-800">
             {errorMessage(state.error)}
           </p>
         )}
         {state.kind === "results" && state.places.length === 0 && (
-          <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-700">제주에서 검색 결과가 없습니다.</p>
+          <p className="rounded-2xl bg-grey-100 p-3 text-sm text-grey-700">제주에서 검색 결과가 없습니다.</p>
         )}
       </div>
 
       {state.kind === "results" && state.places.length > 0 && (
-        <ul aria-label={`${label} 검색 결과`} className="flex flex-col divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+        <ul aria-label={`${label} 검색 결과`} className="flex flex-col divide-y divide-grey-200 rounded-2xl border border-grey-200 bg-white">
           {state.places.map((place) => (
             <li key={place.id}>
               <button
                 type="button"
                 onClick={() => onSelect(place)}
-                className="flex min-h-12 w-full flex-col items-start px-3 py-2 text-left active:bg-slate-100"
+                className="flex min-h-12 w-full flex-col items-start px-3 py-2 text-left active:bg-grey-100"
               >
-                <span className="font-medium text-slate-900">
+                <span className="font-medium text-grey-900">
                   {place.name}
                   {place.provider === "mock" && <span className="ml-2 text-xs font-normal text-amber-700">모의 데이터</span>}
                 </span>
-                <span className="text-sm text-slate-600">{place.roadAddress ?? place.address}</span>
+                <span className="text-sm text-grey-600">{place.roadAddress ?? place.address}</span>
               </button>
             </li>
           ))}

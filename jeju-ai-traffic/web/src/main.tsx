@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { TrafficDashboard } from "./features/traffic/TrafficDashboard";
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./index.css";
 
 const root = document.getElementById("root");

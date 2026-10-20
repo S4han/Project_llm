@@ -199,20 +199,20 @@ export function TrafficDashboard() {
   };
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 bg-slate-50 p-4 md:max-w-5xl xl:max-w-[96rem]">
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 bg-grey-100 p-4 md:max-w-5xl xl:max-w-[96rem]">
       {/*
         반응형(TASK-012 반응형): 휴대폰은 세로 한 줄. 태블릿(md)은 도로 소통·사건 카드를 넓게, 그 아래 큰 지도와 사건 목록.
         PC·아이패드 가로(xl)는 왼쪽에 화면 높이의 지도를 고정하고 오른쪽에 정보 패널.
       */}
       <main className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_auto_auto_auto_auto_1fr]">
         <div className={`flex items-center justify-between gap-2 ${PANEL}`}>
-          <h1 className="text-2xl font-bold text-slate-900">제주 실시간 교통 현황</h1>
-          <a href="/route" className="shrink-0 text-sm font-semibold text-blue-700">
+          <h1 className="text-[26px] font-bold tracking-tight text-grey-900">제주 실시간 교통 현황</h1>
+          <a href="/route" className="shrink-0 text-sm font-semibold text-brand-700">
             경로 추천 →
           </a>
         </div>
         <div className={`flex items-center justify-between gap-2 ${PANEL}`}>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-grey-600">
             제주 ITS 도로 소통·돌발·통제·공사
             {state.snapshot && ` · ${formatKstTime(state.snapshot.observedAt)} 조회`}
             {state.snapshot?.incidents.some((i) => i.source === "mock") && " · 모의 데이터"}
@@ -221,7 +221,7 @@ export function TrafficDashboard() {
             type="button"
             onClick={refresh}
             disabled={state.loading}
-            className="min-h-12 shrink-0 rounded-lg border border-slate-300 bg-white px-3 font-semibold text-slate-800 disabled:opacity-50"
+            className="min-h-12 shrink-0 rounded-2xl bg-white px-4 font-semibold text-grey-700 disabled:opacity-50"
           >
             {state.loading ? "조회 중…" : "새로고침"}
           </button>
@@ -229,34 +229,34 @@ export function TrafficDashboard() {
 
         <div aria-live="polite" className={`flex flex-col gap-2 text-sm ${PANEL}`}>
           {state.problem && (
-            <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-800">
+            <p role="alert" className="rounded-2xl bg-red-50 p-3 text-red-800">
               {state.problem}
               {state.snapshot && ` · 마지막 성공 ${formatKstTime(state.snapshot.observedAt)}`}
             </p>
           )}
           {stale && state.snapshot && (
-            <p role="alert" className="rounded-lg bg-amber-100 p-3 text-amber-900">
+            <p role="alert" className="rounded-2xl bg-amber-100 p-3 text-amber-900">
               오래된 정보입니다({Math.floor((now.getTime() - Date.parse(state.snapshot.observedAt)) / 60_000)}분 전 조회).
             </p>
           )}
         </div>
 
-        <section aria-labelledby="speeds-heading" className={`flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 ${PANEL}`}>
+        <section aria-labelledby="speeds-heading" className={`flex flex-col gap-3 rounded-[20px] bg-white p-4 ${PANEL}`}>
           <div className="flex items-center justify-between gap-2">
             <div>
-              <h2 id="speeds-heading" className="font-bold text-slate-900">
+              <h2 id="speeds-heading" className="font-bold text-grey-900">
                 도로 소통
               </h2>
-              <p className="text-xs text-slate-600">
+              <p className="text-xs text-grey-600">
                 화면이 켜져 있을 때 1분마다 자동 갱신{speeds && ` · 마지막 조회 ${formatKstTime(now.toISOString())}`}
-                {speeds && speedsBusy && <span className="ml-1 font-semibold text-blue-700">· 갱신 중…</span>}
+                {speeds && speedsBusy && <span className="ml-1 font-semibold text-brand-700">· 갱신 중…</span>}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setShowSpeeds((v) => !v)}
               aria-pressed={showSpeeds}
-              className={`min-h-12 rounded-lg border px-3 text-sm font-semibold ${showSpeeds ? "border-blue-600 bg-blue-50 text-blue-800" : "border-slate-300 bg-white text-slate-700"}`}
+              className={`min-h-12 shrink-0 whitespace-nowrap rounded-2xl border px-3 text-sm font-semibold ${showSpeeds ? "border-brand-600 bg-brand-50 text-brand-800" : "border-grey-300 bg-white text-grey-700"}`}
             >
               {showSpeeds ? "지도에 표시 중" : "지도에 표시"}
             </button>
@@ -268,33 +268,33 @@ export function TrafficDashboard() {
                   type="button"
                   onClick={() => chooseSpeed(s)}
                   aria-pressed={speedFilter === s}
-                  className={`flex min-h-16 w-full flex-col items-center justify-center rounded-xl border p-2 ${speedFilter === s ? "border-blue-600 bg-blue-50 ring-2 ring-blue-600/30" : "border-slate-200 bg-white"}`}
+                  className={`flex min-h-16 w-full flex-col items-center justify-center rounded-2xl p-2 ${speedFilter === s ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
                 >
-                  <span className="flex items-center gap-1 text-xs text-slate-600">
+                  <span className="flex items-center gap-1 text-xs text-grey-600">
                     {s !== "all" && <span className={`inline-block h-1.5 w-3 rounded ${STATUS_STYLE[s].bar}`} aria-hidden="true" />}
                     {s === "all" ? "전체" : STATUS_STYLE[s].label}
                   </span>
                   {/* 다섯 자리(11,906)도 휴대폰 폭 카드에서 한 줄에 들어가도록 폭에 맞춰 글자를 줄이고 줄바꿈하지 않는다. */}
-                  <span className="whitespace-nowrap text-[clamp(0.85rem,4vw,1.125rem)] font-bold tabular-nums text-slate-900">
+                  <span className="whitespace-nowrap text-[clamp(0.85rem,4vw,1.125rem)] font-bold tabular-nums text-grey-900">
                     {speedLines.length ? n.toLocaleString("ko-KR") : "–"}
                   </span>
                 </button>
               </li>
             ))}
           </ul>
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-grey-600">
             제주 ITS 구간 평균속도(원활 30km/h 이상 · 서행 15~30 · 정체 15 미만)
             {speeds?.observedAt && ` · ${formatKstTime(speeds.observedAt)} 기준`}
             {speeds?.source === "mock" && " · 모의 데이터"}. 속도 정보가 없는 도로는 표시하지 않습니다.
           </p>
           {showProgress && (
-            <ol role="status" aria-label="도로 소통 처리 현황" className="flex flex-col gap-1 rounded bg-blue-50 p-2 text-sm text-blue-900">
+            <ol role="status" aria-label="도로 소통 처리 현황" className="flex flex-col gap-1 rounded bg-brand-50 p-2 text-sm text-brand-900">
               <li>
                 {linksLoading ? (
                   <>
-                    <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-blue-700 border-t-transparent align-middle" aria-hidden="true" />
+                    <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
                     ① 도로 모양 불러오는 중… {linksSeconds}초
-                    <span className="block text-xs text-blue-800">처음 한 번은 최대 1분 걸릴 수 있어요.</span>
+                    <span className="block text-xs text-brand-800">처음 한 번은 최대 1분 걸릴 수 있어요.</span>
                   </>
                 ) : (
                   <>① 도로 모양 {links ? "✓" : "실패"}</>
@@ -303,7 +303,7 @@ export function TrafficDashboard() {
               <li>
                 {firstSpeeds ? (
                   <>
-                    <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-blue-700 border-t-transparent align-middle" aria-hidden="true" />
+                    <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
                     ② 구간 속도 불러오는 중…
                   </>
                 ) : (
@@ -315,7 +315,7 @@ export function TrafficDashboard() {
           {linksProblem && (
             <div role="alert" className="flex items-center justify-between gap-2 rounded bg-amber-50 p-2 text-sm text-amber-900">
               <span>{linksProblem}</span>
-              <button type="button" onClick={retryLinks} className="min-h-12 shrink-0 rounded-lg bg-amber-700 px-3 font-semibold text-white">
+              <button type="button" onClick={retryLinks} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
                 다시 시도
               </button>
             </div>
@@ -323,7 +323,7 @@ export function TrafficDashboard() {
           {!linksProblem && speedsError && !speeds && !speedsBusy && (
             <div role="alert" className="flex items-center justify-between gap-2 rounded bg-amber-50 p-2 text-sm text-amber-900">
               <span>구간 속도를 불러오지 못했습니다. 네트워크 연결을 확인하세요.</span>
-              <button type="button" onClick={refresh} className="min-h-12 shrink-0 rounded-lg bg-amber-700 px-3 font-semibold text-white">
+              <button type="button" onClick={refresh} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
                 다시 시도
               </button>
             </div>
@@ -335,11 +335,11 @@ export function TrafficDashboard() {
           )}
           {speedFilter !== "all" && speedLines.length > 0 && (
             <div className="flex flex-col gap-1">
-              <h3 className="text-sm font-semibold text-slate-800">
+              <h3 className="text-sm font-semibold text-grey-700">
                 {STATUS_STYLE[speedFilter].label} 도로 {roads.length.toLocaleString("ko-KR")}곳 · 구간이 많은 순
               </h3>
               {roads.length === 0 ? (
-                <p className="text-sm text-slate-600">현재 {STATUS_STYLE[speedFilter].label} 구간이 없습니다.</p>
+                <p className="text-sm text-grey-600">현재 {STATUS_STYLE[speedFilter].label} 구간이 없습니다.</p>
               ) : (
                 <ul aria-label={`${STATUS_STYLE[speedFilter].label} 도로 목록`} className="flex flex-col gap-1">
                   {roads.slice(0, roadLimit).map((r) => (
@@ -348,16 +348,16 @@ export function TrafficDashboard() {
                         type="button"
                         onClick={() => focusRoad(r.key)}
                         aria-pressed={r.key === roadKey}
-                        className={`flex min-h-12 w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-sm ${r.key === roadKey ? "bg-blue-100 ring-2 ring-blue-600" : "bg-slate-50"}`}
+                        className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ${r.key === roadKey ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
                       >
                         <span>
-                          <span className="font-semibold text-slate-900">{r.label}</span>
-                          <span className="text-slate-700">
+                          <span className="font-semibold text-grey-900">{r.label}</span>
+                          <span className="text-grey-700">
                             {" "}
                             · {STATUS_STYLE[speedFilter].label} {r.count}구간 · 평균 {r.avgKmh}km/h
                           </span>
                         </span>
-                        <span className="shrink-0 text-xs font-semibold text-blue-700">{r.key === roadKey ? "지도에 표시 중" : "지도에서 보기 ›"}</span>
+                        <span className="shrink-0 text-xs font-semibold text-brand-700">{r.key === roadKey ? "지도에 표시 중" : "지도에서 보기 ›"}</span>
                       </button>
                     </li>
                   ))}
@@ -367,7 +367,7 @@ export function TrafficDashboard() {
                 <button
                   type="button"
                   onClick={() => setRoadLimit((n) => n + ROAD_PAGE)}
-                  className="min-h-12 rounded-lg border border-slate-300 bg-white font-semibold text-slate-800"
+                  className="min-h-12 rounded-2xl bg-grey-100 font-semibold text-grey-700"
                 >
                   더 보기 ({(roads.length - roadLimit).toLocaleString("ko-KR")}곳 남음)
                 </button>
@@ -385,10 +385,10 @@ export function TrafficDashboard() {
                   type="button"
                   onClick={() => chooseKind(k)}
                   aria-pressed={kind === k}
-                  className={`flex min-h-16 w-full flex-col items-center justify-center rounded-xl border p-2 ${kind === k ? "border-blue-600 bg-blue-50 ring-2 ring-blue-600/30" : "border-slate-200 bg-white"}`}
+                  className={`flex min-h-16 w-full flex-col items-center justify-center rounded-2xl p-2 ${kind === k ? "bg-brand-50 ring-2 ring-brand-600" : "bg-white"}`}
                 >
-                  <span className="text-xs text-slate-600">{k === "all" ? "전체" : INCIDENT_LABEL[k]}</span>
-                  <span className="text-xl font-bold text-slate-900">{state.snapshot ? count : "–"}</span>
+                  <span className="text-xs text-grey-600">{k === "all" ? "전체" : INCIDENT_LABEL[k]}</span>
+                  <span className="text-xl font-bold text-grey-900">{state.snapshot ? count : "–"}</span>
                 </button>
               </li>
             );
@@ -409,11 +409,11 @@ export function TrafficDashboard() {
           />
           <IncidentFocusBar state={incidentFocus} />
           {road && speedFilter !== "all" && (
-            <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg bg-blue-50 p-2 text-sm text-blue-900">
+            <div role="status" className="flex flex-wrap items-center gap-2 rounded-2xl bg-brand-50 p-2 text-sm text-brand-900">
               <span className="mr-auto font-semibold">
                 {road.label} {STATUS_STYLE[speedFilter].label} {road.count}구간 표시 중
               </span>
-              <button type="button" onClick={() => setRoadKey(null)} className="min-h-12 rounded-lg border border-blue-300 bg-white px-3 font-semibold text-blue-900">
+              <button type="button" onClick={() => setRoadKey(null)} className="min-h-12 rounded-2xl border border-brand-300 bg-white px-3 font-semibold text-brand-900">
                 전체 보기
               </button>
             </div>
@@ -421,21 +421,21 @@ export function TrafficDashboard() {
         </div>
 
         {state.snapshot && groups.length > 0 && (
-          <section aria-labelledby="groups-heading" className={`flex flex-col gap-2 self-start rounded-xl border border-slate-200 bg-white pt-4 ${PANEL}`}>
-            <h2 id="groups-heading" className="px-4 font-bold text-slate-900">
+          <section aria-labelledby="groups-heading" className={`flex flex-col gap-2 self-start rounded-[20px] bg-white pt-4 ${PANEL}`}>
+            <h2 id="groups-heading" className="px-4 font-bold text-grey-900">
               감지된 사건 {shown.length}건
             </h2>
             <IncidentGroupList groups={groups} focusedKey={incidentFocus.focusedKey} onFocus={focusGroup} />
           </section>
         )}
         {state.snapshot && shown.length === 0 && (
-          <p className={`self-start rounded-lg bg-slate-100 p-3 text-sm text-slate-700 ${PANEL}`}>
+          <p className={`self-start rounded-2xl bg-grey-100 p-3 text-sm text-grey-700 ${PANEL}`}>
             {kind === "all" ? "현재 제주 ITS에 감지된 돌발·통제·공사가 없습니다." : `현재 제주 ITS에 감지된 ${INCIDENT_LABEL[kind]} 정보가 없습니다.`} 모든 도로의 사건이
             제공되지는 않으므로, 도로에 이상이 없다는 뜻은 아닙니다.
           </p>
         )}
       </main>
-      <footer className="mt-auto flex flex-col gap-1 border-t border-slate-200 pt-3 text-xs text-slate-500">
+      <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
         <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
         <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 이 화면은 위치정보를 사용하지 않습니다.</p>
         <p>지도 © OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크)</p>

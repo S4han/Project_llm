@@ -52,7 +52,7 @@ export function OriginPicker({ onChange, locate = getCurrentLocation }: Props) {
           type="button"
           onClick={useCurrent}
           disabled={status.kind === "locating"}
-          className="min-h-12 flex-1 rounded-lg bg-blue-600 px-3 font-semibold text-white disabled:bg-blue-300"
+          className="min-h-12 flex-1 rounded-2xl bg-brand-600 px-3 font-semibold text-white disabled:bg-brand-300"
         >
           {status.kind === "locating" ? "위치 확인 중…" : retryable ? "현재 위치 다시 확인" : "현재 위치 사용"}
         </button>
@@ -60,14 +60,14 @@ export function OriginPicker({ onChange, locate = getCurrentLocation }: Props) {
           <button
             type="button"
             onClick={() => setManual(true)}
-            className="min-h-12 flex-1 rounded-lg border border-slate-300 bg-white px-3 font-semibold text-slate-800"
+            className="min-h-12 flex-1 rounded-2xl bg-grey-100 px-3 font-semibold text-grey-700"
           >
             직접 검색
           </button>
         )}
       </div>
       {message && (
-        <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+        <p role="alert" className="rounded-2xl bg-amber-50 p-3 text-sm text-amber-900">
           {message}
         </p>
       )}
