@@ -51,15 +51,13 @@ for (const vp of WIDTHS) {
         expect(kinds.y).toBeGreaterThan(p.y);
         expect(m.y).toBeGreaterThan(kinds.y);
       }
-      // 실시간 정체구간(TASK-015): 도로 소통 카드 바로 아래. PC·아이패드 가로는 오른쪽 패널.
-      const chains = (await page.getByRole("region", { name: "실시간 정체구간" }).boundingBox())!;
-      const speedsBox = (await page.getByRole("region", { name: "도로 소통" }).boundingBox())!;
-      expect(chains.y).toBeGreaterThan(speedsBox.y + speedsBox.height - 1);
-      expect(chains.y).toBeLessThan(speedsBox.y + speedsBox.height + 40);
-      if (vp.width >= 1280) expect(chains.x).toBeGreaterThanOrEqual(m.x + m.width);
       await shot(page, `TASK-012-05-traffic-${vp.width}`);
+      // 정체 카드를 누르면 실시간 정체구간 목록이 도로 소통 카드 안에 나온다(TASK-015).
+      await page.getByRole("list", { name: "구간 소통 건수" }).getByRole("button", { name: /정체/ }).click();
+      await expect(page.getByRole("list", { name: "실시간 정체구간 목록" })).toBeVisible();
+      await noHorizontalScroll(page);
       if (process.env.SCREENSHOTS && "TASK-015".startsWith(process.env.SCREENSHOTS)) {
-        await page.getByRole("region", { name: "실시간 정체구간" }).screenshot({ path: `reports/screenshots/TASK-015-03-card-${vp.width}.png` });
+        await page.getByRole("region", { name: "도로 소통" }).screenshot({ path: `reports/screenshots/TASK-015-03-card-${vp.width}.png` });
       }
     });
 

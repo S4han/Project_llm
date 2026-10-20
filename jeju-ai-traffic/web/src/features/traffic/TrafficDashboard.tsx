@@ -23,7 +23,7 @@ const SPEED_ORDER: SpeedStatus[] = ["smooth", "slow", "congested"];
 /** 도로 목록을 한 번에 보여 줄 개수. */
 const ROAD_PAGE = 20;
 
-/** 실시간 정체구간을 한 번에 보여 줄 줄 수(TASK-015). */
+/** 실시간 정체·서행구간을 한 번에 보여 줄 줄 수(TASK-015). */
 const CHAIN_PAGE = 20;
 
 /** 구간 속도 원천이 약 5분 단위라, 15분이 지나면 오래된 속도로 본다. */
@@ -188,11 +188,11 @@ export function TrafficDashboard() {
   const speedLines = useMemo(() => (links && speeds ? joinSpeedLines(links, speeds.speeds) : []), [links, speeds]);
   const speedCounts = SPEED_ORDER.map((s) => [s, speedLines.filter((l) => l.status === s).length] as const);
   const filteredLines = useMemo(() => (speedFilter === "all" ? speedLines : speedLines.filter((l) => l.status === speedFilter)), [speedLines, speedFilter]);
-  const roads = useMemo(() => (speedFilter === "all" ? [] : groupByRoad(filteredLines)), [filteredLines, speedFilter]);
+  // 원활은 도로명별 목록, 정체·서행은 실시간 정체구간 목록(TASK-015 조회 방식)
+  const roads = useMemo(() => (speedFilter === "smooth" ? groupByRoad(filteredLines) : []), [filteredLines, speedFilter]);
   // 보고 있던 도로가 갱신 뒤 이 상태에서 빠지면 강조를 닫는다(목록에서 찾지 못하면 없는 것으로 본다).
   const road = roadKey === null ? undefined : roads.find((r) => r.key === roadKey);
-  const chains = useMemo(() => buildCongestionRows(speedLines), [speedLines]);
-  const chainCounts = { congested: chains.filter((c) => c.status === "congested").length, slow: chains.filter((c) => c.status === "slow").length };
+  const chains = useMemo(() => (speedFilter === "slow" || speedFilter === "congested" ? buildCongestionRows(filteredLines) : []), [filteredLines, speedFilter]);
   // 갱신 뒤 같은 첫 구간으로 시작하는 줄이 없으면(풀렸거나 바뀜) 강조를 닫는다.
   const chain = chainKey === null ? undefined : chains.find((c) => c.key === chainKey);
   const roadIdsKey = chain ? chain.ids.join(",") : (road?.ids.join(",") ?? "");
@@ -234,6 +234,7 @@ export function TrafficDashboard() {
     setRoadKey(null);
     setChainKey(null);
     setRoadLimit(ROAD_PAGE);
+    setChainLimit(CHAIN_PAGE);
     setShowSpeeds(true);
   };
   const focusRoad = (key: string) => {
@@ -243,11 +244,9 @@ export function TrafficDashboard() {
     revealMap(mapBox.current);
   };
 
-  const focusChain = (key: string, status: SpeedStatus) => {
+  const focusChain = (key: string) => {
     setChainKey((k) => (k === key ? null : key));
     setRoadKey(null);
-    // 지도에 그 상태가 보이도록(다른 상태만 보고 있었다면 전체로)
-    if (speedFilter !== "all" && speedFilter !== status) setSpeedFilter("all");
     setShowSpeeds(true);
     clearFocus();
     revealMap(mapBox.current);
@@ -270,7 +269,7 @@ export function TrafficDashboard() {
         반응형(TASK-012 반응형): 휴대폰은 세로 한 줄. 태블릿(md)은 도로 소통·사건 카드를 넓게, 그 아래 큰 지도와 사건 목록.
         PC·아이패드 가로(xl)는 왼쪽에 화면 높이의 지도를 고정하고 오른쪽에 정보 패널.
       */}
-      <main className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_auto_auto_auto_auto_auto_auto_1fr]">
+      <main className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_auto_auto_auto_auto_auto_1fr]">
         <div className={`flex items-center justify-between gap-2 ${PANEL}`}>
           <h1 className="text-[26px] font-bold tracking-tight text-grey-900">제주 실시간 교통 현황</h1>
           <a href="/route" className="shrink-0 text-sm font-semibold text-brand-700">
@@ -399,7 +398,48 @@ export function TrafficDashboard() {
               {speedProblem ?? "오래된 구간 속도입니다(15분 넘게 갱신되지 않음)."}
             </p>
           )}
-          {speedFilter !== "all" && speedLines.length > 0 && (
+          {(speedFilter === "slow" || speedFilter === "congested") && speedLines.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-semibold text-grey-700">
+                실시간 {STATUS_STYLE[speedFilter].label}구간 {chains.length.toLocaleString("ko-KR")}곳 · 느린 순
+              </h3>
+              <p className="text-xs text-grey-600">같은 도로에서 이어진 구간은 한 줄로 묶었습니다. 누르면 지도에서 보여 줍니다.</p>
+              {chains.length === 0 ? (
+                <p className="text-sm text-grey-600">현재 {STATUS_STYLE[speedFilter].label} 구간이 없습니다.</p>
+              ) : (
+                <ul aria-label={`실시간 ${STATUS_STYLE[speedFilter].label}구간 목록`} className="flex flex-col gap-1">
+                  {chains.slice(0, chainLimit).map((c) => (
+                    <li key={c.key}>
+                      <button
+                        type="button"
+                        onClick={() => focusChain(c.key)}
+                        aria-pressed={c.key === chainKey}
+                        className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ${c.key === chainKey ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
+                      >
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate font-semibold text-grey-900">{c.label}</span>
+                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold ${c.status === "congested" ? "bg-red-600 text-white" : "bg-slow text-grey-900"}`}>{STATUS_STYLE[c.status].label}</span>
+                          </span>
+                          <span className="block text-grey-700">{sectionText(c)}</span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="block font-bold tabular-nums text-grey-900">{c.avgKmh}km/h</span>
+                          <span className="block text-xs font-semibold text-brand-700">{c.key === chainKey ? "지도에 표시 중" : "지도 ›"}</span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {chains.length > chainLimit && (
+                <button type="button" onClick={() => setChainLimit((n) => n + CHAIN_PAGE)} className="min-h-12 rounded-2xl bg-grey-100 font-semibold text-grey-700">
+                  더 보기 ({(chains.length - chainLimit).toLocaleString("ko-KR")}곳 남음)
+                </button>
+              )}
+            </div>
+          )}
+          {speedFilter === "smooth" && speedLines.length > 0 && (
             <div className="flex flex-col gap-1">
               <h3 className="text-sm font-semibold text-grey-700">
                 {STATUS_STYLE[speedFilter].label} 도로 {roads.length.toLocaleString("ko-KR")}곳 · 구간이 많은 순
@@ -439,57 +479,6 @@ export function TrafficDashboard() {
                 </button>
               )}
             </div>
-          )}
-        </section>
-
-        <section aria-labelledby="chains-heading" className={`flex flex-col gap-2 rounded-[20px] bg-white p-4 ${PANEL}`}>
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 id="chains-heading" className="font-bold text-grey-900">
-              실시간 정체구간
-            </h2>
-            {speedLines.length > 0 && (
-              <p className="shrink-0 text-sm font-semibold tabular-nums">
-                <span className="text-red-600">정체 {chainCounts.congested.toLocaleString("ko-KR")}</span>
-                <span className="text-grey-400"> · </span>
-                <span className="text-amber-700">서행 {chainCounts.slow.toLocaleString("ko-KR")}</span>
-              </p>
-            )}
-          </div>
-          <p className="text-xs text-grey-600">같은 도로에서 이어진 정체·서행 구간을 한 줄로 묶었습니다. 정체 먼저, 느린 순. 누르면 지도에서 보여 줍니다.</p>
-          {speedLines.length === 0 ? (
-            <p className="text-sm text-grey-600">{showProgress ? "도로 소통을 불러오면 표시합니다." : "구간 속도 정보가 없습니다."}</p>
-          ) : chains.length === 0 ? (
-            <p className="text-sm text-grey-600">현재 정체·서행 구간이 없습니다.</p>
-          ) : (
-            <ul aria-label="실시간 정체구간 목록" className="flex flex-col gap-1">
-              {chains.slice(0, chainLimit).map((c) => (
-                <li key={c.key}>
-                  <button
-                    type="button"
-                    onClick={() => focusChain(c.key, c.status)}
-                    aria-pressed={c.key === chainKey}
-                    className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ${c.key === chainKey ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
-                  >
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-1.5">
-                        <span className="truncate font-semibold text-grey-900">{c.label}</span>
-                        <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold ${c.status === "congested" ? "bg-red-600 text-white" : "bg-slow text-grey-900"}`}>{STATUS_STYLE[c.status].label}</span>
-                      </span>
-                      <span className="block text-grey-700">{sectionText(c)}</span>
-                    </span>
-                    <span className="shrink-0 text-right">
-                      <span className="block font-bold tabular-nums text-grey-900">{c.avgKmh}km/h</span>
-                      <span className="block text-xs font-semibold text-brand-700">{c.key === chainKey ? "지도에 표시 중" : "지도 ›"}</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {chains.length > chainLimit && (
-            <button type="button" onClick={() => setChainLimit((n) => n + CHAIN_PAGE)} className="min-h-12 rounded-2xl bg-grey-100 font-semibold text-grey-700">
-              더 보기 ({(chains.length - chainLimit).toLocaleString("ko-KR")}줄 남음)
-            </button>
           )}
         </section>
 
@@ -566,7 +555,7 @@ export function TrafficDashboard() {
         </ul>
 
 
-        <div ref={mapBox} className="flex flex-col gap-2 md:col-span-2 xl:sticky xl:top-4 xl:col-span-1 xl:col-start-1 xl:row-span-8 xl:row-start-1 xl:self-start">
+        <div ref={mapBox} className="flex flex-col gap-2 md:col-span-2 xl:sticky xl:top-4 xl:col-span-1 xl:col-start-1 xl:row-span-7 xl:row-start-1 xl:self-start">
           <IncidentMap
             incidents={shown}
             focus={incidentFocus.focus}

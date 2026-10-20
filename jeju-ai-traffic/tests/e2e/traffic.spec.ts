@@ -31,13 +31,13 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await shot(page, "TASK-012-01-dashboard");
     await shot(page, "TASK-012-03-speeds");
 
-    // 정체 카드 → 정체 구간만, 도로 목록 → 도로 강조 → 전체 보기
-    await speedCards.filter({ hasText: "정체" }).click();
-    await expect(map).toHaveAttribute("data-speed-lines", "1");
-    const roadButton = page.getByRole("list", { name: "정체 도로 목록" }).getByRole("button", { name: /모의 평화로/ });
-    await expect(roadButton).toContainText("모의 평화로 · 정체 1구간 · 평균 9km/h");
+    // 원활 카드 → 원활 구간만, 도로 목록 → 도로 강조 → 전체 보기
+    await speedCards.filter({ hasText: "원활" }).click();
+    await expect(map).toHaveAttribute("data-speed-lines", "2");
+    const roadButton = page.getByRole("list", { name: "원활 도로 목록" }).getByRole("button", { name: /모의 공항로/ });
+    await expect(roadButton).toContainText("모의 공항로 · 원활 1구간 · 평균 52km/h");
     await roadButton.click();
-    await expect(page.getByRole("status").filter({ hasText: "구간 표시 중" })).toHaveText(/모의 평화로 정체 1구간 표시 중/);
+    await expect(page.getByRole("status").filter({ hasText: "구간 표시 중" })).toHaveText(/모의 공항로 원활 1구간 표시 중/);
     await shot(page, "TASK-012-04-road");
     await page.getByRole("status").filter({ hasText: "구간 표시 중" }).getByRole("button", { name: "전체 보기" }).click();
     await expect(page.getByText(/구간 표시 중/)).toHaveCount(0);
@@ -130,15 +130,18 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await list.getByRole("button", { name: /CCTV/ }).click();
     await expect(map).toHaveAttribute("data-facilities", "2");
   });
-  test("실시간 정체구간: 정체 먼저, A → B, 누르면 지도 강조 (TASK-015, 개발 서버 모의)", async ({ page }) => {
+  test("정체·서행 카드를 누르면 실시간 정체구간 목록, 누르면 지도 강조 (TASK-015, 개발 서버 모의)", async ({ page }) => {
     await page.goto("/");
-    const region = page.getByRole("region", { name: "실시간 정체구간" });
-    await expect(region.getByText("정체 1")).toBeVisible();
-    await expect(region.getByText("서행 1")).toBeVisible();
-    const rows = region.getByRole("list", { name: "실시간 정체구간 목록" }).locator(":scope > li").getByRole("button");
-    await expect(rows).toHaveCount(2);
+    const speedCards = page.getByRole("list", { name: "구간 소통 건수" }).getByRole("button");
+    await expect(speedCards).toHaveText(["전체4", "원활2", "서행1", "정체1"]);
+    await expect(page.getByRole("list", { name: /구간 목록/ })).toHaveCount(0);
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+
+    await speedCards.filter({ hasText: "정체" }).click();
+    await expect(map).toHaveAttribute("data-speed-lines", "1");
+    const rows = page.getByRole("list", { name: "실시간 정체구간 목록" }).getByRole("button");
+    await expect(rows).toHaveCount(1);
     await expect(rows.nth(0)).toContainText("모의 평화로정체모의 어승생 → 모의 서귀포9km/h");
-    await expect(rows.nth(1)).toContainText("모의 평화로서행모의 노형 → 모의 어승생22km/h");
     await shot(page, "TASK-015-01-list");
     await rows.nth(0).click();
     await expect(rows.nth(0)).toHaveAttribute("aria-pressed", "true");
@@ -147,6 +150,9 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await shot(page, "TASK-015-02-focus");
     await bar.getByRole("button", { name: "전체 보기" }).click();
     await expect(rows.nth(0)).toHaveAttribute("aria-pressed", "false");
+
+    await speedCards.filter({ hasText: "서행" }).click();
+    await expect(page.getByRole("list", { name: "실시간 서행구간 목록" }).getByRole("button")).toHaveText(["모의 평화로서행모의 노형 → 모의 어승생22km/h지도 ›"]);
   });
 });
 

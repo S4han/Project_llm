@@ -176,56 +176,57 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(screen.getByRole("list", { name: "구간 소통 건수" }).textContent).toBe("전체–원활–서행–정체–");
   });
 
-  it("상태 카드를 누르면 그 상태 구간만 지도에, 도로명별 목록 → 도로를 누르면 강조, 전체 보기로 닫음", async () => {
+  it("원활 카드: 그 상태 구간만 지도에, 도로명별 목록 → 도로를 누르면 강조, 전체 보기로 닫음", async () => {
     render(<TrafficDashboard />);
     const counts = await screen.findByRole("list", { name: "구간 소통 건수" });
     await within(counts).findByText("3");
     const map = screen.getByRole("region", { name: "교통 현황 지도" });
-    expect(screen.queryByRole("list", { name: /도로 목록/ })).toBeNull();
+    expect(screen.queryByRole("list", { name: /도로 목록|구간 목록/ })).toBeNull();
 
-    fireEvent.click(within(counts).getByRole("button", { name: /정체/ }));
+    fireEvent.click(within(counts).getByRole("button", { name: /원활/ }));
     expect(map.getAttribute("data-speed-lines")).toBe("1");
-    const list = screen.getByRole("list", { name: "정체 도로 목록" });
-    expect(screen.getByText("정체 도로 1곳 · 구간이 많은 순")).toBeTruthy();
-    const road = within(list).getByRole("button", { name: /평화로/ });
-    expect(road.textContent).toContain("평화로 · 정체 1구간 · 평균 8km/h");
+    const list = screen.getByRole("list", { name: "원활 도로 목록" });
+    expect(screen.getByText("원활 도로 1곳 · 구간이 많은 순")).toBeTruthy();
+    const road = within(list).getByRole("button", { name: /노형로/ });
+    expect(road.textContent).toContain("노형로 · 원활 1구간 · 평균 45km/h");
 
     fireEvent.click(road);
     expect(road.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("평화로 정체 1구간 표시 중")).toBeTruthy();
+    expect(screen.getByText("노형로 원활 1구간 표시 중")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "전체 보기" }));
     expect(screen.queryByText(/구간 표시 중/)).toBeNull();
 
     fireEvent.click(within(counts).getByRole("button", { name: /전체/ }));
     expect(map.getAttribute("data-speed-lines")).toBe("3");
-    expect(screen.queryByRole("list", { name: /도로 목록/ })).toBeNull();
+    expect(screen.queryByRole("list", { name: /도로 목록|구간 목록/ })).toBeNull();
   });
 
-  it("실시간 정체구간: 정체 먼저, 도로명·배지·A → B, 누르면 지도 강조, 다시 누르거나 전체 보기로 닫음 (TASK-015)", async () => {
+  it("정체·서행 카드를 누르면 실시간 정체구간 목록(도로명·표시·A → B), 누르면 지도 강조, 다시 누르거나 전체 보기로 닫음 (TASK-015)", async () => {
     render(<TrafficDashboard />);
-    const region = await screen.findByRole("region", { name: "실시간 정체구간" });
-    const list = await within(region).findByRole("list", { name: "실시간 정체구간 목록" });
-    expect(within(region).getByText("정체 1")).toBeTruthy();
-    expect(within(region).getByText("서행 1")).toBeTruthy();
-    const rows = within(list).getAllByRole("button");
-    expect(rows.map((r) => r.textContent)).toEqual(["평화로정체어승생삼거리 → 광평교차로8km/h지도 ›", "연북로서행1구간20km/h지도 ›"]);
-    // 도로 소통 카드 바로 아래(교통시설물보다 위)
-    const speedsRegion = screen.getByRole("region", { name: "도로 소통" });
-    const facilities = screen.getByRole("region", { name: "교통시설물" });
-    expect(speedsRegion.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(region.compareDocumentPosition(facilities) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const counts = await screen.findByRole("list", { name: "구간 소통 건수" });
+    await within(counts).findByText("3");
+    // 따로 된 카드는 없고, 누르기 전에는 목록이 없다.
+    expect(screen.queryByRole("region", { name: "실시간 정체구간" })).toBeNull();
+    expect(screen.queryByRole("list", { name: /구간 목록/ })).toBeNull();
+    const map = screen.getByRole("region", { name: "교통 현황 지도" });
 
-    // 원활만 보고 있다가 정체 줄을 누르면 지도는 전체 상태로 돌아가 그 구간을 강조한다.
-    fireEvent.click(within(screen.getByRole("list", { name: "구간 소통 건수" })).getByRole("button", { name: /원활/ }));
+    fireEvent.click(within(counts).getByRole("button", { name: /정체/ }));
+    expect(map.getAttribute("data-speed-lines")).toBe("1");
+    expect(screen.getByText("실시간 정체구간 1곳 · 느린 순")).toBeTruthy();
+    const rows = within(screen.getByRole("list", { name: "실시간 정체구간 목록" })).getAllByRole("button");
+    expect(rows.map((r) => r.textContent)).toEqual(["평화로정체어승생삼거리 → 광평교차로8km/h지도 ›"]);
     fireEvent.click(rows[0]!);
     expect(rows[0]!.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("region", { name: "교통 현황 지도" }).getAttribute("data-speed-lines")).toBe("3");
     expect(screen.getByText("평화로 정체 · 어승생삼거리 → 광평교차로 표시 중")).toBeTruthy();
     fireEvent.click(rows[0]!);
     expect(screen.queryByText(/광평교차로 표시 중/)).toBeNull();
-    fireEvent.click(rows[1]!);
+
+    fireEvent.click(within(counts).getByRole("button", { name: /서행/ }));
+    const slow = within(screen.getByRole("list", { name: "실시간 서행구간 목록" })).getAllByRole("button");
+    expect(slow.map((r) => r.textContent)).toEqual(["연북로서행1구간20km/h지도 ›"]);
+    fireEvent.click(slow[0]!);
     fireEvent.click(screen.getByRole("button", { name: "전체 보기" }));
-    expect(rows[1]!.getAttribute("aria-pressed")).toBe("false");
+    expect(slow[0]!.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("도로 소통 카드가 사건 카드보다 위에 있고, 구간 속도도 1분마다 다시 조회한다", async () => {
