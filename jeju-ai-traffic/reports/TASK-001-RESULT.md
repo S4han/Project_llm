@@ -152,7 +152,7 @@ BLK-01~05 (`docs/TECH_VALIDATION.md` §8).
 - 근거: 사용자 "ITS 실호출 승인" (2026-10-19). 한도 20건 중 **5건 사용**(Vercel `icn1` 함수, 사용자가 1회 열람).
 - 1단계(키 미사용) — 안내 페이지에서 확인한 호출 형식: `http://api.jejuits.go.kr/api/<기능>?code=<인증키>`, 응답 JSON `{result, info_cnt, info[]}`.
   - 제공 기능: `infoVvmsList`(VMS, 교차로별 소통 색 1:녹·2:노·3:빨), `infoRoadEventList`(돌발: 정지차량·낙하물·역주행·서행·미끄러운 도로·보행자·합류·**지정체구간(258)**), `infoRoadCloseList`(통제), `infoRoadWorkList`(공사), `infoRwisList`(교통기상), 주차장·EV·주유소·신호·관광·빅데이터·통계 등.
-  - **목록에 도로 구간(링크)별 실시간 속도·소통 API는 없다.** 항목마다 `latitude`·`longitude`·`link_id`(표준노드링크)가 있어 좌표 근접 매칭은 가능한 구조.
+  - ~~목록에 도로 구간(링크)별 실시간 속도·소통 API는 없다.~~ **정정(2026-10-20, TASK-012): "실시간 교통정보" API(`getFrafficInfo?type=L`)가 구간 ID별 평균속도·통행시간·교통량·점유율을 제공한다(사용자 캡처). 당시 목록 확인이 불완전했다.** 항목마다 `latitude`·`longitude`·`link_id`(표준노드링크)가 있어 좌표 근접 매칭은 가능한 구조.
   - Vercel Preview 환경에 `JEJU_ITS_API_KEY` 주입 확인(`keyPresent: true`).
 - 2단계(키 사용) — 5종 각 1회:
 

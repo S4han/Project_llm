@@ -48,7 +48,7 @@ describe("GET /api/traffic/incidents (TASK-012)", () => {
 
   it("ITS 한도면 200 + quotaBlocked·재사용 시각, ITS 호출 0회", async () => {
     const { get, traffic, guard } = setup();
-    await guard.reserve("jejuIts", { cost: 2000 });
+    await guard.reserve("jejuIts", { cost: 6000 });
     const body = await (await get()).json();
     expect(body.status).toBe("quotaBlocked");
     expect(body.incidents).toEqual([]);

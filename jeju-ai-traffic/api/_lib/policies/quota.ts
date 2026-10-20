@@ -11,11 +11,11 @@ export interface ProviderBudget {
   reevaluationCutoff?: number;
 }
 
-/** 내부 일일 한도 (DECISIONS 2026-10-19 TASK-003 "2. 승인", kakaoLocal은 TASK-004, ai 200은 TASK-007 "3. 승인"). */
+/** 내부 일일 한도 (DECISIONS 2026-10-19 TASK-003 "2. 승인", kakaoLocal은 TASK-004, ai 200은 TASK-007 "3. 승인", jejuIts 6,000은 TASK-012 "4. 승인"). */
 export const DEFAULT_BUDGETS: Record<ProviderId, ProviderBudget> = {
   kakao: { dailyLimit: 8000, reevaluationCutoff: 6000 },
   kakaoLocal: { dailyLimit: 3000 },
-  jejuIts: { dailyLimit: 2000 },
+  jejuIts: { dailyLimit: 6000 },
   ai: { dailyLimit: 200 },
 };
 

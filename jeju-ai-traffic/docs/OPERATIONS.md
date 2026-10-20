@@ -28,7 +28,7 @@ Vercel → 프로젝트 → Settings → Environment Variables. Production·Prev
 |---|---|---|---|
 | 카카오모빌리티 길찾기 | 일 10,000건 | 429 차단(비즈월렛 미연결 시) | 8,000건, 6,000건부터 자동 재평가 차단 |
 | 카카오 로컬 검색 | 앱 1개 무료 쿼터 | 429 차단(비즈월렛 미연결 시) | 3,000건 |
-| 제주 ITS | 공개 기준 없음 | — | 2,000건 (경로 조회·`/traffic` 대시보드 공통, 함수별로 따로 셈) |
+| 제주 ITS | 공개 기준 없음 | — | 6,000건 (경로 조회·`/traffic` 대시보드 공통, 함수별로 따로 셈) |
 | Cloudflare Workers AI | 일 10,000 Neurons (UTC 0시) | Free 플랜은 오류로 차단 | 200건 (1건 약 14 Neurons) |
 
 - 내부 한도는 **KST 자정**에 초기화되고, 공급자가 429를 주면 그 공급자를 다음 KST 자정까지 막는다.
@@ -41,7 +41,7 @@ Vercel → 프로젝트 → Settings → Environment Variables. Production·Prev
 - Cloudflare: 대시보드 → AI → Workers AI → 사용량(Neurons). Billing에 결제수단이 없는지 본다.
 - Vercel: 프로젝트 → Usage(함수 호출·대역폭), Logs(오류). Hobby 한도를 넘으면 Vercel이 알림을 보낸다.
 - 서비스 상태: `/api/health`. 교통 현황: `/traffic`(제주 ITS 조회 상태를 화면에서 바로 확인할 수 있다).
-- `/traffic`은 화면이 켜진 사용자마다 1분에 1번 서버를 부르지만, 서버는 제주 ITS 결과를 60초 캐시하므로 함수 인스턴스당 제주 ITS 호출은 1분에 최대 3회(하루 최대 4,320회 → 내부 한도 2,000에서 차단)다.
+- `/traffic`은 화면이 켜진 사용자마다 1분에 1번 서버를 부르지만, 서버는 제주 ITS 결과를 60초 캐시하므로 함수 인스턴스당 제주 ITS 호출은 1분에 최대 3회(하루 최대 4,320회로 내부 한도 6,000 안)다.
 
 ## 5. 되돌리기 (Instant Rollback)
 문제가 생긴 Production 배포를 이전 배포로 되돌린다. 코드·환경 변수는 바뀌지 않는다.

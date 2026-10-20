@@ -202,7 +202,7 @@ describe("교통 사건 연결 (제주 ITS, 모의)", () => {
 
   it("ITS 한도면 quotaBlocked, ITS 호출 0회", async () => {
     const { post, traffic, guard } = setup([near]);
-    await guard.reserve("jejuIts", { cost: 2000 });
+    await guard.reserve("jejuIts", { cost: 6000 });
     const body = await (await post(SAME_SIDE)).json();
     expect(body.incidentsStatus).toBe("quotaBlocked");
     expect(traffic.calls).toBe(0);

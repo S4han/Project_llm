@@ -19,11 +19,11 @@ async function blocked(p: Promise<unknown>): Promise<AppError> {
 }
 
 describe("승인된 기본 예산", () => {
-  it("카카오 8,000 / 재평가 6,000, 장소 검색 3,000, ITS 2,000, AI 200", () => {
+  it("카카오 8,000 / 재평가 6,000, 장소 검색 3,000, ITS 6,000, AI 200", () => {
     expect(DEFAULT_BUDGETS).toEqual({
       kakao: { dailyLimit: 8000, reevaluationCutoff: 6000 },
       kakaoLocal: { dailyLimit: 3000 },
-      jejuIts: { dailyLimit: 2000 },
+      jejuIts: { dailyLimit: 6000 },
       ai: { dailyLimit: 200 },
     });
   });
@@ -65,7 +65,7 @@ describe("QuotaGuard", () => {
 
   it("공급자별로 따로 센다", async () => {
     const { guard } = setup();
-    await guard.reserve("jejuIts", { cost: 2000 });
+    await guard.reserve("jejuIts", { cost: 6000 });
     await blocked(guard.reserve("jejuIts"));
     await guard.reserve("kakao");
   });
