@@ -322,8 +322,8 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(map.getAttribute("data-facilities")).toBe("1");
   });
 
-  it("주정차 단속 CCTV(TASK-016): 교통시설물 카드의 한 유형, 기본 꺼짐. 켜면 현재 위치를 확인해 반경 5km 안만 지도에", async () => {
-    const ask = stubLocation({ lat: 33.5, lng: 126.53 });
+  it("주정차 단속 CCTV(TASK-016): 교통시설물 카드의 한 유형, 기본 꺼짐. 켜면 현재 위치를 확인해 반경 1km 안만 지도에", async () => {
+    const ask = stubLocation({ lat: 33.502, lng: 126.536 });
     render(<TrafficDashboard />);
     const list = await screen.findByRole("list", { name: "교통시설물 유형" });
     const enf = await within(list).findByRole("button", { name: /주정차 단속2/ });
@@ -331,11 +331,11 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(ask).not.toHaveBeenCalled();
     const map = screen.getByRole("region", { name: "교통 현황 지도" });
     fireEvent.click(enf);
-    expect(await screen.findByText("내 위치 반경 5km 안 주정차 단속 CCTV 2곳")).toBeTruthy();
+    expect(await screen.findByText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳")).toBeTruthy();
     expect(map.getAttribute("data-facilities")).toBe("2");
     expect(map.getAttribute("data-nearby")).toBe("1");
     expect(ask).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/켜면 현재 위치를 한 번 확인해 반경 5km 안만/)).toBeTruthy();
+    expect(screen.getByText(/켜면 현재 위치를 한 번 확인해 반경 1km 안만/)).toBeTruthy();
     // 끄고 다시 켜면 위치를 다시 묻지 않는다(위치 다시 확인 버튼으로만)
     fireEvent.click(enf);
     expect(map.getAttribute("data-nearby")).toBe("0");
@@ -350,7 +350,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     render(<TrafficDashboard />);
     const list = await screen.findByRole("list", { name: "교통시설물 유형" });
     fireEvent.click(await within(list).findByRole("button", { name: /주정차 단속2/ }));
-    expect(await screen.findByText("내 위치 반경 5km 안에 주정차 단속 CCTV가 없습니다(제주시 자료만 있음).")).toBeTruthy();
+    expect(await screen.findByText("내 위치 반경 1km 안에 주정차 단속 CCTV가 없습니다(제주시 자료만 있음).")).toBeTruthy();
     expect(screen.getByRole("region", { name: "교통 현황 지도" }).getAttribute("data-facilities")).toBe("0");
     cleanup();
 

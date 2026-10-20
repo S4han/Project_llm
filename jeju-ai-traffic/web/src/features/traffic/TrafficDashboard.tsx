@@ -26,10 +26,11 @@ const SPEED_ORDER: SpeedStatus[] = ["smooth", "slow", "congested"];
 /** 도로 목록을 한 번에 보여 줄 개수. */
 const ROAD_PAGE = 20;
 
-/** 주정차 단속은 내 위치 반경 안만 보인다(TASK-016, 사용자 "반경 5키로"). */
-export const ENFORCEMENT_RADIUS_METERS = 5000;
-/** 반경 5km 조회라 경로 추천(200m)보다 느슨하게 받는다. */
-const ENFORCEMENT_LOCATION_ACCURACY_METERS = 1000;
+/** 주정차 단속은 내 위치 반경 안만 보인다(TASK-016, 사용자 "반경을 1키로로 수정"). */
+export const ENFORCEMENT_RADIUS_METERS = 1000;
+const RADIUS_TEXT = `${ENFORCEMENT_RADIUS_METERS / 1000}km`;
+/** 반경 1km라 경로 추천과 같은 정확도 기준(200m)으로 받는다. */
+const ENFORCEMENT_LOCATION_ACCURACY_METERS = 200;
 
 /** 실시간 정체·서행구간을 한 번에 보여 줄 줄 수(TASK-015). */
 const CHAIN_PAGE = 20;
@@ -567,7 +568,7 @@ export function TrafficDashboard() {
             </h2>
             <p className="text-xs text-grey-600">
               제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV·웹카메라 점을 누르면 제주 ITS 교통정보센터(새 창)로 연결되며, 사이트의 CCTV 메뉴에서 같은 위치를 고르면 영상을 볼 수 있습니다. 주정차 단속은
-              제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다{enforcement?.source === "mock" && "(모의 데이터)"}. 켜면 현재 위치를 한 번 확인해 반경 5km 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나
+              제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다{enforcement?.source === "mock" && "(모의 데이터)"}. 켜면 현재 위치를 한 번 확인해 반경 {RADIUS_TEXT} 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나
               저장하지 않습니다).
             </p>
           </div>
@@ -623,8 +624,8 @@ export function TrafficDashboard() {
                 {locating || !myLocation
                   ? "현재 위치 확인 중…"
                   : nearbyCount > 0
-                    ? `내 위치 반경 5km 안 주정차 단속 CCTV ${nearbyCount.toLocaleString("ko-KR")}곳`
-                    : "내 위치 반경 5km 안에 주정차 단속 CCTV가 없습니다(제주시 자료만 있음)."}
+                    ? `내 위치 반경 ${RADIUS_TEXT} 안 주정차 단속 CCTV ${nearbyCount.toLocaleString("ko-KR")}곳`
+                    : `내 위치 반경 ${RADIUS_TEXT} 안에 주정차 단속 CCTV가 없습니다(제주시 자료만 있음).`}
               </span>
               {myLocation && !locating && (
                 <button type="button" onClick={() => void locate()} className="min-h-12 shrink-0 rounded-2xl bg-white px-3 font-semibold text-grey-700">
