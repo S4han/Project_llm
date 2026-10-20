@@ -214,7 +214,7 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
   const renderer = canvasSupported() ? L.canvas({ pane: "facilities", padding: 0.5, tolerance: 6 }) : L.svg({ pane: "facilities" });
   for (const p of points) {
     const style = FACILITY_STYLE[p.type];
-    L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: 5, color: "#fff", weight: 1.5, fillColor: style.color, fillOpacity: 1 })
+    L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: style.stroke ? 6 : 5, color: style.stroke ?? "#fff", weight: style.stroke ? 2 : 1.5, fillColor: style.color, fillOpacity: 1 })
       .bindPopup(
         popupContent(
           `${style.label} · ${p.name || "위치 이름 없음"}${p.model ? ` · 모델 ${p.model}` : ""}${p.detail ? `\n${p.detail}` : ""}`,

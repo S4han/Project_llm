@@ -558,7 +558,11 @@ export function TrafficDashboard() {
                       className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-2xl px-3 text-left text-sm disabled:opacity-40 ${on ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
                     >
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="inline-block h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: FACILITY_STYLE[t].color }} aria-hidden="true" />
+                        <span
+                          className="inline-block h-3 w-3 shrink-0 rounded-full"
+                          style={{ backgroundColor: FACILITY_STYLE[t].color, boxShadow: FACILITY_STYLE[t].stroke ? `inset 0 0 0 2px ${FACILITY_STYLE[t].stroke}` : undefined }}
+                          aria-hidden="true"
+                        />
                         <span className="truncate font-semibold text-grey-800">{FACILITY_STYLE[t].short}</span>
                       </span>
                       <span className="shrink-0 tabular-nums text-grey-700">{n.toLocaleString("ko-KR")}</span>
