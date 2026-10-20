@@ -11,10 +11,5 @@
       "source": "/traffic",
       "destination": "/index.html"
     }
-  ],
-  "functions": {
-    "api/nodelink-probe.ts": {
-      "maxDuration": 60
-    }
-  }
+  ]
 }
