@@ -10,6 +10,10 @@
     {
       "source": "/traffic",
       "destination": "/index.html"
+    },
+    {
+      "source": "/route",
+      "destination": "/index.html"
     }
   ],
   "functions": {

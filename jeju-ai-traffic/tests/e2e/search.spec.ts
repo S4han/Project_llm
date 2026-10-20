@@ -14,7 +14,7 @@ test.describe("출발지·목적지 선택 (모바일 390×844)", () => {
   test("위치 권한 허용 → 현재 위치 출발지, 목적지 선택, 경로 조회 버튼 활성", async ({ browser }) => {
     const context = await newClientContext(browser, { permissions: ["geolocation"], geolocation: { ...AIRPORT, accuracy: 15 } });
     const page = await context.newPage();
-    await page.goto("/");
+    await page.goto("/route");
     await shot(page, "TASK-004-01-initial");
 
     await page.getByRole("button", { name: "현재 위치 사용" }).click();
@@ -39,7 +39,7 @@ test.describe("출발지·목적지 선택 (모바일 390×844)", () => {
   test("위치 권한 거부 → 안내 후 출발지 직접 검색", async ({ browser }) => {
     const context = await newClientContext(browser, { permissions: [] });
     const page = await context.newPage();
-    await page.goto("/");
+    await page.goto("/route");
     await page.getByRole("button", { name: "현재 위치 사용" }).click();
     await expect(page.getByText("위치 권한이 거부되었습니다. 출발지를 직접 검색하세요.")).toBeVisible();
     await expect(page.getByRole("searchbox", { name: "출발지" })).toBeVisible();
@@ -59,7 +59,7 @@ test.describe("출발지·목적지 선택 (모바일 390×844)", () => {
       geolocation: { latitude: 37.5665, longitude: 126.978, accuracy: 10 },
     });
     const page = await context.newPage();
-    await page.goto("/");
+    await page.goto("/route");
     await page.getByRole("button", { name: "현재 위치 사용" }).click();
     await expect(page.getByText("현재 위치가 제주 밖입니다. 출발지를 직접 검색하세요.")).toBeVisible();
     await expect(page.getByRole("searchbox", { name: "출발지" })).toBeVisible();
@@ -69,7 +69,7 @@ test.describe("출발지·목적지 선택 (모바일 390×844)", () => {
   test("정확도 부족 → 재확인 안내", async ({ browser }) => {
     const context = await newClientContext(browser, { permissions: ["geolocation"], geolocation: { ...AIRPORT, accuracy: 850 } });
     const page = await context.newPage();
-    await page.goto("/");
+    await page.goto("/route");
     await page.getByRole("button", { name: "현재 위치 사용" }).click();
     await expect(page.getByText(/위치가 정확하지 않습니다/)).toBeVisible();
     await expect(page.getByRole("button", { name: "현재 위치 다시 확인" })).toBeVisible();
@@ -78,7 +78,7 @@ test.describe("출발지·목적지 선택 (모바일 390×844)", () => {
   });
 
   test("검색 결과 없음 / 조회 제한 안내", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/route");
     await page.getByRole("searchbox", { name: "목적지" }).fill("없는장소이름");
     await page.getByRole("searchbox", { name: "목적지" }).press("Enter");
     await expect(page.getByText("제주에서 검색 결과가 없습니다.")).toBeVisible();
@@ -105,7 +105,7 @@ test.describe("출발지·목적지 선택 (모바일 390×844)", () => {
   test("출발지와 목적지가 같으면 조회 차단", async ({ browser }) => {
     const context = await newClientContext(browser, { permissions: ["geolocation"], geolocation: { ...AIRPORT, accuracy: 10 } });
     const page = await context.newPage();
-    await page.goto("/");
+    await page.goto("/route");
     await page.getByRole("button", { name: "현재 위치 사용" }).click();
     await pickDestination(page, "공항", "제주국제공항");
     await expect(page.getByText("출발지와 목적지가 같습니다. 다른 목적지를 선택하세요.")).toBeVisible();
@@ -114,7 +114,7 @@ test.describe("출발지·목적지 선택 (모바일 390×844)", () => {
   });
 
   test("가로 스크롤이 생기지 않는다", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/route");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(0);
   });

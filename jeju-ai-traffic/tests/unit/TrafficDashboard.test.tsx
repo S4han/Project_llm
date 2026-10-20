@@ -72,7 +72,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     const groups = screen.getByRole("list", { name: "확인된 교통 사건" });
     expect(within(groups).getAllByRole("button").map((b) => b.textContent?.match(/^(.+?\d+건)/)?.[1])).toEqual(["정지차량 감지 3건", "지정체구간 감지 1건", "공사 도로 공사 1건"]);
     expect(screen.getByText(/10월 20일 09:33 조회/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "← 경로 추천" }).getAttribute("href")).toBe("/");
+    expect(screen.getByRole("link", { name: "경로 추천 →" }).getAttribute("href")).toBe("/route");
     expect(screen.getByText("운전 중에는 화면을 조작하지 마세요.")).toBeTruthy();
     expect(screen.getByRole("contentinfo").textContent).toContain("제주 ITS");
   });

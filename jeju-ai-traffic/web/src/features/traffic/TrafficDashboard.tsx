@@ -207,8 +207,8 @@ export function TrafficDashboard() {
       <main className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_auto_auto_auto_auto_1fr]">
         <div className={`flex items-center justify-between gap-2 ${PANEL}`}>
           <h1 className="text-2xl font-bold text-slate-900">제주 실시간 교통 현황</h1>
-          <a href="/" className="shrink-0 text-sm font-semibold text-blue-700">
-            ← 경로 추천
+          <a href="/route" className="shrink-0 text-sm font-semibold text-blue-700">
+            경로 추천 →
           </a>
         </div>
         <div className={`flex items-center justify-between gap-2 ${PANEL}`}>

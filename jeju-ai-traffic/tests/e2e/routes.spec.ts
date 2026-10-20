@@ -4,7 +4,7 @@ import { newClientContext, shot, uniqueClient } from "./client";
 const AIRPORT = { latitude: 33.5066, longitude: 126.4929 };
 
 async function setup(page: Page, destinationQuery: string, destinationName: string) {
-  await page.goto("/");
+  await page.goto("/route");
   await page.getByRole("button", { name: "현재 위치 사용" }).click();
   await expect(page.getByText("현재 위치", { exact: true })).toBeVisible();
   await page.getByRole("searchbox", { name: "목적지" }).fill(destinationQuery);

@@ -55,7 +55,7 @@ for (const vp of WIDTHS) {
     });
 
     test("경로 추천: 배치와 가로 스크롤 없음", async ({ page }) => {
-      await page.goto("/");
+      await page.goto("/route");
       await page.getByRole("button", { name: "현재 위치 사용" }).click();
       await page.getByRole("searchbox", { name: "목적지" }).fill("서귀포");
       await page.getByRole("searchbox", { name: "목적지" }).press("Enter");
@@ -98,7 +98,7 @@ test.describe("넓은 화면 간격", () => {
   });
 
   test("경로 추천 왼쪽 출발지는 결과가 길어도 제목 바로 아래", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/route");
     await page.getByRole("button", { name: "현재 위치 사용" }).click();
     await page.getByRole("searchbox", { name: "목적지" }).fill("서귀포");
     await page.getByRole("searchbox", { name: "목적지" }).press("Enter");

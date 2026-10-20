@@ -8,9 +8,15 @@ test.beforeEach(async ({ page }) => {
 
 test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모의 사건)", () => {
   test("경로 화면에서 링크로 이동, 건수·지도·묶음 목록, 지도에서 보기", async ({ page }) => {
+    // 첫 화면이 교통 현황. 경로 추천으로 갔다가 돌아온다. 예전 /traffic 주소도 교통 현황.
     await page.goto("/");
-    await page.getByRole("link", { name: "교통 현황 →" }).click();
-    await expect(page).toHaveURL(/\/traffic$/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 실시간 교통 현황");
+    await page.getByRole("link", { name: "경로 추천 →" }).click();
+    await expect(page).toHaveURL(/\/route$/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 AI 교통 경로 추천");
+    await page.getByRole("link", { name: "← 교통 현황" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await page.goto("/traffic");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 실시간 교통 현황");
     await expect(page.getByText(/조회 · 모의 데이터/)).toBeVisible();
 
@@ -48,7 +54,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await expect(map.locator("path.incident-marker")).toHaveCount(1);
     await expect(page.getByText(/번째 지점 표시 중|지점 표시 중/)).toHaveCount(0);
 
-    await page.getByRole("link", { name: "← 경로 추천" }).click();
+    await page.getByRole("link", { name: "경로 추천 →" }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 AI 교통 경로 추천");
   });
 

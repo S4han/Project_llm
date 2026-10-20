@@ -27,8 +27,8 @@ export function App() {
       <main className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] md:grid-rows-[auto_1fr] md:items-start xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
         <div className="flex items-center justify-between gap-2 md:col-start-1">
           <h1 className="text-2xl font-bold text-slate-900">제주 AI 교통 경로 추천</h1>
-          <a href="/traffic" className="shrink-0 text-sm font-semibold text-blue-700">
-            교통 현황 →
+          <a href="/" className="shrink-0 text-sm font-semibold text-blue-700">
+            ← 교통 현황
           </a>
         </div>
         <div className="md:col-start-1">
