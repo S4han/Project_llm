@@ -120,8 +120,8 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
   it("도로 소통: 속도가 있는 구간만 원활·서행·정체로 세고, 끄고 켤 수 있다", async () => {
     render(<TrafficDashboard />);
     const counts = await screen.findByRole("list", { name: "구간 소통 건수" });
-    await within(counts).findByText("원활 1구간");
-    expect(counts.textContent).toBe("원활 1구간서행 1구간정체 1구간");
+    await within(counts).findByText("3");
+    expect(within(counts).getAllByRole("button").map((b) => b.textContent)).toEqual(["전체3", "원활1", "서행1", "정체1"]);
     expect(screen.getByText(/10월 20일 09:30 기준/)).toBeTruthy();
     const map = screen.getByRole("region", { name: "교통 현황 지도" });
     expect(map.getAttribute("data-speed-lines")).toBe("3");
@@ -136,6 +136,31 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     render(<TrafficDashboard />);
     expect(await screen.findByText("구간 속도 정보 미확보(오늘 조회 한도 도달, 10월 21일 00:00 이후 다시 사용 가능)")).toBeTruthy();
     expect(screen.getByText("감지된 사건 5건")).toBeTruthy();
-    expect(screen.getByRole("list", { name: "구간 소통 건수" }).textContent).toBe("원활 –서행 –정체 –");
+    expect(screen.getByRole("list", { name: "구간 소통 건수" }).textContent).toBe("전체–원활–서행–정체–");
+  });
+
+  it("상태 카드를 누르면 그 상태 구간만 지도에, 도로명별 목록 → 도로를 누르면 강조, 전체 보기로 닫음", async () => {
+    render(<TrafficDashboard />);
+    const counts = await screen.findByRole("list", { name: "구간 소통 건수" });
+    await within(counts).findByText("3");
+    const map = screen.getByRole("region", { name: "교통 현황 지도" });
+    expect(screen.queryByRole("list", { name: /도로 목록/ })).toBeNull();
+
+    fireEvent.click(within(counts).getByRole("button", { name: /정체/ }));
+    expect(map.getAttribute("data-speed-lines")).toBe("1");
+    const list = screen.getByRole("list", { name: "정체 도로 목록" });
+    expect(screen.getByText("정체 도로 1곳 · 구간이 많은 순")).toBeTruthy();
+    const road = within(list).getByRole("button", { name: /평화로/ });
+    expect(road.textContent).toContain("평화로 · 정체 1구간 · 평균 8km/h");
+
+    fireEvent.click(road);
+    expect(road.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("평화로 정체 1구간 표시 중")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "전체 보기" }));
+    expect(screen.queryByText(/구간 표시 중/)).toBeNull();
+
+    fireEvent.click(within(counts).getByRole("button", { name: /전체/ }));
+    expect(map.getAttribute("data-speed-lines")).toBe("3");
+    expect(screen.queryByRole("list", { name: /도로 목록/ })).toBeNull();
   });
 });

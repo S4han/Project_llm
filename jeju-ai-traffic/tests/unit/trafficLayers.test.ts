@@ -7,7 +7,7 @@ import { createMockLinkProvider, createVworldLinkProvider, parseVworldPage, toLi
 import { handleTrafficLinks, handleTrafficSpeeds, selectLinkProvider, selectSpeedProvider, type TrafficLinksDeps } from "../../api/_lib/trafficLayers";
 import { decodePolyline, encodePolyline, simplifyLine } from "../../shared/rules/polyline";
 import { speedStatus } from "../../shared/rules/traffic";
-import { joinSpeedLines } from "../../web/src/features/traffic/speedLines";
+import { groupByRoad, joinSpeedLines } from "../../web/src/features/traffic/speedLines";
 
 const NOW = new Date("2026-10-20T01:00:00.000Z");
 
@@ -71,6 +71,18 @@ describe("구간 속도 규칙·형식 (TASK-012)", () => {
     expect(urls[0]!.searchParams.get("data")).toBe("LT_L_MOCTLINK");
     expect(urls[0]!.searchParams.get("domain")).toBe("https://jeju-its-probe.vercel.app");
     expect(urls[0]!.searchParams.get("crs")).toBe("EPSG:4326");
+  });
+
+  it("도로명별 묶음: 구간이 많은 순, 같으면 느린 순, 도로명 없음은 맨 아래", () => {
+    const l = (id: string, name: string, kmh: number) => ({ id, name, points: [], kmh, travelSeconds: 0, status: speedStatus(kmh) });
+    const groups = groupByRoad([l("1", "", 5), l("2", "", 6), l("3", "", 7), l("4", "노형로", 10), l("5", "노형로", 14), l("6", "연북로", 9), l("7", "평화로", 12)]);
+    expect(groups.map((g) => [g.label, g.count, g.avgKmh])).toEqual([
+      ["노형로", 2, 12],
+      ["연북로", 1, 9],
+      ["평화로", 1, 12],
+      ["도로명 없음", 3, 6],
+    ]);
+    expect(groups[0]!.ids).toEqual(["4", "5"]);
   });
 
   it("화면용 결합: 속도가 없는 구간은 그리지 않는다", () => {

@@ -120,17 +120,39 @@ export interface SpeedLine {
   status: SpeedStatus;
 }
 
+/** 확대 수준에 따른 구간 선 두께. 섬 전체(9~10)에서는 가늘게 그려 선이 뭉쳐 보이지 않게 한다(TASK-012 "3. (a)"). */
+export function speedLineWeight(zoom: number, highlighted: boolean): number {
+  const base = zoom <= 10 ? 1.5 : zoom <= 11 ? 2 : zoom <= 13 ? 3 : 4;
+  return highlighted ? base + 4 : base;
+}
+
 /**
  * 구간 속도 선을 그린다. 수천 개라 SVG 대신 캔버스로 그리고, 사건 점보다 아래 칸(pane)에 둔다.
- * 선을 누르면 "도로명 · 평균 34km/h · 통행 2분 · HH:MM 기준" 팝업.
+ * 강조 구간(highlightIds)은 굵게 맨 위에. 선을 누르면 "도로명 · 평균 34km/h · 통행 2분 · HH:MM 기준" 팝업.
+ * 확대 수준이 바뀌면 updateSpeedLineWeights로 두께만 바꾼다.
  */
-export function addSpeedLines(map: L.Map, layer: L.LayerGroup, lines: SpeedLine[], observedAt: string | null) {
+export function addSpeedLines(map: L.Map, layer: L.LayerGroup, lines: SpeedLine[], observedAt: string | null, highlightIds: Set<string> = new Set()): L.Polyline[] {
   if (!map.getPane("speeds")) map.createPane("speeds").style.zIndex = "350";
   const renderer = canvasSupported() ? L.canvas({ pane: "speeds", padding: 0.5, tolerance: 6 }) : L.svg({ pane: "speeds" });
   const at = observedAt ? ` · ${formatKstTime(observedAt)} 기준` : "";
-  for (const line of lines) {
-    L.polyline(line.points.map(toLatLng), { renderer, pane: "speeds", color: STATUS_STYLE[line.status].color, weight: 4, opacity: 0.85 })
-      .bindPopup(`${line.name || "도로명 없음"} · 평균 ${line.kmh}km/h · 통행 ${formatDuration(line.travelSeconds)}${at}`)
-      .addTo(layer);
-  }
+  const zoom = map.getZoom() || 10;
+  const ordered = [...lines].sort((a, b) => Number(highlightIds.has(a.id)) - Number(highlightIds.has(b.id)));
+  return ordered.map((line) => {
+    const highlighted = highlightIds.has(line.id);
+    const pl = L.polyline(line.points.map(toLatLng), {
+      renderer,
+      pane: "speeds",
+      color: STATUS_STYLE[line.status].color,
+      weight: speedLineWeight(zoom, highlighted),
+      opacity: highlightIds.size > 0 && !highlighted ? 0.35 : 0.9,
+    });
+    (pl as L.Polyline & { highlighted?: boolean }).highlighted = highlighted;
+    pl.bindPopup(`${line.name || "도로명 없음"} · 평균 ${line.kmh}km/h · 통행 ${formatDuration(line.travelSeconds)}${at}`).addTo(layer);
+    return pl;
+  });
+}
+
+export function updateSpeedLineWeights(map: L.Map, polylines: L.Polyline[]) {
+  const zoom = map.getZoom();
+  for (const pl of polylines) pl.setStyle({ weight: speedLineWeight(zoom, Boolean((pl as L.Polyline & { highlighted?: boolean }).highlighted)) });
 }
