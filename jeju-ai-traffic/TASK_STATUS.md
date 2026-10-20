@@ -8,12 +8,12 @@
 | 항목 | 값 |
 |---|---|
 | 현재 TASK | **TASK-013** — 교통시설물 지도 표시 |
-| 상태 | **진행 중** |
+| 상태 | **결과 검토** |
 | 실행 주체 | Claude (사용자 지정, 2026-10-18) |
 | 승인 범위 | 제주 ITS 교통시설물정보(`getFacilityInfo`, 7개 유형) 시험 호출 10건 이내(Preview 임시 함수), `GET /api/traffic/facilities`(서버 하루·CDN 7일 보관), 교통 현황 "교통시설물" 카드(도로 소통 아래, 유형별 켜기·기본 모두 꺼짐)·지도 점·팝업, 테스트·보고서 (`DECISIONS.md` 2026-10-20) |
 | 차단 요인 | 없음 |
-| 결과 보고서 | — (TASK-012: `reports/TASK-012-RESULT.md`, 완료) |
-| 다음 행동 | 시험 호출(Preview 임시 함수) → 구현 → `reports/TASK-013-RESULT.md` → 결과 검토 |
+| 결과 보고서 | `reports/TASK-013-RESULT.md` |
+| 다음 행동 | 사용자 결과 검토(새 Preview 교통 현황에서 교통시설물 실데이터 확인) → `완료 승인: TASK-013` (공개 반영은 별도 `main 반영`) |
 | 최종 갱신 | 2026-10-20 |
 
 ## 상태 정의
@@ -42,4 +42,4 @@
 | TASK-010 | 변경 안내 | **완료** (2026-10-19) | `reports/TASK-010-RESULT.md` |
 | TASK-011 | 품질/출시 | **완료** (2026-10-20) | `reports/TASK-011-RESULT.md` |
 | TASK-012 | ITS 대시보드 (MVP 이후 추가) | **완료** (2026-10-20) | `reports/TASK-012-RESULT.md` |
-| TASK-013 | 교통시설물 표시 (MVP 이후 추가) | **진행 중** | — |
+| TASK-013 | 교통시설물 표시 (MVP 이후 추가) | **결과 검토** | `reports/TASK-013-RESULT.md` |

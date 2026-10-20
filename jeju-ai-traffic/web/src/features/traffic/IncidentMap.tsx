@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import type { TrafficIncident } from "../../../../shared/contracts/traffic";
-import { addIncidentMarkers, addSpeedLines, FOCUS_ZOOM, toLatLng, updateSpeedLineWeights, useLeafletMap, type IncidentFocus, type SpeedLine } from "../map/leafletMap";
+import { addFacilityMarkers, addIncidentMarkers, addSpeedLines, FOCUS_ZOOM, toLatLng, updateSpeedLineWeights, useLeafletMap, type FacilityPoint, type IncidentFocus, type SpeedLine } from "../map/leafletMap";
 
 /** 제주도 전체가 보이는 범위. */
 const JEJU_BOUNDS: [[number, number], [number, number]] = [
@@ -23,16 +23,28 @@ interface Props {
   heightClass?: string;
   /** 지도 가운데에 반투명으로 띄울 안내(예: "도로 소통 불러오는 중…"). */
   overlay?: string | null;
+  /** 켜 둔 유형의 교통시설물(TASK-013). */
+  facilities?: FacilityPoint[];
 }
 
 const NO_IDS: string[] = [];
+const NO_FACILITIES: FacilityPoint[] = [];
 
 /** 제주 전체 교통 사건 지도(TASK-012). */
-export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null }: Props) {
+export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null, facilities = NO_FACILITIES }: Props) {
   const { attach, mapRef, layerRef, mapReady, failed, tilesFailed } = useLeafletMap();
   const speedLayer = useRef<L.LayerGroup | null>(null);
   const polylines = useRef<L.Polyline[]>([]);
   const highlightKey = highlightIds.join(",");
+
+  const facilityLayer = useRef<L.LayerGroup | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    if (!facilityLayer.current || !map.hasLayer(facilityLayer.current)) facilityLayer.current = L.layerGroup().addTo(map);
+    facilityLayer.current.clearLayers();
+    addFacilityMarkers(map, facilityLayer.current, facilities);
+  }, [mapReady, mapRef, facilities]);
 
   // 확대 수준이 바뀌면 선 두께만 바꾼다(다시 그리지 않음).
   useEffect(() => {
@@ -92,7 +104,7 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
   return (
     <div className="flex flex-col gap-1">
       <div className="relative">
-        <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} className={`${heightClass} w-full overflow-hidden rounded-[20px] bg-grey-200`} />
+        <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} data-facilities={facilities.length} className={`${heightClass} w-full overflow-hidden rounded-[20px] bg-grey-200`} />
         {overlay && (
           <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center">
             <p className="rounded-2xl bg-white/85 px-4 py-2 text-sm font-semibold text-grey-700 shadow">{overlay}</p>

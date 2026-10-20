@@ -114,5 +114,21 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await expect(progress).toHaveCount(0, { timeout: 10_000 });
     await expect(page.getByRole("region", { name: "교통 현황 지도" })).toHaveAttribute("data-speed-lines", "4");
   });
+
+  test("교통시설물: 기본 꺼짐, 유형을 누르면 지도에 표시 (TASK-013, 개발 서버 모의)", async ({ page }) => {
+    await page.goto("/");
+    const list = page.getByRole("list", { name: "교통시설물 유형" });
+    const buttons = list.getByRole("button");
+    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1"]);
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+    await expect(map).toHaveAttribute("data-facilities", "0");
+    await list.getByRole("button", { name: /CCTV/ }).click();
+    await list.getByRole("button", { name: /VMS/ }).click();
+    await expect(map).toHaveAttribute("data-facilities", "5");
+    await expect(list.getByRole("button", { name: /CCTV/ })).toHaveAttribute("aria-pressed", "true");
+    await shot(page, "TASK-013-01-facilities");
+    await list.getByRole("button", { name: /CCTV/ }).click();
+    await expect(map).toHaveAttribute("data-facilities", "2");
+  });
 });
 

@@ -20,6 +20,7 @@ Vercel → 프로젝트 → Settings → Environment Variables. Production·Prev
 | `AI_PROVIDER=cloudflare` | AI 설명 켜기 | 규칙 기반 설명만 |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_TOKEN` | Workers AI (토큰은 Workers AI 권한만, Sensitive) | 규칙 기반 설명만 |
 | `JEJU_ITS_TRAFFIC_API_KEY` | 제주 ITS 실시간 교통정보(구간 속도) 전용 키 (Sensitive, TASK-012) | `/traffic` 구간 속도 모의 |
+| `JEJU_ITS_FACILITY_API_KEY` (선택) | 제주 ITS 교통시설물정보 전용 키. 없으면 `JEJU_ITS_TRAFFIC_API_KEY` 사용(TASK-013) | 시설물 모의 |
 | `VWORLD_API_KEY` | 브이월드 2D 데이터 API 키 (Sensitive, 서비스 주소 `https://jeju-its-probe.vercel.app` 등록, TASK-012). `VWORLD_DOMAIN`으로 등록 주소 변경 가능 | `/traffic` 구간 모양 모의 |
 | `CF_AI_MODEL` (선택) | 모델 이름 | 기본 `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
 

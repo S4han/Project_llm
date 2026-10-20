@@ -1,5 +1,5 @@
 import type { ApiError, ApiErrorBody } from "../../../shared/contracts/common";
-import type { TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../shared/contracts/traffic";
+import type { TrafficFacilitiesResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../shared/contracts/traffic";
 
 export type TrafficIncidentsResult = { ok: true; data: TrafficIncidentsResponse } | { ok: false; error: ApiError };
 
@@ -45,4 +45,9 @@ export function fetchTrafficSpeeds(signal?: AbortSignal): Promise<Result<Traffic
 /** GET /api/traffic/links(TASK-012): 구간 모양(CDN 30일 보관). 화면을 열 때 한 번만 부른다. */
 export function fetchTrafficLinks(signal?: AbortSignal): Promise<Result<TrafficLinksResponse>> {
   return getJson<TrafficLinksResponse>("/api/traffic/links", (b) => "links" in b, signal);
+}
+
+/** GET /api/traffic/facilities(TASK-013): 교통시설물 위치(서버 하루·CDN 7일 보관). 화면을 열 때 한 번만 부른다. */
+export function fetchTrafficFacilities(signal?: AbortSignal): Promise<Result<TrafficFacilitiesResponse>> {
+  return getJson<TrafficFacilitiesResponse>("/api/traffic/facilities", (b) => "facilities" in b, signal);
 }

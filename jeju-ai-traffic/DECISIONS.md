@@ -171,3 +171,5 @@
 | 2026-10-20 | TASK-013 | 계획 승인 | "계획 승인: TASK-013 1. (a) 2. 승인 3. 승인 4. 승인" | 계획 검토 → 진행 중 | 1.(a) 시설물 기본 모두 꺼짐 2. 시험 호출 10건 이내 3. 서버 하루·CDN 7일 보관 4. 도로 소통 카드 아래 + 같은 지도 |
 | 2026-10-20 | TASK-013 | 기타 | (시험 1차 결과) | — | getFacilityInfo FTY01: 기존 키·실시간 교통정보 키 모두 HTTP 400(본문 173바이트). 키 미등록이면 200 "code not registered"였으므로 요청 형식 문제로 판단. 2차: 오류 본문 표시·파라미터 형식 3가지(최대 3건, 누적 최대 5/10건) |
 | 2026-10-20 | TASK-013 | 기타 | (시험 2차 결과) | — | 누적 5/10건. getFacilityInfo 파라미터는 `fcltType`(안내 페이지의 fdtType은 오기, 서버 메시지 "Required String parameter 'fcltType' is not present"). `fcltType=FTY01` + 기존 키 → 200 "code not registered"(이 API 미등록). 사용자 활용 신청 필요. 3차는 전용 키 `JEJU_ITS_FACILITY_API_KEY`(없으면 기존 키)로 VMS·CCTV 2건(누적 최대 7건) |
+| 2026-10-20 | TASK-013 | 기타 | (시험 3차 결과) | — | 누적 7/10건. `JEJU_ITS_TRAFFIC_API_KEY`로 getFacilityInfo `fcltType` 조회 success: FTY01 VMS 68개, FTY02 CCTV 202개. 항목 fclt_id·fclt_type·fclt_lctn·mdl_nm·x_crdn·y_crdn. **x_crdn=위도, y_crdn=경도**(이름 반대), 일부 좌표 0(무효), 모델명 "-"=없음. 별도 활용 신청 불필요. 확인 함수 삭제 |
+| 2026-10-20 | TASK-013 | 상태 | (구현 완료, 보고서 작성) | 진행 중 → 결과 검토 | `/api/traffic/facilities`·교통시설물 카드·지도 점 구현, `reports/TASK-013-RESULT.md` |

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
+import type { TrafficFacilitiesResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
 import { encodePolyline } from "../../shared/rules/polyline";
 import { REFRESH_MS, TrafficDashboard } from "../../web/src/features/traffic/TrafficDashboard";
 
@@ -20,7 +20,20 @@ const line = encodePolyline([{ lat: 33.5, lng: 126.5 }, { lat: 33.49, lng: 126.5
 const LINKS: TrafficLinksResponse = { links: [["4050000001", "노형로", line], ["4050000002", "연북로", line], ["4050000003", "평화로", line], ["4050000009", "속도없음로", line]], builtAt: AT, source: "vworld" };
 const SPEEDS: TrafficSpeedsResponse = { status: "ok", observedAt: "2026-10-20T00:30:00.000Z", speeds: { "4050000001": [45, 60], "4050000002": [20, 130], "4050000003": [8, 400] }, source: "jejuIts", retryAfter: null };
 
+const FACILITIES: TrafficFacilitiesResponse = {
+  facilities: [
+    ["V1", "FTY01", "축산마을입구", "", 33.44, 126.49],
+    ["C1", "FTY02", "이호테우해변입구교차로", "TCS-3500", 33.49, 126.45],
+    ["C2", "FTY02", "신광사거리", "MMK-H208", 33.49, 126.49],
+    ["R1", "FTY23", "1100고지", "", 33.36, 126.46],
+  ],
+  failedTypes: [],
+  builtAt: AT,
+  source: "jejuIts",
+};
+
 let respond: () => Response;
+let facilitiesRespond: () => Response;
 let speedsRespond: () => Response;
 let speedCalls = 0;
 let linksRespond: () => Response | Promise<Response>;
@@ -37,6 +50,7 @@ beforeEach(() => {
   speedCalls = 0;
   linksRespond = () => Response.json(LINKS);
   linksCalls = 0;
+  facilitiesRespond = () => Response.json(FACILITIES);
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.stubGlobal(
@@ -46,6 +60,7 @@ beforeEach(() => {
         speedCalls += 1;
         return speedsRespond();
       }
+      if (url.startsWith("/api/traffic/facilities")) return facilitiesRespond();
       if (url.startsWith("/api/traffic/links")) {
         linksCalls += 1;
         return linksRespond();
@@ -228,5 +243,31 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(screen.queryByRole("status", { name: "도로 소통 처리 현황" })).toBeNull();
     await act(async () => release(Response.json(SPEEDS)));
     await waitFor(() => expect(within(region).queryByText("· 갱신 중…")).toBeNull());
+  });
+
+  it("교통시설물: 유형별 개수, 기본 모두 꺼짐, 누르면 지도에 켜고 끈다, 없는 유형은 누를 수 없음", async () => {
+    render(<TrafficDashboard />);
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    const buttons = within(list).getAllByRole("button");
+    expect(buttons.map((b) => b.textContent)).toEqual(["VMS1", "CCTV2", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1"]);
+    expect(buttons.every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
+    expect((within(list).getByRole("button", { name: /웹카메라/ }) as HTMLButtonElement).disabled).toBe(true);
+    const map = screen.getByRole("region", { name: "교통 현황 지도" });
+    expect(map.getAttribute("data-facilities")).toBe("0");
+    fireEvent.click(within(list).getByRole("button", { name: /CCTV/ }));
+    expect(map.getAttribute("data-facilities")).toBe("2");
+    fireEvent.click(within(list).getByRole("button", { name: /RWIS/ }));
+    expect(map.getAttribute("data-facilities")).toBe("3");
+    fireEvent.click(within(list).getByRole("button", { name: /CCTV/ }));
+    expect(map.getAttribute("data-facilities")).toBe("1");
+  });
+
+  it("교통시설물 실패 시 안내와 다시 시도", async () => {
+    facilitiesRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
+    render(<TrafficDashboard />);
+    const msg = await screen.findByText("교통시설물을 불러오지 못했습니다.");
+    facilitiesRespond = () => Response.json(FACILITIES);
+    fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
+    expect(await screen.findByRole("list", { name: "교통시설물 유형" })).toBeTruthy();
   });
 });

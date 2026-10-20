@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { IncidentKind, SpeedStatus, TrafficIncident, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../../shared/contracts/traffic";
+import type { FacilityType, IncidentKind, SpeedStatus, TrafficFacilitiesResponse, TrafficIncident, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../../shared/contracts/traffic";
 import { isStale } from "../../../../shared/rules/traffic";
-import { fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds } from "../../services/trafficApi";
-import type { SpeedLine } from "../map/leafletMap";
+import { fetchTrafficFacilities, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds } from "../../services/trafficApi";
+import type { FacilityPoint, SpeedLine } from "../map/leafletMap";
+import { FACILITY_ORDER, FACILITY_STYLE } from "./facilityStyle";
 import { IncidentFocusBar, IncidentGroupList } from "../routes/IncidentFocus";
 import { groupIncidents, useIncidentFocus } from "../routes/incidents";
 import { INCIDENT_LABEL, STATUS_STYLE } from "../routes/trafficStyle";
@@ -55,6 +56,11 @@ export function TrafficDashboard() {
   const [clock, setClock] = useState(() => Date.now());
   const [speedsBusy, setSpeedsBusy] = useState(true);
   const [speedsError, setSpeedsError] = useState(false);
+  // 교통시설물(TASK-013): 화면을 열 때 한 번 받고, 유형은 기본 모두 꺼 둔다(승인 1. (a)).
+  const [facilities, setFacilities] = useState<TrafficFacilitiesResponse | null>(null);
+  const [facilitiesLoading, setFacilitiesLoading] = useState(true);
+  const [facilitiesProblem, setFacilitiesProblem] = useState(false);
+  const [facilityTypes, setFacilityTypes] = useState<Set<FacilityType>>(() => new Set());
   const [showSpeeds, setShowSpeeds] = useState(true);
   // 도로 소통 상태 카드·도로 목록(TASK-012 소통대시보드)
   const [speedFilter, setSpeedFilter] = useState<SpeedStatus | "all">("all");
@@ -125,6 +131,23 @@ export function TrafficDashboard() {
     };
   }, [fetchLinks]);
 
+  const fetchFacilities = useCallback(async () => {
+    const r = await fetchTrafficFacilities();
+    if (!alive.current) return;
+    setFacilitiesLoading(false);
+    setFacilitiesProblem(!r.ok);
+    if (r.ok) setFacilities(r.data);
+  }, []);
+  const retryFacilities = () => {
+    setFacilitiesLoading(true);
+    setFacilitiesProblem(false);
+    void fetchFacilities();
+  };
+  useEffect(() => {
+    const first = setTimeout(() => void fetchFacilities(), 0);
+    return () => clearTimeout(first);
+  }, [fetchFacilities]);
+
   // 도로 모양을 받는 동안 경과 시간(초)을 1초마다 갱신한다.
   useEffect(() => {
     if (!linksLoading) return;
@@ -165,6 +188,25 @@ export function TrafficDashboard() {
   const roadIdsKey = road?.ids.join(",") ?? "";
   const highlightIds = useMemo(() => (roadIdsKey ? roadIdsKey.split(",") : EMPTY_IDS), [roadIdsKey]);
   const speedStale = speeds?.observedAt ? now.getTime() - Date.parse(speeds.observedAt) > SPEED_STALE_MS : false;
+  const facilityCounts = useMemo(() => {
+    const counts = Object.fromEntries(FACILITY_ORDER.map((t) => [t, 0])) as Record<FacilityType, number>;
+    for (const f of facilities?.facilities ?? []) counts[f[1]] += 1;
+    return counts;
+  }, [facilities]);
+  const facilityPoints = useMemo<FacilityPoint[]>(
+    () =>
+      (facilities?.facilities ?? [])
+        .filter((f) => facilityTypes.has(f[1]))
+        .map(([id, type, name, model, lat, lng]) => ({ id, type, name, model, lat, lng })),
+    [facilities, facilityTypes],
+  );
+  const toggleFacility = (t: FacilityType) =>
+    setFacilityTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t);
+      else next.add(t);
+      return next;
+    });
   const linksSeconds = Math.max(0, Math.floor((clock - linksStartedAt) / 1000));
   const firstSpeeds = speeds === null && speedsBusy;
   const showProgress = linksLoading || firstSpeeds;
@@ -204,7 +246,7 @@ export function TrafficDashboard() {
         반응형(TASK-012 반응형): 휴대폰은 세로 한 줄. 태블릿(md)은 도로 소통·사건 카드를 넓게, 그 아래 큰 지도와 사건 목록.
         PC·아이패드 가로(xl)는 왼쪽에 화면 높이의 지도를 고정하고 오른쪽에 정보 패널.
       */}
-      <main className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_auto_auto_auto_auto_1fr]">
+      <main className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_auto_auto_auto_auto_auto_1fr]">
         <div className={`flex items-center justify-between gap-2 ${PANEL}`}>
           <h1 className="text-[26px] font-bold tracking-tight text-grey-900">제주 실시간 교통 현황</h1>
           <a href="/route" className="shrink-0 text-sm font-semibold text-brand-700">
@@ -376,6 +418,59 @@ export function TrafficDashboard() {
           )}
         </section>
 
+        <section aria-labelledby="facilities-heading" className={`flex flex-col gap-3 rounded-[20px] bg-white p-4 ${PANEL}`}>
+          <div>
+            <h2 id="facilities-heading" className="font-bold text-grey-900">
+              교통시설물
+            </h2>
+            <p className="text-xs text-grey-600">
+              제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV 영상은 제공하지 않습니다.
+            </p>
+          </div>
+          {facilitiesLoading && (
+            <p role="status" aria-label="교통시설물 처리 현황" className="rounded-2xl bg-brand-50 p-2 text-sm text-brand-900">
+              <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
+              교통시설물 불러오는 중…
+            </p>
+          )}
+          {facilitiesProblem && (
+            <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
+              <span>교통시설물을 불러오지 못했습니다.</span>
+              <button type="button" onClick={retryFacilities} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
+                다시 시도
+              </button>
+            </div>
+          )}
+          {facilities && (
+            <ul aria-label="교통시설물 유형" className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
+              {FACILITY_ORDER.map((t) => {
+                const on = facilityTypes.has(t);
+                const n = facilityCounts[t];
+                return (
+                  <li key={t}>
+                    <button
+                      type="button"
+                      onClick={() => toggleFacility(t)}
+                      aria-pressed={on}
+                      disabled={n === 0}
+                      className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-2xl px-3 text-left text-sm disabled:opacity-40 ${on ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="inline-block h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: FACILITY_STYLE[t].color }} aria-hidden="true" />
+                        <span className="truncate font-semibold text-grey-800">{FACILITY_STYLE[t].short}</span>
+                      </span>
+                      <span className="shrink-0 tabular-nums text-grey-700">{n.toLocaleString("ko-KR")}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {facilities && facilities.failedTypes.length > 0 && (
+            <p className="text-xs text-amber-800">일부 유형({facilities.failedTypes.map((t) => FACILITY_STYLE[t].short).join(", ")})은 받지 못했습니다. 잠시 뒤 다시 확인됩니다.</p>
+          )}
+        </section>
+
         <ul aria-label="종류별 건수" className={`grid grid-cols-4 gap-2 ${PANEL}`}>
           {(["all", ...KINDS] as const).map((k) => {
             const count = k === "all" ? all.length : all.filter((i) => i.kind === k).length;
@@ -396,7 +491,7 @@ export function TrafficDashboard() {
         </ul>
 
 
-        <div ref={mapBox} className="flex flex-col gap-2 md:col-span-2 xl:sticky xl:top-4 xl:col-span-1 xl:col-start-1 xl:row-span-6 xl:row-start-1 xl:self-start">
+        <div ref={mapBox} className="flex flex-col gap-2 md:col-span-2 xl:sticky xl:top-4 xl:col-span-1 xl:col-start-1 xl:row-span-7 xl:row-start-1 xl:self-start">
           <IncidentMap
             incidents={shown}
             focus={incidentFocus.focus}
@@ -405,6 +500,7 @@ export function TrafficDashboard() {
             speedObservedAt={speeds?.observedAt ?? null}
             heightClass="h-80 md:h-[60vh] xl:h-[calc(100dvh-7rem)]"
             overlay={mapOverlay}
+            facilities={facilityPoints}
             highlightIds={showSpeeds ? highlightIds : EMPTY_IDS}
           />
           <IncidentFocusBar state={incidentFocus} />

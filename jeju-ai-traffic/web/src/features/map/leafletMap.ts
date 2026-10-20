@@ -2,8 +2,9 @@ import { useCallback, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Coordinate } from "../../../../shared/contracts/route";
-import type { SpeedStatus, TrafficIncident } from "../../../../shared/contracts/traffic";
+import type { FacilityType, SpeedStatus, TrafficIncident } from "../../../../shared/contracts/traffic";
 import { formatDuration } from "../routes/format";
+import { FACILITY_STYLE } from "../traffic/facilityStyle";
 import { INCIDENT_LABEL, STATUS_STYLE } from "../routes/trafficStyle";
 import { formatKstTime } from "../trip/format";
 
@@ -155,4 +156,26 @@ export function addSpeedLines(map: L.Map, layer: L.LayerGroup, lines: SpeedLine[
 export function updateSpeedLineWeights(map: L.Map, polylines: L.Polyline[]) {
   const zoom = map.getZoom();
   for (const pl of polylines) pl.setStyle({ weight: speedLineWeight(zoom, Boolean((pl as L.Polyline & { highlighted?: boolean }).highlighted)) });
+}
+
+/** 지도에 찍을 교통시설물 하나(TASK-013). */
+export interface FacilityPoint {
+  id: string;
+  type: FacilityType;
+  name: string;
+  model: string;
+  lat: number;
+  lng: number;
+}
+
+/** 교통시설물 점(유형별 색). 수백~수천 개라 캔버스로, 구간 선 위·사건 점 아래 칸에 그린다. 누르면 "유형 · 설치 위치 · 모델". */
+export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: FacilityPoint[]) {
+  if (!map.getPane("facilities")) map.createPane("facilities").style.zIndex = "380";
+  const renderer = canvasSupported() ? L.canvas({ pane: "facilities", padding: 0.5, tolerance: 6 }) : L.svg({ pane: "facilities" });
+  for (const p of points) {
+    const style = FACILITY_STYLE[p.type];
+    L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: 5, color: "#fff", weight: 1.5, fillColor: style.color, fillOpacity: 1 })
+      .bindPopup(`${style.label} · ${p.name || "위치 이름 없음"}${p.model ? ` · 모델 ${p.model}` : ""}`)
+      .addTo(layer);
+  }
 }

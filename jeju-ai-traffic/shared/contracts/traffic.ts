@@ -65,3 +65,17 @@ export interface TrafficLinksResponse {
   builtAt: IsoDateTime;
   source: "vworld" | "mock";
 }
+
+/** 제주 ITS 교통시설물 유형(getFacilityInfo fcltType, TASK-013). */
+export type FacilityType = "FTY01" | "FTY02" | "FTY03" | "FTY07" | "FTY09" | "FTY17" | "FTY23";
+
+/**
+ * GET /api/traffic/facilities 응답(TASK-013). facilities[i] = [시설물 ID, 유형, 설치 위치, 모델명(없으면 ""), 위도, 경도].
+ * failedTypes는 이번에 받지 못한 유형(있으면 짧게만 보관).
+ */
+export interface TrafficFacilitiesResponse {
+  facilities: [string, FacilityType, string, string, number, number][];
+  failedTypes: FacilityType[];
+  builtAt: IsoDateTime;
+  source: "jejuIts" | "mock";
+}

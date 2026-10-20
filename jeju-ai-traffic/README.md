@@ -26,7 +26,7 @@ web/            React 앱 (Vite root, index.html, src/)
   src/features/routes/ 경로 비교 결과·지도(RouteMap)·혼잡 표시·추천 이유(ExplanationCard)·길 안내 시작(NavigationPanel)
   src/features/monitor/ 5분 재평가 제어기(monitor)와 화면(MonitorPanel)
   src/services/       API 호출(placesApi, routesApi, explanationsApi), 위치(geolocation), 앱 주소 열기(appLink)
-api/            Vercel Functions — 파일 하나가 엔드포인트 (api/health.ts, api/places.ts, api/routes/compare.ts, api/explanations.ts, api/traffic/incidents.ts)
+api/            Vercel Functions — 파일 하나가 엔드포인트 (api/health.ts, api/places.ts, api/routes/compare.ts, api/explanations.ts, api/traffic/incidents.ts, api/traffic/speeds.ts, api/traffic/links.ts, api/traffic/facilities.ts)
 api/_lib/       함수 공용 코드 (밑줄 폴더는 Vercel이 엔드포인트로 배포하지 않음)
   errors.ts       오류 코드 ↔ HTTP 상태, 공통 오류 응답
   places.ts       장소 검색 처리(입력 검사·빈도 제한·사용량·제주 필터)
@@ -74,6 +74,7 @@ tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
 - `GET /api/traffic/incidents` → `{ incidents[], status: "ok"|"unavailable"|"quotaBlocked", observedAt, retryAfter }`(TASK-012). 제주 전체 돌발·통제·공사. 경로 조회와 같은 제주 ITS 어댑터·60초 캐시·일일 한도를 쓰고, IP별 분당 20회. 실패·한도는 200 + `status`로 알린다.
 - `GET /api/traffic/speeds` → `{ status, observedAt, speeds: { link_id: [평균속도 km/h, 통행시간 초] }, source, retryAfter }`(TASK-012). 제주 ITS 실시간 교통정보(`getFrafficInfo`, 약 12,000개 구간, 약 5분 단위). 전용 키 `JEJU_ITS_TRAFFIC_API_KEY`. 60초 캐시, 제주 ITS 일일 한도 공유.
 - `GET /api/traffic/links` → `{ links: [[link_id, 도로명, polyline]], builtAt, source }`(TASK-012). 브이월드 교통링크(`LT_L_MOCTLINK`, 제주 범위 약 37,000개 중 속도가 있는 구간)를 3m 단순화해 Google polyline으로. 키 `VWORLD_API_KEY`. 인스턴스 메모리 24시간 + CDN 30일 보관(`s-maxage`).
+- `GET /api/traffic/facilities` → `{ facilities: [[ID, 유형(FTY01~FTY23), 설치 위치, 모델명, 위도, 경도]], failedTypes, builtAt, source }`(TASK-013). 제주 ITS 교통시설물정보(`getFacilityInfo?fcltType=`, 7개 유형). 키는 `JEJU_ITS_FACILITY_API_KEY` 또는 `JEJU_ITS_TRAFFIC_API_KEY`. 서버 하루 + CDN 7일 보관.
 - 화면 주소: `/`(첫 화면) 교통 현황 대시보드, `/route` 경로 추천, `/traffic`(예전 주소) 교통 현황(TASK-012). Vercel은 `vercel.json` `rewrites`로 `/route`·`/traffic`에도 같은 `index.html`을 준다. 대시보드는 화면이 켜져 있을 때만 1분마다 다시 조회한다.
   - 경로 표시 후 화면이 따로 요청한다. 경로 이름은 정해진 4개만 받는다(지시문 주입 방지). IP별 분당 10회.
   - AI 문장은 검증(숫자·도로 이름·조건부 단어·3문장·180자)을 통과해야 쓰고, 아니면 규칙 기반 설명. AI 4초 제한, 일일 200건.
