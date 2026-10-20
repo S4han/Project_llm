@@ -1,10 +1,10 @@
 // TASK-012 일회성 확인용(승인: "계획 승인: TASK-012 소통정보 1. 승인", 시험 호출 5건 이내). 확인 후 삭제한다. main에 넣지 않는다.
-// 열 때마다 실시간 교통정보 API를 1회 호출하고, 실패하면 이름을 바꿔 1회 더 호출한다(최대 2건).
-// 인스턴스당 2번까지만 연다(최대 4건). 키 값은 응답에 넣지 않고, 원본 대신 요약만 돌려준다.
+// 열 때마다 실시간 교통정보 API(getFrafficInfo, 1차 확인에서 이름 확인)를 1회 호출한다.
+// 인스턴스당 2번까지만 연다(최대 2건, 누적 승인 5건 중 1차 2건 사용). 키 값은 응답에 넣지 않고, 원본 대신 요약만 돌려준다.
 // 사용: 미리보기 주소 + /api/traffic-probe 를 한 번만 연다(Vercel icn1, 국내 IP).
 let opens = 0;
 const MAX_OPENS = 2;
-const NAMES = ["getFrafficInfo", "getTrafficInfo"];
+const NAMES = ["getFrafficInfo"];
 
 function clip(v: unknown): unknown {
   return typeof v === "string" && v.length > 40 ? `${v.slice(0, 40)}…` : v;
