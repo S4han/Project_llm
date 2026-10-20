@@ -4,7 +4,13 @@
 // 인스턴스당 1번만 연다. 사용: 미리보기 주소 + /api/nodelink-probe 를 한 번만 연다(Vercel icn1, 국내 IP).
 import { inflateRawSync } from "node:zlib";
 
-const URL_ = "https://www.its.go.kr/opendata/nodelinkFileSDownload/DF_221/0";
+const URLS = ["https://www.its.go.kr/opendata/nodelinkFileSDownload/DF_221/0", "http://www.its.go.kr/opendata/nodelinkFileSDownload/DF_221/0"];
+
+/** fetch 실패의 실제 원인(인증서·DNS·연결 거부 등)을 꺼낸다. */
+function why(e: unknown): Record<string, unknown> {
+  const err = e as { message?: string; cause?: { code?: string; message?: string; reason?: string } };
+  return { message: err.message, causeCode: err.cause?.code, cause: err.cause?.message, reason: err.cause?.reason };
+}
 let opened = false;
 
 async function range(url: string, start: number, end: number): Promise<{ status: number; buf: Buffer; total: number | null }> {
@@ -54,8 +60,20 @@ export async function GET(): Promise<Response> {
   const t0 = Date.now();
   const out: Record<string, unknown> = { region: process.env.VERCEL_REGION ?? null, checkedAt: new Date().toISOString() };
   try {
-    // 1) Range 지원 여부: 첫 4바이트만 요청
-    const first = await fetch(URL_, { headers: { Range: "bytes=0-3" }, redirect: "follow", signal: AbortSignal.timeout(30_000) });
+    // 1) Range 지원 여부: 첫 4바이트만 요청. https가 연결 단계에서 실패하면 http로 한 번 더.
+    const attempts: Record<string, unknown>[] = [];
+    out.attempts = attempts;
+    let first: Response | null = null;
+    for (const u of URLS) {
+      try {
+        first = await fetch(u, { headers: { Range: "bytes=0-3" }, redirect: "follow", signal: AbortSignal.timeout(30_000) });
+        attempts.push({ url: u, status: first.status });
+        break;
+      } catch (e) {
+        attempts.push({ url: u, ...why(e) });
+      }
+    }
+    if (!first) throw new Error("모든 주소 연결 실패");
     const url = first.url;
     out.firstStatus = first.status;
     out.acceptRanges = first.headers.get("accept-ranges");
@@ -145,7 +163,7 @@ export async function GET(): Promise<Response> {
       }
     }
   } catch (e) {
-    out.error = String(e);
+    out.error = why(e);
   }
   out.totalMs = Date.now() - t0;
   out.memoryMb = Math.round(process.memoryUsage().rss / 1e6);
