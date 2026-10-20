@@ -1,6 +1,6 @@
 // TASK-012 일회성 확인용(승인: "계획 승인: TASK-012 소통정보 1. 승인", 시험 호출 5건 이내). 확인 후 삭제한다. main에 넣지 않는다.
 // 열 때마다 실시간 교통정보 API(getFrafficInfo, 1차 확인에서 이름 확인)를 1회 호출한다.
-// 인스턴스당 2번까지만 연다(최대 2건). 누적: 승인 5건 중 3건 사용(1차 2건, 2차 1건 모두 "code not registered"). 키 값은 응답에 넣지 않고, 원본 대신 요약만 돌려준다.
+// 인스턴스당 2번까지만 연다. 기존 키 이름을 쓰면 돌발 API도 1회 확인한다(열 때 최대 2건). 누적: 승인 5건 중 3건 사용(1차 2건, 2차 1건 모두 "code not registered"). 키 값은 응답에 넣지 않고, 원본 대신 요약만 돌려준다.
 // 사용: 미리보기 주소 + /api/traffic-probe 를 한 번만 연다(Vercel icn1, 국내 IP).
 let opens = 0;
 const MAX_OPENS = 2;
@@ -64,6 +64,17 @@ export async function GET(): Promise<Response> {
     results.push(out);
     if (out.result === "success") break;
   }
-  const text = redact(JSON.stringify({ open: opens, maxOpens: MAX_OPENS, keyName, region: process.env.VERCEL_REGION ?? null, checkedAt: new Date().toISOString(), results }, null, 1));
+  // 기존 키 값을 바꾼 경우: 이미 쓰고 있는 돌발 API가 새 값으로도 되는지 1회 확인한다(결과·건수만).
+  let eventApiCheck: Record<string, unknown> | null = null;
+  if (keyName === "JEJU_ITS_API_KEY") {
+    try {
+      const res = await fetch(`http://api.jejuits.go.kr/api/infoRoadEventList?code=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(15_000) });
+      const body = (await res.json().catch(() => null)) as { result?: unknown; info?: unknown[] } | null;
+      eventApiCheck = { status: res.status, result: body?.result, count: body?.info?.length ?? 0 };
+    } catch (e) {
+      eventApiCheck = { error: redact(String(e)) };
+    }
+  }
+  const text = redact(JSON.stringify({ eventApiCheck, open: opens, maxOpens: MAX_OPENS, keyName, region: process.env.VERCEL_REGION ?? null, checkedAt: new Date().toISOString(), results }, null, 1));
   return new Response(text, { headers });
 }
