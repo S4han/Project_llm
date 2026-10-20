@@ -1,6 +1,7 @@
 // TASK-017 일회성 확인용(승인: "계획 승인: TASK-017 1. (a) 2. (a) 3. (a)", 시험 호출 5건 이내). 확인 후 삭제한다. main에 넣지 않는다.
 // 제주 ITS 주차장 기본정보(infoParkingInfoList)와 주차가능면수(infoParkingStateList)를 1번씩 부른다.
-// 키는 실시간 교통정보 키 → (실패하면) 교통시설물 전용 키 순서로 기본정보에 시험하고, 되는 키로 주차가능면수를 부른다(최대 3건).
+// 1차(1건): 실시간 교통정보 키는 "code not registered". 2차: 주차장 전용 키(JEJU_ITS_PARKING_API_KEY, 있으면) → 실시간 교통정보 키(주차장 활용 승인 뒤 같은 키일 수 있음)
+// → 돌발 키(JEJU_ITS_API_KEY) 순서로 기본정보에 시험하고, 되는 키로 주차가능면수를 부른다(최대 4건, 누적 최대 5건).
 // 건수·항목 이름·좌표 범위(x/y 중 어느 쪽이 위도인지)·표본·두 목록의 ID 일치 수만 돌려준다. 인스턴스당 1번만 연다. 키 값은 응답에 넣지 않는다.
 // 사용: 미리보기 주소 + /api/parking-probe 를 한 번만 연다.
 let opened = false;
@@ -46,7 +47,7 @@ export async function GET(): Promise<Response> {
   const headers = { "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8" };
   if (opened) return Response.json({ stopped: "이 서버에서는 이미 한 번 열었습니다" }, { headers });
   opened = true;
-  const keys = (["JEJU_ITS_TRAFFIC_API_KEY", "JEJU_ITS_FACILITY_API_KEY"] as const).map((name) => ({ name, key: process.env[name] ?? "" })).filter((k) => k.key);
+  const keys = (["JEJU_ITS_PARKING_API_KEY", "JEJU_ITS_TRAFFIC_API_KEY", "JEJU_ITS_API_KEY"] as const).map((name) => ({ name, key: process.env[name] ?? "" })).filter((k) => k.key);
   if (!keys.length) return Response.json({ keyPresent: false }, { headers });
   const redact = (s: string) => keys.reduce((acc, k) => acc.split(k.key).join("[KEY]").split(encodeURIComponent(k.key)).join("[KEY]"), s);
   const attempts: Record<string, unknown>[] = [];
