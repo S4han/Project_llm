@@ -1,6 +1,6 @@
 // TASK-012 일회성 확인용(승인: "계획 승인: TASK-012 소통정보 1. 승인", 시험 호출 5건 이내). 확인 후 삭제한다. main에 넣지 않는다.
 // 열 때마다 실시간 교통정보 API(getFrafficInfo, 1차 확인에서 이름 확인)를 1회 호출한다.
-// 인스턴스당 2번까지만 연다(최대 2건, 누적 승인 5건 중 1차 2건 사용). 키 값은 응답에 넣지 않고, 원본 대신 요약만 돌려준다.
+// 인스턴스당 2번까지만 연다(최대 2건). 누적: 승인 5건 중 3건 사용(1차 2건, 2차 1건 모두 "code not registered"). 키 값은 응답에 넣지 않고, 원본 대신 요약만 돌려준다.
 // 사용: 미리보기 주소 + /api/traffic-probe 를 한 번만 연다(Vercel icn1, 국내 IP).
 let opens = 0;
 const MAX_OPENS = 2;
@@ -17,7 +17,9 @@ function stats(values: number[]) {
 }
 
 export async function GET(): Promise<Response> {
-  const key = process.env.JEJU_ITS_API_KEY ?? "";
+  // 실시간 교통정보용 키를 따로 받았으면 그것을, 없으면 기존 키를 쓴다. 응답에는 어떤 이름을 썼는지만 넣는다.
+  const keyName = process.env.JEJU_ITS_TRAFFIC_API_KEY ? "JEJU_ITS_TRAFFIC_API_KEY" : "JEJU_ITS_API_KEY";
+  const key = process.env[keyName] ?? "";
   const headers = { "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8" };
   if (!key) return Response.json({ keyPresent: false }, { headers });
   if (opens >= MAX_OPENS) return Response.json({ stopped: "호출 상한 도달(인스턴스당 2번)" }, { headers });
@@ -62,6 +64,6 @@ export async function GET(): Promise<Response> {
     results.push(out);
     if (out.result === "success") break;
   }
-  const text = redact(JSON.stringify({ open: opens, maxOpens: MAX_OPENS, region: process.env.VERCEL_REGION ?? null, checkedAt: new Date().toISOString(), results }, null, 1));
+  const text = redact(JSON.stringify({ open: opens, maxOpens: MAX_OPENS, keyName, region: process.env.VERCEL_REGION ?? null, checkedAt: new Date().toISOString(), results }, null, 1));
   return new Response(text, { headers });
 }
