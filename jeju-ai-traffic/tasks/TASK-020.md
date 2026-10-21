@@ -8,7 +8,7 @@
 ## 범위
 - 원인: OpenStreetMap 기본 타일은 256px 한 배 해상도라 휴대폰(픽셀 2~3배)에서 늘어나 흐림
 - (a) CARTO Voyager 래스터 타일로 교체(같은 OSM 자료, 고해상도 화면에서 @2x 타일, 키 없음, 비상업 무료·출처 © CARTO © OpenStreetMap)
-- (범위 변경) 브이월드 WMTS 흰색 바탕지도(지도용 키 `VITE_VWORLD_MAP_KEY`), 키 없거나 타일 실패 시 OpenStreetMap, 출처 © 브이월드(국토교통부)
+- (범위 변경) 브이월드 WMTS 기본(Base) 바탕지도(지도용 키 `VITE_VWORLD_MAP_KEY`), 키 없거나 타일 실패 시 OpenStreetMap, 출처 © 브이월드(국토교통부)
 - 교통 현황·경로 추천 공통, 하단 출처 문구, 바탕 못 불러올 때 안내 유지, 캡처·보고서
 
 ## 사용자 확인 지점

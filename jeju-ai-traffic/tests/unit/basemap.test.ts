@@ -23,7 +23,7 @@ const fail = (layer: L.TileLayer, n: number) => {
 
 describe("바탕지도(TASK-020)", () => {
   it("브이월드 흰색 WMTS 주소", () => {
-    expect(vworldTileUrl("ABC-1")).toBe("https://api.vworld.kr/req/wmts/1.0.0/ABC-1/white/{z}/{y}/{x}.png");
+    expect(vworldTileUrl("ABC-1")).toBe("https://api.vworld.kr/req/wmts/1.0.0/ABC-1/Base/{z}/{y}/{x}.png");
   });
 
   it("지도용 키가 없으면 OpenStreetMap", () => {
@@ -40,7 +40,7 @@ describe("바탕지도(TASK-020)", () => {
     const onFailed = vi.fn();
     addBaseTiles(map, " KEY ", onFailed);
     const vworld = tileLayers(map)[0]!;
-    expect((vworld as unknown as { _url: string })._url).toContain("api.vworld.kr/req/wmts/1.0.0/KEY/white");
+    expect((vworld as unknown as { _url: string })._url).toContain("api.vworld.kr/req/wmts/1.0.0/KEY/Base");
     expect(vworld.getAttribution?.()).toContain("브이월드");
     fail(vworld, 3);
     expect(tileLayers(map)).toEqual([vworld]);

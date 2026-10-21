@@ -24,13 +24,13 @@ const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 기여자';
 const VWORLD_ATTRIBUTION = '&copy; <a href="https://www.vworld.kr">브이월드</a>(국토교통부)';
 
-/** 브이월드 WMTS 흰색 바탕지도 주소. 지도용 키는 서비스 URL(도메인)에 묶인 공개 키라 화면 코드에 들어가도 된다. */
+/** 브이월드 WMTS 기본(Base) 바탕지도 주소. 흰색(white)은 건물·장소 이름이 거의 없어 기본으로 바꿨다(TASK-020 점검). 지도용 키는 서비스 URL(도메인)에 묶인 공개 키라 화면 코드에 들어가도 된다. */
 export function vworldTileUrl(key: string): string {
-  return `https://api.vworld.kr/req/wmts/1.0.0/${encodeURIComponent(key)}/white/{z}/{y}/{x}.png`;
+  return `https://api.vworld.kr/req/wmts/1.0.0/${encodeURIComponent(key)}/Base/{z}/{y}/{x}.png`;
 }
 
 /**
- * 바탕지도(TASK-020). 지도용 키(VITE_VWORLD_MAP_KEY)가 있으면 브이월드 흰색, 없으면 OpenStreetMap.
+ * 바탕지도(TASK-020). 지도용 키(VITE_VWORLD_MAP_KEY)가 있으면 브이월드 기본(Base), 없으면 OpenStreetMap.
  * 브이월드 타일을 한 장도 못 받고 4장 실패하면(키·도메인 불일치 등) OpenStreetMap으로 바꾼다.
  * OpenStreetMap까지 못 받으면 onFailed.
  */
