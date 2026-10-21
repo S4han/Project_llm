@@ -135,7 +135,7 @@ export function TrafficDashboard() {
   // 주유소(TASK-018, 오피넷): 서버가 제주 전체를 받아 두고 화면이 반경만 거른다(내 위치는 보내지 않음).
   const [gas, setGas] = useState<TrafficGasResponse | null>(null);
   const [gasLoading, setGasLoading] = useState(true);
-  const [gasProblem, setGasProblem] = useState(false);
+  const [gasProblem, setGasProblem] = useState<string | null>(null);
   // 주유소 목록(휘발유 싼 순)에서 고른 곳과 보여 줄 줄 수
   const [gasFocus, setGasFocus] = useState<{ id: string; seq: number } | null>(null);
   const [gasLimit, setGasLimit] = useState(GAS_PAGE);
@@ -241,12 +241,18 @@ export function TrafficDashboard() {
     const r = await fetchTrafficGas();
     if (!alive.current) return;
     setGasLoading(false);
-    setGasProblem(!r.ok);
+    setGasProblem(
+      r.ok
+        ? null
+        : r.error.code === "QUOTA_BLOCKED"
+          ? `오늘 오피넷 가격 조회 한도에 도달해 주유소를 표시할 수 없습니다${r.error.retryAfter ? `(${formatKstTime(r.error.retryAfter)} 이후 다시 확인)` : "(내일 다시 확인)"}.`
+          : "주유소 정보를 불러오지 못했습니다.",
+    );
     if (r.ok) setGas(r.data);
   }, []);
   const retryGas = () => {
     setGasLoading(true);
-    setGasProblem(false);
+    setGasProblem(null);
     void fetchGas();
   };
   const retryParking = () => {
@@ -824,7 +830,7 @@ export function TrafficDashboard() {
           )}
           {gasProblem && (
             <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
-              <span>주유소 정보를 불러오지 못했습니다.</span>
+              <span>{gasProblem}</span>
               <button type="button" onClick={retryGas} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
                 다시 시도
               </button>

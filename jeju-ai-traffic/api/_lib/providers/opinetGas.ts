@@ -26,6 +26,11 @@ const RADIUS_METERS = 5000;
 const PRODUCTS = { gasoline: "B027", diesel: "D047" } as const;
 /** 동시 호출 수. 오피넷이 몰린 요청을 어떻게 다루는지 확인되지 않아 낮게 둔다. */
 const CONCURRENCY = 3;
+/**
+ * 제주 주유소는 약 190곳이다. 합친 결과가 이보다 훨씬 적으면 오피넷 하루 한도(300건)를 넘겨 빈 목록이 온 것으로 본다
+ * (TASK-018 점검: 한도를 넘기자 오류 없이 빈 결과 → 60곳, 이어서 0곳). 이때는 보관하지 않고 오늘은 더 부르지 않는다.
+ */
+export const MIN_COMPLETE_STATIONS = 120;
 const TIMEOUT_MS = 15_000;
 
 /** 제주 본섬 해안선을 대강 따라간 다각형(격자 중심을 고르는 데만 쓴다). */
@@ -140,6 +145,7 @@ export function createOpinetGasProvider(apiKey: string, fetchImpl: typeof fetch 
       const meta = { calls: jobs.length, nonEmpty, distinctResults: results.size };
       // Vercel 로그에서 확인할 수 있게 건수만 남긴다(키·위치 없음).
       console.info("opinet gas", { ...meta, stations: merged.size });
+      if (merged.size < MIN_COMPLETE_STATIONS) throw new ProviderError("rate_limited", `opinet: ${merged.size}곳뿐(한도 소진 추정)`);
       return { stations: [...merged.values()], source: "opinet", meta };
     },
   };

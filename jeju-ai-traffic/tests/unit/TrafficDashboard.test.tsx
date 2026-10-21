@@ -437,6 +437,12 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(rows[1]!.className).not.toContain("ring-amber-400");
   });
 
+  it("주유소: 오피넷 한도면 '오늘 한도에 도달' 안내", async () => {
+    gasRespond = () => Response.json({ error: { code: "QUOTA_BLOCKED", message: "x", retryAfter: "2026-10-21T15:00:00.000Z" } }, { status: 429 });
+    render(<TrafficDashboard />);
+    expect(await screen.findByText("오늘 오피넷 가격 조회 한도에 도달해 주유소를 표시할 수 없습니다(10월 22일 00:00 이후 다시 확인).")).toBeTruthy();
+  });
+
   it("주유소 자료를 못 받으면 안내와 다시 시도", async () => {
     gasRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
     render(<TrafficDashboard />);

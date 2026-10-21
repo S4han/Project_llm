@@ -49,7 +49,10 @@ describe("오피넷 주유소 (TASK-018)", () => {
       const url = new URL(u);
       urls.push(url);
       const diesel = url.searchParams.get("prodcd") === "D047";
-      return new Response(JSON.stringify({ RESULT: { OIL: [{ ...OIL, PRICE: diesel ? 1845 : 1867 }] } }), { headers: { "content-type": "text/html; charset=utf-8" } });
+      // 칸마다 다른 주유소 3곳 + 모든 칸에 나오는 도남주유소(합쳐서 120곳 이상이 되게)
+      const cell = `${url.searchParams.get("x")}-${url.searchParams.get("y")}`;
+      const own = [1, 2, 3].map((n) => ({ ...OIL, UNI_ID: `${cell}-${n}`, PRICE: 1900 }));
+      return new Response(JSON.stringify({ RESULT: { OIL: [{ ...OIL, PRICE: diesel ? 1845 : 1867 }, ...own] } }), { headers: { "content-type": "text/html; charset=utf-8" } });
     }) as unknown as typeof fetch;
     const p = createOpinetGasProvider("k", fetchImpl);
     const snap = await p.fetchStations();
@@ -60,8 +63,16 @@ describe("오피넷 주유소 (TASK-018)", () => {
     // 좌표는 정수(시험에서 확인된 형식)
     expect(urls.every((u) => /^\d+$/.test(u.searchParams.get("x")!) && /^\d+$/.test(u.searchParams.get("y")!))).toBe(true);
     expect(new Set(urls.map((u) => u.searchParams.get("x") + "," + u.searchParams.get("y"))).size).toBe(jejuGrid().length);
-    expect(snap.stations).toEqual([["A0030897", "SKE", "도남주유소", 1867, 1845, expect.any(Number), expect.any(Number)]]);
-    expect(snap.meta).toEqual({ calls: p.calls, nonEmpty: p.calls, distinctResults: 2 });
+    expect(snap.stations[0]).toEqual(["A0030897", "SKE", "도남주유소", 1867, 1845, expect.any(Number), expect.any(Number)]);
+    expect(snap.stations).toHaveLength(1 + jejuGrid().length * 3);
+    expect(snap.meta).toEqual({ calls: p.calls, nonEmpty: p.calls, distinctResults: p.calls });
+  });
+
+  it("합친 결과가 120곳 미만이면 한도 소진으로 보고 실패(rate_limited, 보관하지 않음)", async () => {
+    const fetchImpl = (async () => new Response(JSON.stringify({ RESULT: { OIL: [OIL] } }))) as unknown as typeof fetch;
+    await expect(createOpinetGasProvider("k", fetchImpl).fetchStations()).rejects.toMatchObject({ kind: "rate_limited" });
+    const empty = (async () => new Response(JSON.stringify({ RESULT: { OIL: [] } }))) as unknown as typeof fetch;
+    await expect(createOpinetGasProvider("k", empty).fetchStations()).rejects.toMatchObject({ kind: "rate_limited" });
   });
 
   it("GET /api/traffic/gas: CDN 하루, 메모리 캐시(사용량 = 호출 수), 처음부터 실패면 503", async () => {
