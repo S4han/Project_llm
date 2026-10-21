@@ -1,5 +1,6 @@
 // TASK-018·019 일회성 확인용(승인: "범위 변경: TASK-018 제주 ITS 주유소 / 계획 승인: TASK-019 … / 시험 4건 승인"). 확인 후 삭제한다. main에 넣지 않는다.
-// 제주 ITS 주유소 기본정보·가격, 전기차 충전소 기본정보·충전 가능 정보를 실시간 교통정보 키로 1건씩(4건).
+// 제주 ITS 주유소 기본정보·가격, 전기차 충전소 기본정보·충전 가능 정보를 1건씩(4건).
+// 사용자 "주유소 충전소 정보는 c-its api야" → C-ITS 키(JEJU_CITS_API_KEY)가 있으면 그것으로, 없으면 실시간 교통정보 키로.
 // 건수·항목 이름·좌표로 보이는 칸의 범위·표본·두 목록의 ID 일치 수만 돌려준다. 인스턴스당 1번만 연다. 키 값은 응답에 넣지 않는다.
 // 사용: 미리보기 주소 + /api/its-fuel-probe 를 한 번만 연다.
 let opened = false;
@@ -19,7 +20,8 @@ export async function GET(): Promise<Response> {
   const headers = { "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8" };
   if (opened) return Response.json({ stopped: "이 서버에서는 이미 한 번 열었습니다" }, { headers });
   opened = true;
-  const key = process.env.JEJU_ITS_TRAFFIC_API_KEY ?? "";
+  const keyName = process.env.JEJU_CITS_API_KEY ? "JEJU_CITS_API_KEY" : "JEJU_ITS_TRAFFIC_API_KEY";
+  const key = process.env[keyName] ?? "";
   if (!key) return Response.json({ keyPresent: false }, { headers });
   const redact = (s: string) => s.split(key).join("[KEY]").split(encodeURIComponent(key)).join("[KEY]");
   const ids: Record<string, Set<string>> = {};
@@ -57,5 +59,5 @@ export async function GET(): Promise<Response> {
   }
   const overlap = (a: string, b: string) => (ids[a] && ids[b] ? [...ids[b]!].filter((id) => ids[a]!.has(id)).length : null);
   const summary = { gasPriceIdsInInfo: overlap("infoGasInfoList", "infoGasPriceList"), evStatusIdsInInfo: overlap("infoEvInfoList", "infoEvList"), evInfoDistinctIds: ids.infoEvInfoList?.size ?? null };
-  return new Response(redact(JSON.stringify({ region: process.env.VERCEL_REGION ?? null, checkedAt: new Date().toISOString(), calls: attempts.length, summary, attempts }, null, 1)), { headers });
+  return new Response(redact(JSON.stringify({ region: process.env.VERCEL_REGION ?? null, keyUsed: keyName, checkedAt: new Date().toISOString(), calls: attempts.length, summary, attempts }, null, 1)), { headers });
 }
