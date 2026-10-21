@@ -1,5 +1,5 @@
 import type { ApiError, ApiErrorBody } from "../../../shared/contracts/common";
-import type { TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../shared/contracts/traffic";
+import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../shared/contracts/traffic";
 
 export type TrafficIncidentsResult = { ok: true; data: TrafficIncidentsResponse } | { ok: false; error: ApiError };
 
@@ -65,4 +65,9 @@ export function fetchTrafficParking(signal?: AbortSignal): Promise<Result<Traffi
 /** GET /api/traffic/gas(TASK-018): 제주 주유소·휘발유·경유 가격(서버·CDN 6시간 보관). 화면을 열 때 한 번만 부른다. */
 export function fetchTrafficGas(signal?: AbortSignal): Promise<Result<TrafficGasResponse>> {
   return getJson<TrafficGasResponse>("/api/traffic/gas?v=2", (b) => "stations" in b, signal);
+}
+
+/** GET /api/traffic/ev(TASK-019): 제주 전기차 충전소·충전 가능 수(충전 가능 30분 보관). 화면을 열 때와 30분마다 부른다. */
+export function fetchTrafficEv(signal?: AbortSignal): Promise<Result<TrafficEvResponse>> {
+  return getJson<TrafficEvResponse>("/api/traffic/ev", (b) => "stations" in b, signal);
 }

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
+import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
 import { encodePolyline } from "../../shared/rules/polyline";
 import { REFRESH_MS, TrafficDashboard } from "../../web/src/features/traffic/TrafficDashboard";
 
@@ -71,7 +71,19 @@ const GAS: TrafficGasResponse = {
   source: "jejuIts",
 };
 
+const EV: TrafficEvResponse = {
+  stations: [
+    ["E1", "시청 충전소", "제주시 이도2동", 33.5, 126.531, 2, 4, 1, 2, "24시간 이용가능", "환경부", "1661-9408", "Y"],
+    ["E2", "신설오름 충전소", "제주시", 33.504, 126.54, 0, 2, 0, 0, "", "운영사", "", "N"],
+    ["E3", "노형 급속충전소", "제주시", 33.503, 126.533, 3, 0, null, null, "", "운영사", "", ""],
+  ],
+  statusAt: AT,
+  builtAt: AT,
+  source: "jejuIts",
+};
+
 let respond: () => Response;
+let evRespond: () => Response;
 let gasRespond: () => Response;
 let parkingRespond: () => Response;
 let enforcementRespond: () => Response;
@@ -96,6 +108,7 @@ beforeEach(() => {
   enforcementRespond = () => Response.json(ENFORCEMENT);
   parkingRespond = () => Response.json(PARKING);
   gasRespond = () => Response.json(GAS);
+  evRespond = () => Response.json(EV);
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.stubGlobal(
@@ -109,6 +122,7 @@ beforeEach(() => {
       if (url.startsWith("/api/traffic/enforcement")) return enforcementRespond();
       if (url.startsWith("/api/traffic/parking")) return parkingRespond();
       if (url.startsWith("/api/traffic/gas")) return gasRespond();
+      if (url.startsWith("/api/traffic/ev")) return evRespond();
       if (url.startsWith("/api/traffic/links")) {
         linksCalls += 1;
         return linksRespond();
@@ -335,7 +349,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     render(<TrafficDashboard />);
     const list = await screen.findByRole("list", { name: "교통시설물 유형" });
     const buttons = within(list).getAllByRole("button");
-    expect(buttons.map((b) => b.textContent)).toEqual(["VMS1", "CCTV2", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속2", "주차장2", "주유소3", "LPG 충전소1"]);
+    expect(buttons.map((b) => b.textContent)).toEqual(["VMS1", "CCTV2", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속2", "주차장2", "주유소3", "LPG 충전소1", "전기차 충전소3"]);
     expect(buttons.every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
     expect((within(list).getByRole("button", { name: /웹카메라/ }) as HTMLButtonElement).disabled).toBe(true);
     const map = screen.getByRole("region", { name: "교통 현황 지도" });
@@ -385,7 +399,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     const list2 = await screen.findByRole("list", { name: "교통시설물 유형" });
     const enf = await within(list2).findByRole("button", { name: /주정차 단속2/ });
     fireEvent.click(enf);
-    expect(await screen.findByText(/내 위치 주변\(주정차 단속·주차장·주유소·LPG 충전소\)을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
+    expect(await screen.findByText(/내 위치 주변\(주정차 단속·주차장·주유소·LPG 충전소·전기차 충전소\)을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
     expect(enf.getAttribute("aria-pressed")).toBe("false");
   });
 
@@ -429,6 +443,33 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     fireEvent.click(within(list).getByRole("button", { name: /주유소3/ }));
     expect(within(screen.getByRole("list", { name: "주유소 목록" })).queryByText(/LPG충전소/)).toBeNull();
     expect(screen.getByText("내 위치 반경 3km 안 주유소 2곳 · 반경 5km 안 LPG 충전소 1곳 · 휘발유 최저 1,849원 · LPG 최저 1,178원")).toBeTruthy();
+  });
+
+  it("전기차 충전소(TASK-019): 반경 1km, 충전 가능 먼저·가까운 순, 급속만, 충전 가능 수 안내", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    render(<TrafficDashboard />);
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    fireEvent.click(await within(list).findByRole("button", { name: /전기차 충전소3/ }));
+    expect(await screen.findByText("내 위치 반경 1km 안 전기차 충전소 3곳 · 충전 가능 1곳")).toBeTruthy();
+    const rows = () => within(screen.getByRole("list", { name: "전기차 충전소 목록" })).getAllByRole("button").map((r) => r.textContent);
+    expect(rows()).toEqual([
+      "⚡시청 충전소0.5km · 급속 1/2 · 완속 2/43대충전 가능",
+      "⚡노형 급속충전소0.3km · 급속 ?/3–상태 정보 없음",
+      "⚡신설오름 충전소0.4km · 완속 0/2사용 중2대 모두",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "⚡ 급속만" }));
+    expect(rows()).toEqual(["⚡시청 충전소0.5km · 급속 1/2 · 완속 2/43대충전 가능", "⚡노형 급속충전소0.3km · 급속 ?/3–상태 정보 없음"]);
+    expect(screen.getByRole("region", { name: "교통 현황 지도" }).getAttribute("data-facilities")).toBe("2");
+  });
+
+  it("전기차 충전소 자료를 못 받으면 안내와 다시 시도", async () => {
+    evRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
+    render(<TrafficDashboard />);
+    const msg = await screen.findByText("전기차 충전소 정보를 불러오지 못했습니다.");
+    evRespond = () => Response.json(EV);
+    fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    expect(await within(list).findByRole("button", { name: /전기차 충전소3/ })).toBeTruthy();
   });
 
   it("반경 안에 주유소가 없으면 '주유소가 없습니다'(조사)", async () => {

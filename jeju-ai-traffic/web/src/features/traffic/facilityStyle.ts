@@ -1,13 +1,13 @@
 import type { FacilityType } from "../../../../shared/contracts/traffic";
 
 /** 교통시설물 카드의 유형. 제주 ITS 7개 + 제주시 주정차 단속 CCTV(ENF, TASK-016) + 주차장(PARK, 표준데이터, TASK-017). */
-export type FacilityKey = FacilityType | "ENF" | "PARK" | "GAS" | "LPG";
+export type FacilityKey = FacilityType | "ENF" | "PARK" | "GAS" | "LPG" | "EV";
 
 /** 내 위치 반경 안만 보이는 유형(TASK-016·017·018). */
-export const NEARBY_KEYS: FacilityKey[] = ["ENF", "PARK", "GAS", "LPG"];
+export const NEARBY_KEYS: FacilityKey[] = ["ENF", "PARK", "GAS", "LPG", "EV"];
 
 /** 유형별 조회 반경(m). 주유소는 드문드문해서 3km(TASK-018 2.(a)), LPG 충전소는 더 드물어 5km, 나머지는 1km. */
-export const NEARBY_RADIUS: Partial<Record<FacilityKey, number>> = { ENF: 1000, PARK: 1000, GAS: 3000, LPG: 5000 };
+export const NEARBY_RADIUS: Partial<Record<FacilityKey, number>> = { ENF: 1000, PARK: 1000, GAS: 3000, LPG: 5000, EV: 1000 };
 
 /** 오피넷 상표 코드 → 이름·짧은 표시·색(TASK-018). 목록에 없는 코드는 "기타". */
 export const GAS_BRANDS: Record<string, { name: string; mark: string; color: string; textColor?: string }> = {
@@ -42,6 +42,8 @@ export const FACILITY_STYLE: Record<FacilityKey, { label: string; short: string;
   // 지도에서는 상표 색 가격 표시(핀)로 그린다. 여기 색은 카드 버튼의 범례 점용.
   GAS: { label: "주유소", short: "주유소", color: "#f97316", stroke: "#7c2d12", mark: "⛽" },
   LPG: { label: "LPG 충전소", short: "LPG 충전소", color: "#0284c7", stroke: "#0c4a6e", mark: "LPG" },
+  // 지도에서는 충전 가능 수 표시(초록 = 가능, 회색 = 모두 사용 중·정보 없음)로 그린다(TASK-019).
+  EV: { label: "전기차 충전소", short: "전기차 충전소", color: "#16a34a", stroke: "#14532d", mark: "⚡" },
 };
 
-export const FACILITY_ORDER: FacilityKey[] = ["FTY01", "FTY02", "FTY03", "FTY07", "FTY09", "FTY17", "FTY23", "ENF", "PARK", "GAS", "LPG"];
+export const FACILITY_ORDER: FacilityKey[] = ["FTY01", "FTY02", "FTY03", "FTY07", "FTY09", "FTY17", "FTY23", "ENF", "PARK", "GAS", "LPG", "EV"];

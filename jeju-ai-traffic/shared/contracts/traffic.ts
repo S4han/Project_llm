@@ -114,3 +114,15 @@ export interface TrafficGasResponse {
   builtAt: IsoDateTime;
   source: "jejuIts" | "mock";
 }
+
+/**
+ * GET /api/traffic/ev 응답(TASK-019). 제주 ITS 전기차 충전소 기본정보(충전기 단위 → 충전소로 묶음) + 충전 가능 정보.
+ * stations[i] = [충전소 ID, 이름, 주소, 위도, 경도, 급속 충전기 수, 완속 충전기 수, 급속 충전 가능 수, 완속 충전 가능 수(모르면 null), 이용 시간, 운영기관, 문의 전화, 주차 무료(Y/N/"")].
+ */
+export interface TrafficEvResponse {
+  stations: [string, string, string, number, number, number, number, number | null, number | null, string, string, string, string][];
+  /** 충전 가능 정보를 받은 시각(받지 못했으면 null). */
+  statusAt: IsoDateTime | null;
+  builtAt: IsoDateTime;
+  source: "jejuIts" | "mock";
+}

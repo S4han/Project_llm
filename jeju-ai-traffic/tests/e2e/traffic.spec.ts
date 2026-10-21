@@ -120,7 +120,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await page.goto("/");
     const list = page.getByRole("list", { name: "교통시설물 유형" });
     const buttons = list.getByRole("button");
-    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속3", "주차장3", "주유소4", "LPG 충전소1"]);
+    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속3", "주차장3", "주유소4", "LPG 충전소1", "전기차 충전소4"]);
     const map = page.getByRole("region", { name: "교통 현황 지도" });
     await expect(map).toHaveAttribute("data-facilities", "0");
     await list.getByRole("button", { name: /^CCTV/ }).click();
@@ -158,7 +158,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
 
 });
 
-test.describe("내 위치 반경: 주정차 단속·주차장·주유소 (TASK-016·017·018, 개발 서버 모의)", () => {
+test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·전기차 충전소 (TASK-016~019, 개발 서버 모의)", () => {
   // 모의 단속 3곳 중 2곳(시청·신설오름 부근, 약 0.6km)만 1km 안, 노형 부근은 밖인 위치
   test.use({ permissions: ["geolocation"], geolocation: { latitude: 33.502, longitude: 126.536, accuracy: 30 } });
 
@@ -308,5 +308,29 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소 (TASK-0
     await expect(card.locator("dd").first()).toHaveText("1,178원/L");
     await page.locator(".leaflet-popup").scrollIntoViewIfNeeded();
     await shot(page, "TASK-018-04-lpg");
+  });
+
+  test("전기차 충전소(TASK-019): 반경 1km 충전 가능 수 표시, 목록(충전 가능 먼저)·급속만, 카드", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /전기차 충전소/ }).click();
+    await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 1km 안 전기차 충전소 3곳 · 충전 가능 1곳");
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+    await expect(map.locator(".gas-pin")).toHaveCount(3);
+    await expect(map.locator(".gas-pin").filter({ hasText: "3/6" })).toHaveCount(1);
+    const rows = page.getByRole("list", { name: "전기차 충전소 목록" }).getByRole("button");
+    await expect(rows.first()).toContainText("모의 시청 공영주차장 충전소");
+    await expect(rows.first()).toContainText("충전 가능");
+    await page.getByRole("button", { name: "⚡ 급속만" }).click();
+    await expect(rows).toHaveCount(2);
+    await page.getByRole("list", { name: "전기차 충전소 목록" }).scrollIntoViewIfNeeded();
+    await shot(page, "TASK-019-01-list");
+    await rows.first().click();
+    const card = page.locator(".leaflet-popup .popup-card");
+    await expect(card.locator(".popup-card-kicker")).toHaveText("전기차 충전소 · 환경부");
+    await expect(card.locator(".popup-card-stat")).toHaveText("3대 충전 가능");
+    await expect(card.locator("dd").first()).toHaveText("급속 1/2 · 완속 2/4");
+    await page.locator(".leaflet-popup").scrollIntoViewIfNeeded();
+    await shot(page, "TASK-019-02-card");
   });
 });

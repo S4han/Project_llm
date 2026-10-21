@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { IncidentKind, SpeedStatus, TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../../shared/contracts/traffic";
+import type { IncidentKind, SpeedStatus, TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../../shared/contracts/traffic";
 import { isStale } from "../../../../shared/rules/traffic";
 import { distanceMeters } from "../../../../shared/rules/geo";
 import type { Coordinate } from "../../../../shared/contracts/route";
 import { getCurrentLocation } from "../../services/geolocation";
 import { parkingRouteHref } from "../trip/routeLink";
-import { fetchTrafficEnforcement, fetchTrafficFacilities, fetchTrafficGas, fetchTrafficParking, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds } from "../../services/trafficApi";
+import { fetchTrafficEnforcement, fetchTrafficEv, fetchTrafficFacilities, fetchTrafficGas, fetchTrafficParking, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds } from "../../services/trafficApi";
 import type { FacilityPoint, PopupCard, SpeedLine } from "../map/leafletMap";
 import { FACILITY_ORDER, FACILITY_STYLE, gasBrand, NEARBY_KEYS, NEARBY_RADIUS, type FacilityKey } from "./facilityStyle";
 import { IncidentFocusBar, IncidentGroupList } from "../routes/IncidentFocus";
@@ -51,6 +51,8 @@ interface DashboardState {
 const EMPTY_LINES: SpeedLine[] = [];
 
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
+/** 전기차 충전 가능 수 다시 받기 간격(TASK-019 1.(a)). */
+export const EV_REFRESH_MS = 30 * 60_000;
 /** 주유소 목록을 한 번에 보여 줄 줄 수(TASK-018). */
 const GAS_PAGE = 5;
 
@@ -143,6 +145,92 @@ function FuelList({ title, label, fuel, rows, low, limit, onMore, onPick }: { ti
   );
 }
 
+type EvStationRow = TrafficEvResponse["stations"][number];
+/** 충전 가능 수(급속+완속, 정보 없으면 null). */
+const evAvail = (s: EvStationRow) => (s[7] === null && s[8] === null ? null : (s[7] ?? 0) + (s[8] ?? 0));
+/** 충전소 색: 가능 = 초록, 모두 사용 중 = 회색, 정보 없음 = 옅은 회색. */
+const evColor = (avail: number | null) => (avail === null ? "#9ca3af" : avail > 0 ? "#16a34a" : "#6b7280");
+const evCountText = (avail: number | null, total: number) => (total === 0 ? "" : avail === null ? `${total}대` : `${avail}/${total}`);
+
+/** 전기차 충전소 카드(TASK-019): ⚡·이름, 급속·완속·주차 무료 칩, 충전 가능(급속·완속 가능/전체)·이용 시간·문의, 주소·기준, 경로 안내. */
+function evCard(s: EvStationRow, statusAt: string | null): PopupCard {
+  const [id, name, addr, lat, lng, fast, slow, fastAvail, slowAvail, use, biz, call, free] = s;
+  const avail = evAvail(s);
+  const part = (label: string, a: number | null, total: number) => (total ? `${label} ${a === null ? "?" : a}/${total}` : "");
+  return {
+    badge: { text: "⚡", color: evColor(avail) },
+    kicker: `전기차 충전소${biz ? ` · ${biz}` : ""}`,
+    title: name || "이름 없는 충전소",
+    chips: [fast ? `급속 ${fast}대` : "", slow ? `완속 ${slow}대` : "", free === "Y" ? "주차 무료" : ""].filter(Boolean),
+    stat: avail !== null ? { value: String(avail), unit: "대 충전 가능" } : undefined,
+    rows: [
+      { label: "가능", lines: [avail === null ? "충전 가능 정보 없음" : [part("급속", fastAvail, fast), part("완속", slowAvail, slow)].filter(Boolean).join(" · ")] },
+      ...(use ? [{ label: "이용", lines: [use] }] : []),
+      ...(call ? [{ label: "문의", lines: [call] }] : []),
+    ],
+    footer: [addr, `제주 ITS${statusAt ? ` · 충전 가능 ${formatKstTime(statusAt)} 기준` : ""}(30분마다 갱신)`].filter(Boolean).join("\n"),
+    action: { href: parkingRouteHref({ id, name, address: addr, lat, lng }), label: "현재 위치에서 경로 안내" },
+  };
+}
+
+/** 전기차 충전소 목록(TASK-019 3.(a)): 충전 가능한 곳 먼저, 그다음 가까운 순. "급속만"으로 급속 충전기가 있는 곳만. */
+function EvList({ rows, fastOnly, onFastOnly, limit, onMore, onPick }: { rows: { s: EvStationRow; meters: number }[]; fastOnly: boolean; onFastOnly: () => void; limit: number; onMore: () => void; onPick: (id: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-grey-700">반경 1km 전기차 충전소 · 충전 가능 먼저</h3>
+        <button
+          type="button"
+          onClick={onFastOnly}
+          aria-pressed={fastOnly}
+          className={`min-h-11 shrink-0 rounded-xl px-3 text-sm font-semibold ${fastOnly ? "bg-green-600 text-white" : "bg-grey-100 text-grey-700"}`}
+        >
+          ⚡ 급속만
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-grey-600">반경 1km 안에 {fastOnly ? "급속 " : ""}충전소가 없습니다.</p>
+      ) : (
+        <ul aria-label="전기차 충전소 목록" className="flex flex-col gap-1.5">
+          {rows.slice(0, limit).map(({ s, meters }) => {
+            const avail = evAvail(s);
+            const total = s[5] + s[6];
+            return (
+              <li key={s[0]}>
+                <button
+                  type="button"
+                  onClick={() => onPick(s[0])}
+                  className={`flex min-h-14 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm ${avail ? "bg-green-50 ring-1 ring-green-300" : "bg-grey-100"}`}
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base font-bold text-white" style={{ backgroundColor: evColor(avail) }} aria-hidden="true">
+                    ⚡
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-grey-900">{s[1] || "이름 없는 충전소"}</span>
+                    <span className="block text-xs text-grey-600">
+                      {(meters / 1000).toFixed(1)}km{s[5] ? ` · 급속 ${s[7] ?? "?"}/${s[5]}` : ""}
+                      {s[6] ? ` · 완속 ${s[8] ?? "?"}/${s[6]}` : ""}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className={`block font-bold tabular-nums ${avail ? "text-lg text-green-700" : "text-grey-600"}`}>{avail === null ? "–" : avail > 0 ? `${avail}대` : "사용 중"}</span>
+                    <span className="block text-xs text-grey-500">{avail === null ? "상태 정보 없음" : avail > 0 ? "충전 가능" : `${total}대 모두`}</span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {rows.length > limit && (
+        <button type="button" onClick={onMore} className="min-h-12 rounded-2xl bg-grey-100 font-semibold text-grey-700">
+          더 보기 ({(rows.length - limit).toLocaleString("ko-KR")}곳 남음)
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** 주차장 카드 팝업(TASK-017): 머리(P·이름), 구분 칩·면수, 운영·요금 줄, 주소, 경로 안내 버튼. */
 function parkingCard(l: { id: string; name: string; se: string; type: string; address: string; spaces: number | null; hours: string; fee: string; lat: number; lng: number }): PopupCard {
   // 요금 설명 "유료 · 기본 30분 1,000원 · 추가 15분 500원" → 칩 "유료" + 줄 "기본 …", "추가 …"
@@ -212,6 +300,12 @@ export function TrafficDashboard() {
   const [gasFocus, setGasFocus] = useState<{ id: string; seq: number } | null>(null);
   const [gasLimit, setGasLimit] = useState(GAS_PAGE);
   const [lpgLimit, setLpgLimit] = useState(GAS_PAGE);
+  // 전기차 충전소(TASK-019, 제주 ITS): 화면을 열 때와 30분마다 받는다.
+  const [ev, setEv] = useState<TrafficEvResponse | null>(null);
+  const [evLoading, setEvLoading] = useState(true);
+  const [evProblem, setEvProblem] = useState(false);
+  const [evFastOnly, setEvFastOnly] = useState(false);
+  const [evLimit, setEvLimit] = useState(GAS_PAGE);
   // 내 위치(주정차 단속 반경 조회용). 이 화면 메모리에만 두고 서버로 보내거나 저장하지 않는다.
   const [myLocation, setMyLocation] = useState<Coordinate | null>(null);
   const [locating, setLocating] = useState(false);
@@ -323,6 +417,18 @@ export function TrafficDashboard() {
     );
     if (r.ok) setGas(r.data);
   }, []);
+  const fetchEv = useCallback(async () => {
+    const r = await fetchTrafficEv();
+    if (!alive.current) return;
+    setEvLoading(false);
+    setEvProblem(!r.ok);
+    if (r.ok) setEv(r.data);
+  }, []);
+  const retryEv = () => {
+    setEvLoading(true);
+    setEvProblem(false);
+    void fetchEv();
+  };
   const retryGas = () => {
     setGasLoading(true);
     setGasProblem(null);
@@ -349,9 +455,17 @@ export function TrafficDashboard() {
       void fetchEnforcement();
       void fetchParking();
       void fetchGas();
+      void fetchEv();
     }, 0);
-    return () => clearTimeout(first);
-  }, [fetchFacilities, fetchEnforcement, fetchParking, fetchGas]);
+    // 충전 가능 수는 30분마다(화면이 켜져 있을 때만) 다시 받는다(TASK-019 1.(a)).
+    const evTick = setInterval(() => {
+      if (document.visibilityState === "visible") void fetchEv();
+    }, EV_REFRESH_MS);
+    return () => {
+      clearTimeout(first);
+      clearInterval(evTick);
+    };
+  }, [fetchFacilities, fetchEnforcement, fetchParking, fetchGas, fetchEv]);
 
   // 도로 모양을 받는 동안 경과 시간(초)을 1초마다 갱신한다.
   useEffect(() => {
@@ -405,8 +519,9 @@ export function TrafficDashboard() {
     counts.PARK = parking?.lots.length ?? 0;
     counts.GAS = gas?.stations.filter(isGasStation).length ?? 0;
     counts.LPG = gas?.stations.filter(isLpgStation).length ?? 0;
+    counts.EV = ev?.stations.length ?? 0;
     return counts;
-  }, [facilities, enforcement, parking, gas]);
+  }, [facilities, enforcement, parking, gas, ev]);
   // 반경 안 주유소와 휘발유 최저가(TASK-018 3.(a)).
   const nearGas = useMemo(
     () => (facilityTypes.has("GAS") && myLocation ? (gas?.stations ?? []).filter((s) => isGasStation(s) && distanceMeters(myLocation, { lat: s[5], lng: s[6] }) <= (NEARBY_RADIUS.GAS ?? 3000)) : []),
@@ -417,6 +532,17 @@ export function TrafficDashboard() {
     () => (facilityTypes.has("LPG") && myLocation ? (gas?.stations ?? []).filter((s) => isLpgStation(s) && distanceMeters(myLocation, { lat: s[5], lng: s[6] }) <= (NEARBY_RADIUS.LPG ?? 5000)) : []),
     [facilityTypes, myLocation, gas],
   );
+  // 반경 안 전기차 충전소(TASK-019). "급속만"이면 급속 충전기가 있는 곳만. 목록은 충전 가능 → 정보 없음 → 모두 사용 중, 같으면 가까운 순.
+  const evList = useMemo(() => {
+    if (!facilityTypes.has("EV") || !myLocation) return [];
+    const rank = (s: EvStationRow) => (evAvail(s) === null ? 1 : evAvail(s)! > 0 ? 0 : 2);
+    return (ev?.stations ?? [])
+      .filter((s) => !evFastOnly || s[5] > 0)
+      .map((s) => ({ s, meters: distanceMeters(myLocation, { lat: s[3], lng: s[4] }) }))
+      .filter((r) => r.meters <= (NEARBY_RADIUS.EV ?? 1000))
+      .sort((a, b) => rank(a.s) - rank(b.s) || a.meters - b.meters);
+  }, [facilityTypes, myLocation, ev, evFastOnly]);
+  const evAvailCount = evList.filter((r) => (evAvail(r.s) ?? 0) > 0).length;
   const lowLpg = nearLpg.reduce<number | null>((m, s) => (s[7] !== null && (m === null || s[7] < m) ? s[7] : m), null);
   const lowGasoline = nearGas.reduce<number | null>((m, s) => (s[3] !== null && (m === null || s[3] < m) ? s[3] : m), null);
   // 목록: 휘발유 싼 순(가격 없음은 아래), 같으면 가까운 순.
@@ -433,7 +559,7 @@ export function TrafficDashboard() {
       .sort((a, b) => Number(a.price === null) - Number(b.price === null) || (a.price ?? 0) - (b.price ?? 0) || a.meters - b.meters);
   const gasList = myLocation ? toFuelRows(nearGas, "GAS", myLocation) : [];
   const lpgList = myLocation ? toFuelRows(nearLpg, "LPG", myLocation) : [];
-  const focusFuel = (kind: "GAS" | "LPG", id: string) => {
+  const focusFuel = (kind: "GAS" | "LPG" | "EV", id: string) => {
     setGasFocus((prev) => ({ id: `${kind}-${id}`, seq: (prev?.seq ?? 0) + 1 }));
     revealMap(mapBox.current);
   };
@@ -492,12 +618,25 @@ export function TrafficDashboard() {
           card: gasCard({ id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel }, low, gas?.builtAt, "LPG"),
         };
       }),
+      ...evList.map(({ s }): FacilityPoint => {
+        const avail = evAvail(s);
+        return {
+          id: `EV-${s[0]}`,
+          type: "EV",
+          name: s[1],
+          model: "",
+          lat: s[3],
+          lng: s[4],
+          pin: { mark: "⚡", price: evCountText(avail, s[5] + s[6]) || null, color: evColor(avail), low: false },
+          card: evCard(s, ev?.statusAt ?? null),
+        };
+      }),
     ],
-    [facilities, facilityTypes, enforcement, parking, myLocation, nearGas, lowGasoline, nearLpg, lowLpg, gas],
+    [facilities, facilityTypes, enforcement, parking, myLocation, nearGas, lowGasoline, nearLpg, lowLpg, gas, evList, ev],
   );
   const nearbyOn = NEARBY_KEYS.filter((k) => facilityTypes.has(k));
   const nearbyCount = (k: FacilityKey) => facilityPoints.filter((p) => p.type === k).length;
-  const nearbyLabel: Partial<Record<FacilityKey, string>> = { ENF: "주정차 단속 CCTV", PARK: "주차장", GAS: "주유소", LPG: "LPG 충전소" };
+  const nearbyLabel: Partial<Record<FacilityKey, string>> = { ENF: "주정차 단속 CCTV", PARK: "주차장", GAS: "주유소", LPG: "LPG 충전소", EV: "전기차 충전소" };
   // 반경이 같은 유형끼리 한 덩어리로: "내 위치 반경 1km 안 주정차 단속 CCTV 2곳 · 주차장 1곳 · 반경 3km 안 주유소 5곳 · 휘발유 최저 1,849원"
   const nearbyMaxRadius = Math.max(0, ...nearbyOn.map((k) => NEARBY_RADIUS[k] ?? 1000));
   const nearbyText = [...new Set(nearbyOn.map((k) => NEARBY_RADIUS[k] ?? 1000))]
@@ -505,7 +644,8 @@ export function TrafficDashboard() {
     .join(" · ")
     .replace(/^/, "내 위치 ")
     .concat(lowGasoline !== null ? ` · 휘발유 최저 ${won(lowGasoline)}` : "")
-    .concat(lowLpg !== null ? ` · LPG 최저 ${won(lowLpg)}` : "");
+    .concat(lowLpg !== null ? ` · LPG 최저 ${won(lowLpg)}` : "")
+    .concat(facilityTypes.has("EV") && evList.length ? ` · 충전 가능 ${evAvailCount.toLocaleString("ko-KR")}곳` : "");
   function radiusText(r: number, keys: FacilityKey[]): string {
     const km = `${r / 1000}km`;
     const total = keys.reduce((s, k) => s + nearbyCount(k), 0);
@@ -534,7 +674,7 @@ export function TrafficDashboard() {
       inaccurate: `위치가 부정확합니다(오차 약 ${"accuracyMeters" in r ? r.accuracyMeters : "?"}m). 실외나 와이파이가 켜진 곳에서 다시 시도하세요.`,
       outsideJeju: "현재 위치가 제주 밖이라 내 위치 주변을 표시할 수 없습니다.",
     };
-    setLocationProblem(`내 위치 주변(주정차 단속·주차장·주유소·LPG 충전소)을 표시하지 못했습니다: ${reason[r.kind]}`);
+    setLocationProblem(`내 위치 주변(주정차 단속·주차장·주유소·LPG 충전소·전기차 충전소)을 표시하지 못했습니다: ${reason[r.kind]}`);
     setFacilityTypes((prev) => new Set([...prev].filter((k) => !NEARBY_KEYS.includes(k))));
   };
   const toggleFacility = (t: FacilityKey) => {
@@ -820,10 +960,10 @@ export function TrafficDashboard() {
             <p className="text-xs text-grey-600">
               제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV·웹카메라 점을 누르면 제주 ITS 교통정보센터(새 창)로 연결되며, 사이트의 CCTV 메뉴에서 같은 위치를 고르면 영상을 볼 수 있습니다. 주정차 단속은
               제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다{enforcement?.source === "mock" && "(모의 데이터)"}. 주차장은 전국주차장정보표준데이터(제주시·서귀포시)로 위치·면수·요금·운영 시간만 있고 실시간 남은 칸은 없습니다
-              {parking?.source === "mock" && "(모의 데이터)"}. 주유소는 제주 ITS 주유소 정보(오피넷 가격, 휘발유·경유·LPG, 1시간마다 다시 조회){gas?.source === "mock" && "(모의 데이터)"}입니다. LPG 충전소는 같은 자료의 LPG 판매 정보입니다. 주정차 단속·주차장(반경 1km)·주유소(반경 3km)·LPG 충전소(반경 5km)는 켜면 현재 위치를 한 번 확인해 반경 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나 저장하지 않습니다).
+              {parking?.source === "mock" && "(모의 데이터)"}. 주유소는 제주 ITS 주유소 정보(오피넷 가격, 휘발유·경유·LPG, 1시간마다 다시 조회){gas?.source === "mock" && "(모의 데이터)"}입니다. LPG 충전소는 같은 자료의 LPG 판매 정보입니다. 전기차 충전소는 제주 ITS 충전소·충전 가능 정보(30분마다 갱신){ev?.source === "mock" && "(모의 데이터)"}입니다. 주정차 단속·주차장·전기차 충전소(반경 1km)·주유소(반경 3km)·LPG 충전소(반경 5km)는 켜면 현재 위치를 한 번 확인해 반경 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나 저장하지 않습니다).
             </p>
           </div>
-          {(facilitiesLoading || enforcementLoading || parkingLoading || gasLoading) && (
+          {(facilitiesLoading || enforcementLoading || parkingLoading || gasLoading || evLoading) && (
             <p role="status" aria-label="교통시설물 처리 현황" className="rounded-2xl bg-brand-50 p-2 text-sm text-brand-900">
               <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
               교통시설물 불러오는 중…
@@ -837,7 +977,7 @@ export function TrafficDashboard() {
               </button>
             </div>
           )}
-          {(facilities || enforcement || parking || gas) && (
+          {(facilities || enforcement || parking || gas || ev) && (
             <ul aria-label="교통시설물 유형" className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
               {FACILITY_ORDER.map((t) => {
                 const on = facilityTypes.has(t);
@@ -884,6 +1024,9 @@ export function TrafficDashboard() {
           {facilityTypes.has("GAS") && myLocation && !locating && gasList.length > 0 && (
             <FuelList title="반경 3km 주유소 · 휘발유 싼 순" label="주유소 목록" fuel="휘발유" rows={gasList} low={lowGasoline} limit={gasLimit} onMore={() => setGasLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("GAS", id)} />
           )}
+          {facilityTypes.has("EV") && myLocation && !locating && ev && (
+            <EvList rows={evList} fastOnly={evFastOnly} onFastOnly={() => setEvFastOnly((v) => !v)} limit={evLimit} onMore={() => setEvLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("EV", id)} />
+          )}
           {facilityTypes.has("LPG") && myLocation && !locating && lpgList.length > 0 && (
             <FuelList title="반경 5km LPG 충전소 · LPG 싼 순" label="LPG 충전소 목록" fuel="LPG" rows={lpgList} low={lowLpg} limit={lpgLimit} onMore={() => setLpgLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("LPG", id)} />
           )}
@@ -891,6 +1034,14 @@ export function TrafficDashboard() {
             <p role="alert" className="rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
               {locationProblem}
             </p>
+          )}
+          {evProblem && (
+            <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
+              <span>전기차 충전소 정보를 불러오지 못했습니다.</span>
+              <button type="button" onClick={retryEv} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
+                다시 시도
+              </button>
+            </div>
           )}
           {gasProblem && (
             <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
@@ -992,8 +1143,8 @@ export function TrafficDashboard() {
       </main>
       <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
         <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
-        <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 주정차 단속·주차장·주유소·LPG 충전소를 켤 때만 한 번 확인하며, 이 기기에서 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
-        <p>지도 © OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사)</p>
+        <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 주정차 단속·주차장·주유소·LPG·전기차 충전소를 켤 때만 한 번 확인하며, 이 기기에서 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
+        <p>지도 © OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS</p>
       </footer>
     </div>
   );

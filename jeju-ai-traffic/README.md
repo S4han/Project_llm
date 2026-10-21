@@ -26,7 +26,7 @@ web/            React 앱 (Vite root, index.html, src/)
   src/features/routes/ 경로 비교 결과·지도(RouteMap)·혼잡 표시·추천 이유(ExplanationCard)·길 안내 시작(NavigationPanel)
   src/features/monitor/ 5분 재평가 제어기(monitor)와 화면(MonitorPanel)
   src/services/       API 호출(placesApi, routesApi, explanationsApi), 위치(geolocation), 앱 주소 열기(appLink)
-api/            Vercel Functions — 파일 하나가 엔드포인트 (api/health.ts, api/places.ts, api/routes/compare.ts, api/explanations.ts, api/traffic/incidents.ts, api/traffic/speeds.ts, api/traffic/links.ts, api/traffic/facilities.ts, api/traffic/enforcement.ts, api/traffic/parking.ts, api/traffic/gas.ts)
+api/            Vercel Functions — 파일 하나가 엔드포인트 (api/health.ts, api/places.ts, api/routes/compare.ts, api/explanations.ts, api/traffic/incidents.ts, api/traffic/speeds.ts, api/traffic/links.ts, api/traffic/facilities.ts, api/traffic/enforcement.ts, api/traffic/parking.ts, api/traffic/gas.ts, api/traffic/ev.ts)
 api/_lib/       함수 공용 코드 (밑줄 폴더는 Vercel이 엔드포인트로 배포하지 않음)
   errors.ts       오류 코드 ↔ HTTP 상태, 공통 오류 응답
   places.ts       장소 검색 처리(입력 검사·빈도 제한·사용량·제주 필터)
@@ -77,6 +77,7 @@ tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
 - `GET /api/traffic/facilities` → `{ facilities: [[ID, 유형(FTY01~FTY23), 설치 위치, 모델명, 위도, 경도]], failedTypes, builtAt, source }`(TASK-013). 제주 ITS 교통시설물정보(`getFacilityInfo?fcltType=`, 7개 유형). 키는 `JEJU_ITS_FACILITY_API_KEY` 또는 `JEJU_ITS_TRAFFIC_API_KEY`. 서버 하루 + CDN 7일 보관.
 - `GET /api/traffic/parking` → `{ lots: [[관리번호, 이름, 구분, 유형, 주소, 주차구획수, 운영 시간, 요금, 위도, 경도]], builtAt, source }`(TASK-017). 전국주차장정보표준데이터(공공데이터포털 15012896, `api.data.go.kr/openapi/tn_pubr_prkplce_info_api`, 제공기관 코드 제주시 6510000·서귀포시 6520000). 실시간 남은 칸 없음. 키 `DATA_GO_KR_API_KEY`. 서버 하루 + CDN 7일 보관.
 - `GET /api/traffic/gas` → `{ stations: [[주유소 ID, 상표 코드, 이름, 휘발유, 경유, 위도, 경도, LPG, 주소, 전화]], builtAt, source }`(TASK-018, 범위 변경: 제주 ITS C-ITS `infoGasInfoList`·`infoGasPriceList`, 제주 전체 2건). 좌표 KATEC → 위도·경도 변환(`shared/rules/katec.ts`). 키 `JEJU_ITS_API_KEY`(돌발 키에 함께 열림). 내 위치는 받지 않음(화면이 반경 3km를 거름). 서버·CDN 1시간 보관.
+- `GET /api/traffic/ev` → `{ stations: [[충전소 ID, 이름, 주소, 위도, 경도, 급속 수, 완속 수, 급속 가능, 완속 가능, 이용 시간, 운영기관, 전화, 주차 무료]], statusAt, builtAt, source }`(TASK-019). 제주 ITS C-ITS `infoEvInfoList`(충전기 단위 → 충전소로 묶음, 02·08 완속·그 외 급속)·`infoEvList`(충전 가능). 키 `JEJU_ITS_API_KEY`. 기본정보 하루·충전 가능 30분 보관. 내 위치는 받지 않음(화면이 반경 1km를 거름).
 - `GET /api/traffic/enforcement` → `{ cameras: [[데이터 코드, 설치 장소, 설치 주소, 회전형 수, 검지 수, 운영 시간, 위도, 경도]], builtAt, source }`(TASK-016). 제주시 주정차 단속 CCTV(공공데이터포털 15109175, `apis.data.go.kr/6510000/parkingControlCctvService/getParkingControlCctvList`, 제주시만 약 370곳). 키 `DATA_GO_KR_API_KEY`(인코딩 키는 그대로 붙임). 서버 하루 + CDN 7일 보관.
 - 화면 주소: `/`(첫 화면) 교통 현황 대시보드, `/route` 경로 추천, `/traffic`(예전 주소) 교통 현황(TASK-012). Vercel은 `vercel.json` `rewrites`로 `/route`·`/traffic`에도 같은 `index.html`을 준다. 대시보드는 화면이 켜져 있을 때만 1분마다 다시 조회한다.
   - 경로 표시 후 화면이 따로 요청한다. 경로 이름은 정해진 4개만 받는다(지시문 주입 방지). IP별 분당 10회.
