@@ -3,7 +3,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
 import { encodePolyline } from "../../shared/rules/polyline";
-import { REFRESH_MS, TrafficDashboard } from "../../web/src/features/traffic/TrafficDashboard";
+import { REFRESH_MS } from "../../web/src/features/traffic/TrafficDashboard";
+import { TrafficApp } from "../../web/src/features/traffic/TrafficApp";
+import { viewFromPath } from "../../web/src/features/traffic/views";
 import { parkingFeeKind } from "../../web/src/features/traffic/facilityStyle";
 
 const AT = "2026-10-20T00:33:00.000Z"; // KST 09:33
@@ -152,21 +154,108 @@ function stubLocation(at: { lat: number; lng: number } | null) {
 
 const counts = () => within(screen.getByRole("list", { name: "종류별 건수" })).getAllByRole("button").map((b) => b.textContent);
 
-describe("교통 현황 대시보드 (TASK-012)", () => {
-  it("종류별 건수, 묶음 목록, 조회 시각, 경로 추천 링크와 고지", async () => {
-    render(<TrafficDashboard />);
-    expect(await screen.findByText("감지된 사건 5건")).toBeTruthy();
-    expect(counts()).toEqual(["전체5", "돌발4", "통제0", "공사1"]);
-    const groups = screen.getByRole("list", { name: "확인된 교통 사건" });
-    expect(within(groups).getAllByRole("button").map((b) => b.textContent?.match(/^(.+?\d+건)/)?.[1])).toEqual(["정지차량 감지 3건", "지정체구간 감지 1건", "공사 도로 공사 1건"]);
-    expect(screen.getByText(/10월 20일 09:33 조회/)).toBeTruthy();
+/** 주소를 정하고 교통 현황을 연다(TASK-025: 대시보드 /, 항목별 지도 /map/…). */
+function openAt(path = "/") {
+  window.history.pushState(null, "", path);
+  return render(<TrafficApp />);
+}
+const map = () => screen.getByRole("region", { name: "교통 현황 지도" });
+const status = () => screen.getByRole("status", { name: "내 위치 주변 조회 범위" });
+
+describe("대시보드와 화면 전환 (TASK-025)", () => {
+  it("주소 → 화면: /·/traffic·모르는 주소는 대시보드", () => {
+    expect(viewFromPath("/")).toBe("home");
+    expect(viewFromPath("/traffic")).toBe("home");
+    expect(viewFromPath("/map/parking")).toBe("PARK");
+    expect(viewFromPath("/map/congested/")).toBe("congested");
+    expect(viewFromPath("/map/nothing")).toBe("home");
+  });
+
+  it("대시보드 카드: 도로 소통 3장, 내 위치 기준 주변 5장, 그 밖의 정보 2장, 지도 없음, 경로 추천 링크와 고지", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    openAt("/");
+    const card = (name: RegExp) => screen.getByRole("button", { name });
+    await waitFor(() => expect(card(/^원활/).textContent).toContain("1구간"));
+    expect(within(screen.getByRole("list", { name: "도로 소통 카드" })).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "원활1구간30km/h 이상지도 보기 ›",
+      "서행1구간15~30km/h지도 보기 ›",
+      "정체1구간15km/h 미만지도 보기 ›",
+    ]);
+    await waitFor(() => expect(screen.getByRole("status", { name: "대시보드 위치 기준" }).textContent).toBe("내 위치 기준(이 기기에서만 사용)"));
+    await waitFor(() => expect(card(/^전기차 충전소/).textContent).toContain("1곳"));
+    expect(within(screen.getByRole("list", { name: "내 주변 카드" })).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "주정차 단속2곳반경 1km 안지도 보기 ›",
+      "주차장1곳반경 1km · 무료 0곳지도 보기 ›",
+      "주유소1,849원반경 3km 휘발유 최저 · 2곳지도 보기 ›",
+      "LPG 충전소1,178원반경 5km LPG 최저 · 1곳지도 보기 ›",
+      "전기차 충전소1곳반경 1km 충전 가능 · 전체 3곳지도 보기 ›",
+    ]);
+    expect(card(/^돌발·통제·공사/).textContent).toContain("5건");
+    expect(card(/^CCTV 등 교통시설물/).textContent).toContain("4곳");
+    expect(screen.queryByRole("region", { name: "교통 현황 지도" })).toBeNull();
     expect(screen.getByRole("link", { name: "경로 추천 →" }).getAttribute("href")).toBe("/route");
     expect(screen.getByText("운전 중에는 화면을 조작하지 마세요.")).toBeTruthy();
     expect(screen.getByRole("contentinfo").textContent).toContain("제주 ITS");
   });
 
+  it("위치를 허용하지 않으면 경고 없이 제주 전체 수", async () => {
+    stubLocation(null);
+    openAt("/");
+    await waitFor(() => expect(screen.getByRole("status", { name: "대시보드 위치 기준" }).textContent).toBe("위치 허용 시 내 주변 · 지금은 제주 전체"));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^주차장/ }).textContent).toBe("주차장2곳제주 전체 · 무료 1곳지도 보기 ›"));
+    expect(screen.getByRole("button", { name: /^주정차 단속/ }).textContent).toBe("주정차 단속2곳제주시 전체지도 보기 ›");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("카드를 누르면 주소가 바뀌고 그 항목 지도 페이지, '← 대시보드'·뒤로 가기로 돌아오며 위치는 한 번만 묻는다", async () => {
+    const ask = stubLocation({ lat: 33.502, lng: 126.536 });
+    openAt("/");
+    await waitFor(() => expect(screen.getByRole("button", { name: /^주차장/ }).textContent).toContain("1곳"));
+    fireEvent.click(screen.getByRole("button", { name: /^주차장/ }));
+    expect(window.location.pathname).toBe("/map/parking");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("주차장");
+    expect(await screen.findByText("내 위치 반경 1km 안 주차장 1곳(무료 0곳)")).toBeTruthy();
+    expect(map().getAttribute("data-facilities")).toBe("1");
+    fireEvent.click(screen.getByRole("button", { name: "← 대시보드" }));
+    expect(window.location.pathname).toBe("/");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("제주 실시간 교통 현황");
+    // 뒤로 가기(popstate)
+    act(() => {
+      window.history.pushState(null, "", "/map/gas");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("주유소");
+    expect(screen.getByText("내 위치 반경 3km 안 주유소 2곳 · 휘발유 최저 1,849원")).toBeTruthy();
+    expect(map().getAttribute("data-facilities")).toBe("2");
+    expect(ask).toHaveBeenCalledTimes(1);
+  });
+
+  it("지도 페이지는 그 항목만: 정체 페이지에는 사건·시설물이 없고, 시설물 페이지에는 도로 소통 선이 없다", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    openAt("/map/congested");
+    await waitFor(() => expect(map().getAttribute("data-speed-lines")).toBe("1"));
+    expect(map().getAttribute("data-facilities")).toBe("0");
+    expect(screen.queryByRole("list", { name: "종류별 건수" })).toBeNull();
+    cleanup();
+    openAt("/map/gas");
+    await waitFor(() => expect(map().getAttribute("data-facilities")).toBe("2"));
+    expect(map().getAttribute("data-speed-lines")).toBe("0");
+    expect(screen.queryByRole("list", { name: "구간 소통 건수" })).toBeNull();
+  });
+});
+
+describe("돌발·통제·공사 페이지 (TASK-012 → TASK-025 /map/incidents)", () => {
+  it("종류별 건수, 묶음 목록, 조회 시각", async () => {
+    openAt("/map/incidents");
+    expect(await screen.findByText("감지된 사건 5건")).toBeTruthy();
+    expect(counts()).toEqual(["전체5", "돌발4", "통제0", "공사1"]);
+    const groups = screen.getByRole("list", { name: "확인된 교통 사건" });
+    expect(within(groups).getAllByRole("button").map((b) => b.textContent?.match(/^(.+?\d+건)/)?.[1])).toEqual(["정지차량 감지 3건", "지정체구간 감지 1건", "공사 도로 공사 1건"]);
+    expect(screen.getByText(/10월 20일 09:33 조회/)).toBeTruthy();
+  });
+
   it("종류 필터: 공사만 보이고, 없는 종류는 '이상 없음'이 아니라고 안내", async () => {
-    render(<TrafficDashboard />);
+    openAt("/map/incidents");
     await screen.findByText("감지된 사건 5건");
     fireEvent.click(screen.getByRole("button", { name: /공사1/ }));
     expect(screen.getByText("감지된 사건 1건")).toBeTruthy();
@@ -176,7 +265,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
   });
 
   it("묶음을 누르면 지도 지점 표시·다음 지점·전체 보기", async () => {
-    render(<TrafficDashboard />);
+    openAt("/map/incidents");
     fireEvent.click(await screen.findByRole("button", { name: /정지차량 감지 3건/ }));
     expect(screen.getByText("정지차량 감지 1/3번째 지점 표시 중")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "다음 지점 ›" }));
@@ -186,7 +275,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
   });
 
   it("화면이 켜져 있을 때만 1분마다 다시 조회, 실패하면 마지막 성공 결과를 남긴다", async () => {
-    render(<TrafficDashboard />);
+    openAt("/map/incidents");
     await screen.findByText("감지된 사건 5건");
     expect(calls).toBe(1);
     respond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "네트워크 연결을 확인한 뒤 다시 시도하세요." } }, { status: 503 });
@@ -205,7 +294,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
 
   it("한도·장애면 '정보 미확보(사유)', 사건 0건과 구분", async () => {
     respond = () => Response.json({ incidents: [], status: "quotaBlocked", observedAt: null, retryAfter: "2026-10-20T15:00:00.000Z" });
-    render(<TrafficDashboard />);
+    openAt("/map/incidents");
     expect((await screen.findAllByRole("alert"))[0]!.textContent).toBe("교통 사건 정보 미확보(오늘 조회 한도 도달, 10월 21일 00:00 이후 다시 사용 가능)");
     expect(counts()).toEqual(["전체–", "돌발–", "통제–", "공사–"]);
     expect(screen.queryByText(/감지된 돌발·통제·공사가 없습니다/)).toBeNull();
@@ -213,69 +302,46 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
 
   it("사건이 없으면 '감지된 사건 없음'과 한계를 함께 안내", async () => {
     respond = () => Response.json({ ...OK, incidents: [] });
-    render(<TrafficDashboard />);
+    openAt("/map/incidents");
     expect(await screen.findByText(/현재 제주 ITS에 감지된 돌발·통제·공사가 없습니다/)).toBeTruthy();
   });
+});
 
-  it("도로 소통: 속도가 있는 구간만 원활·서행·정체로 세고, 끄고 켤 수 있다", async () => {
-    render(<TrafficDashboard />);
-    const counts = await screen.findByRole("list", { name: "구간 소통 건수" });
-    await within(counts).findByText("3");
-    expect(within(counts).getAllByRole("button").map((b) => b.textContent)).toEqual(["전체3", "원활1", "서행1", "정체1"]);
+describe("도로 소통 페이지 (TASK-012·015 → TASK-025 /map/smooth·slow·congested)", () => {
+  it("원활 페이지: 상태별 건수(누르면 그 상태 페이지), 그 상태 구간만 지도에, 도로명별 목록 → 강조, 전체 보기로 닫음", async () => {
+    openAt("/map/smooth");
+    const list = await screen.findByRole("list", { name: "구간 소통 건수" });
+    await within(list).findAllByText("1");
+    expect(within(list).getAllByRole("button").map((b) => b.textContent)).toEqual(["원활1", "서행1", "정체1"]);
+    expect(within(list).getByRole("button", { name: /원활/ }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText(/10월 20일 09:30 기준/)).toBeTruthy();
-    const map = screen.getByRole("region", { name: "교통 현황 지도" });
-    expect(map.getAttribute("data-speed-lines")).toBe("3");
-    const toggle = screen.getByRole("button", { name: "지도에 표시 중" });
-    fireEvent.click(toggle);
-    expect(map.getAttribute("data-speed-lines")).toBe("0");
-    expect(screen.getByRole("button", { name: "지도에 표시" }).getAttribute("aria-pressed")).toBe("false");
-  });
-
-  it("구간 속도 한도면 미확보 안내, 사건 정보는 그대로", async () => {
-    speedsRespond = () => Response.json({ status: "quotaBlocked", observedAt: null, speeds: {}, source: "jejuIts", retryAfter: "2026-10-20T15:00:00.000Z" });
-    render(<TrafficDashboard />);
-    expect(await screen.findByText("구간 속도 정보 미확보(오늘 조회 한도 도달, 10월 21일 00:00 이후 다시 사용 가능)")).toBeTruthy();
-    expect(screen.getByText("감지된 사건 5건")).toBeTruthy();
-    expect(screen.getByRole("list", { name: "구간 소통 건수" }).textContent).toBe("전체–원활–서행–정체–");
-  });
-
-  it("원활 카드: 그 상태 구간만 지도에, 도로명별 목록 → 도로를 누르면 강조, 전체 보기로 닫음", async () => {
-    render(<TrafficDashboard />);
-    const counts = await screen.findByRole("list", { name: "구간 소통 건수" });
-    await within(counts).findByText("3");
-    const map = screen.getByRole("region", { name: "교통 현황 지도" });
-    expect(screen.queryByRole("list", { name: /도로 목록|구간 목록/ })).toBeNull();
-
-    fireEvent.click(within(counts).getByRole("button", { name: /원활/ }));
-    expect(map.getAttribute("data-speed-lines")).toBe("1");
-    const list = screen.getByRole("list", { name: "원활 도로 목록" });
+    expect(map().getAttribute("data-speed-lines")).toBe("1");
+    const roads = screen.getByRole("list", { name: "원활 도로 목록" });
     expect(screen.getByText("원활 도로 1곳 · 구간이 많은 순")).toBeTruthy();
-    const road = within(list).getByRole("button", { name: /노형로/ });
+    const road = within(roads).getByRole("button", { name: /노형로/ });
     expect(road.textContent).toContain("노형로 · 원활 1구간 · 평균 45km/h");
-
     fireEvent.click(road);
     expect(road.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText("노형로 원활 1구간 표시 중")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "전체 보기" }));
     expect(screen.queryByText(/구간 표시 중/)).toBeNull();
 
-    fireEvent.click(within(counts).getByRole("button", { name: /전체/ }));
-    expect(map.getAttribute("data-speed-lines")).toBe("3");
-    expect(screen.queryByRole("list", { name: /도로 목록|구간 목록/ })).toBeNull();
+    fireEvent.click(within(list).getByRole("button", { name: /정체/ }));
+    expect(window.location.pathname).toBe("/map/congested");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("도로 소통 · 정체");
   });
 
-  it("정체·서행 카드를 누르면 실시간 정체구간 목록(도로명·표시·A → B), 누르면 지도 강조, 다시 누르거나 전체 보기로 닫음 (TASK-015)", async () => {
-    render(<TrafficDashboard />);
-    const counts = await screen.findByRole("list", { name: "구간 소통 건수" });
-    await within(counts).findByText("3");
-    // 따로 된 카드는 없고, 누르기 전에는 목록이 없다.
-    expect(screen.queryByRole("region", { name: "실시간 정체구간" })).toBeNull();
-    expect(screen.queryByRole("list", { name: /구간 목록/ })).toBeNull();
-    const map = screen.getByRole("region", { name: "교통 현황 지도" });
+  it("구간 속도 한도면 미확보 안내", async () => {
+    speedsRespond = () => Response.json({ status: "quotaBlocked", observedAt: null, speeds: {}, source: "jejuIts", retryAfter: "2026-10-20T15:00:00.000Z" });
+    openAt("/map/congested");
+    expect(await screen.findByText("구간 속도 정보 미확보(오늘 조회 한도 도달, 10월 21일 00:00 이후 다시 사용 가능)")).toBeTruthy();
+    expect(screen.getByRole("list", { name: "구간 소통 건수" }).textContent).toBe("원활–서행–정체–");
+  });
 
-    fireEvent.click(within(counts).getByRole("button", { name: /정체/ }));
-    expect(map.getAttribute("data-speed-lines")).toBe("1");
-    expect(screen.getByText("실시간 정체구간 1곳 · 느린 순")).toBeTruthy();
+  it("정체 페이지: 실시간 정체구간 목록(도로명·표시·A → B), 누르면 지도 강조, 다시 누르거나 전체 보기로 닫음, 서행 페이지 (TASK-015)", async () => {
+    openAt("/map/congested");
+    expect(await screen.findByText("실시간 정체구간 1곳 · 느린 순")).toBeTruthy();
+    expect(map().getAttribute("data-speed-lines")).toBe("1");
     const rows = within(screen.getByRole("list", { name: "실시간 정체구간 목록" })).getAllByRole("button");
     expect(rows.map((r) => r.textContent)).toEqual(["평화로정체어승생삼거리 → 광평교차로8km/h지도 ›"]);
     fireEvent.click(rows[0]!);
@@ -284,7 +350,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     fireEvent.click(rows[0]!);
     expect(screen.queryByText(/광평교차로 표시 중/)).toBeNull();
 
-    fireEvent.click(within(counts).getByRole("button", { name: /서행/ }));
+    fireEvent.click(within(screen.getByRole("list", { name: "구간 소통 건수" })).getByRole("button", { name: /서행/ }));
     const slow = within(screen.getByRole("list", { name: "실시간 서행구간 목록" })).getAllByRole("button");
     expect(slow.map((r) => r.textContent)).toEqual(["연북로서행1구간20km/h지도 ›"]);
     fireEvent.click(slow[0]!);
@@ -292,13 +358,11 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(slow[0]!.getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("도로 소통 카드가 사건 카드보다 위에 있고, 구간 속도도 1분마다 다시 조회한다", async () => {
-    render(<TrafficDashboard />);
+  it("구간 속도도 1분마다 다시 조회한다", async () => {
+    openAt("/map/slow");
     const speedsRegion = await screen.findByRole("region", { name: "도로 소통" });
     await within(speedsRegion).findByText(/마지막 조회/);
     expect(within(speedsRegion).getByText(/화면이 켜져 있을 때 1분마다 자동 갱신/)).toBeTruthy();
-    const kinds = screen.getByRole("list", { name: "종류별 건수" });
-    expect(speedsRegion.compareDocumentPosition(kinds) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(speedCalls).toBe(1);
     await act(async () => vi.advanceTimersByTime(REFRESH_MS));
     expect(speedCalls).toBe(2);
@@ -307,7 +371,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
   it("처리 현황: 도로 모양을 받는 동안 단계·경과 시간과 지도 안내, 끝나면 감춘다", async () => {
     let release: (r: Response) => void = () => undefined;
     linksRespond = () => new Promise<Response>((resolve) => (release = resolve));
-    render(<TrafficDashboard />);
+    openAt("/map/smooth");
     const progress = await screen.findByRole("status", { name: "도로 소통 처리 현황" });
     expect(progress.textContent).toContain("① 도로 모양 불러오는 중… 0초");
     expect(progress.textContent).toContain("처음 한 번은 최대 1분 걸릴 수 있어요.");
@@ -318,23 +382,23 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     await act(async () => release(Response.json(LINKS)));
     await waitFor(() => expect(screen.queryByRole("status", { name: "도로 소통 처리 현황" })).toBeNull());
     expect(screen.queryByText("도로 소통 불러오는 중…")).toBeNull();
-    expect(screen.getByRole("region", { name: "교통 현황 지도" }).getAttribute("data-speed-lines")).toBe("3");
+    expect(map().getAttribute("data-speed-lines")).toBe("1");
   });
 
   it("도로 모양 실패 시 다시 시도 버튼으로 다시 받는다", async () => {
     linksRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
-    render(<TrafficDashboard />);
+    openAt("/map/smooth");
     const alert = await screen.findByText("도로 모양을 불러오지 못해 구간 속도 색을 표시할 수 없습니다.");
     expect(linksCalls).toBe(1);
     linksRespond = () => Response.json(LINKS);
     fireEvent.click(within(alert.parentElement!).getByRole("button", { name: "다시 시도" }));
-    await waitFor(() => expect(screen.getByRole("region", { name: "교통 현황 지도" }).getAttribute("data-speed-lines")).toBe("3"));
+    await waitFor(() => expect(map().getAttribute("data-speed-lines")).toBe("1"));
     expect(linksCalls).toBe(2);
     expect(screen.queryByText(/도로 모양을 불러오지 못해/)).toBeNull();
   });
 
   it("1분 자동 갱신 중에는 '갱신 중…'만 작게 표시", async () => {
-    render(<TrafficDashboard />);
+    openAt("/map/smooth");
     const region = await screen.findByRole("region", { name: "도로 소통" });
     await within(region).findByText(/마지막 조회/);
     let release: (r: Response) => void = () => undefined;
@@ -345,137 +409,111 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     await act(async () => release(Response.json(SPEEDS)));
     await waitFor(() => expect(within(region).queryByText("· 갱신 중…")).toBeNull());
   });
+});
 
-  it("교통시설물: 유형별 개수, 기본 모두 꺼짐, 누르면 지도에 켜고 끈다, 없는 유형은 누를 수 없음", async () => {
-    render(<TrafficDashboard />);
+describe("CCTV 등 교통시설물 페이지 (TASK-013 → TASK-025 /map/facilities)", () => {
+  it("제주 ITS 유형별 개수, 기본 모두 꺼짐, 누르면 지도에 켜고 끈다, 없는 유형은 누를 수 없음", async () => {
+    openAt("/map/facilities");
     const list = await screen.findByRole("list", { name: "교통시설물 유형" });
     const buttons = within(list).getAllByRole("button");
-    expect(buttons.map((b) => b.textContent)).toEqual(["VMS1", "CCTV2", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속2", "주차장2", "주유소3", "LPG 충전소1", "전기차 충전소3"]);
+    expect(buttons.map((b) => b.textContent)).toEqual(["VMS1", "CCTV2", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1"]);
     expect(buttons.every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
     expect((within(list).getByRole("button", { name: /웹카메라/ }) as HTMLButtonElement).disabled).toBe(true);
-    const map = screen.getByRole("region", { name: "교통 현황 지도" });
-    expect(map.getAttribute("data-facilities")).toBe("0");
+    expect(map().getAttribute("data-facilities")).toBe("0");
     fireEvent.click(within(list).getByRole("button", { name: /^CCTV/ }));
-    expect(map.getAttribute("data-facilities")).toBe("2");
+    expect(map().getAttribute("data-facilities")).toBe("2");
     fireEvent.click(within(list).getByRole("button", { name: /RWIS/ }));
-    expect(map.getAttribute("data-facilities")).toBe("3");
+    expect(map().getAttribute("data-facilities")).toBe("3");
     fireEvent.click(within(list).getByRole("button", { name: /^CCTV/ }));
-    expect(map.getAttribute("data-facilities")).toBe("1");
+    expect(map().getAttribute("data-facilities")).toBe("1");
   });
 
-  it("주정차 단속 CCTV(TASK-016): 교통시설물 카드의 한 유형, 기본 꺼짐. 켜면 (화면을 열 때 확인한) 위치 기준 반경 1km 안만 지도에", async () => {
+  it("교통시설물 실패 시 안내와 다시 시도", async () => {
+    facilitiesRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
+    openAt("/map/facilities");
+    const msg = await screen.findByText("교통시설물을 불러오지 못했습니다.");
+    facilitiesRespond = () => Response.json(FACILITIES);
+    fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
+    expect(await screen.findByRole("list", { name: "교통시설물 유형" })).toBeTruthy();
+  });
+});
+
+describe("내 주변 페이지 (TASK-016~024 → TASK-025 /map/enforcement·parking·gas·lpg·ev)", () => {
+  it("주정차 단속: (화면을 열 때 확인한) 위치 기준 반경 1km 안만 지도에, 위치 다시 확인", async () => {
     const ask = stubLocation({ lat: 33.502, lng: 126.536 });
-    render(<TrafficDashboard />);
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    const enf = await within(list).findByRole("button", { name: /주정차 단속2/ });
-    expect(enf.getAttribute("aria-pressed")).toBe("false");
-    // 화면을 열 때 한 번 확인한다(TASK-023). 켤 때는 그 위치를 그대로 쓴다.
-    expect(ask).toHaveBeenCalledTimes(1);
-    const map = screen.getByRole("region", { name: "교통 현황 지도" });
-    fireEvent.click(enf);
+    openAt("/map/enforcement");
     expect(await screen.findByText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳")).toBeTruthy();
-    expect(map.getAttribute("data-facilities")).toBe("2");
-    expect(map.getAttribute("data-nearby")).toBe("1");
+    expect(map().getAttribute("data-facilities")).toBe("2");
+    expect(map().getAttribute("data-nearby")).toBe("1");
     expect(ask).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/켜면 현재 위치를 한 번 확인해 반경 안만/)).toBeTruthy();
-    // 끄고 다시 켜면 위치를 다시 묻지 않는다(위치 다시 확인 버튼으로만)
-    fireEvent.click(enf);
-    expect(map.getAttribute("data-nearby")).toBe("0");
-    fireEvent.click(enf);
-    expect(ask).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/제주시 자료\(공공데이터포털\)로 서귀포시는 없고/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "위치 다시 확인" }));
     await waitFor(() => expect(ask).toHaveBeenCalledTimes(2));
   });
 
-  it("화면을 열 때 위치를 한 번 확인해 지도를 내 위치 기준으로, 거부하면 안내 없이 제주 전체(TASK-023)", async () => {
+  it("위치를 허용하면 지도를 내 위치 기준으로('제주 전체' 버튼), 거부하면 주변 페이지에서 다시 확인하고 이유와 다시 시도(TASK-023)", async () => {
     const ask = stubLocation({ lat: 33.502, lng: 126.536 });
-    render(<TrafficDashboard />);
+    openAt("/map/parking");
     expect(await screen.findByRole("button", { name: "제주 전체" })).toBeTruthy();
     expect(ask).toHaveBeenCalledTimes(1);
     cleanup();
-    stubLocation(null);
-    render(<TrafficDashboard />);
-    expect(await screen.findByText("감지된 사건 5건")).toBeTruthy();
+    const denied = stubLocation(null);
+    openAt("/map/parking");
+    expect(await screen.findByText(/내 위치 주변\(주정차 단속·주차장·주유소·LPG 충전소·전기차 충전소\)을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
+    expect(denied).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("button", { name: "제주 전체" })).toBeNull();
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(map().getAttribute("data-facilities")).toBe("0");
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    expect(await screen.findByText("내 위치 반경 1km 안 주차장 1곳(무료 0곳)")).toBeTruthy();
+    expect(map().getAttribute("data-facilities")).toBe("1");
   });
 
-  it("제주 밖이면 제주 전체로 열고, 주변 유형을 켤 때 다시 확인한다(TASK-023)", async () => {
+  it("제주 밖이면 주변 페이지에서 다시 확인하고 이유를 보인다(TASK-023)", async () => {
     const ask = stubLocation({ lat: 37.56, lng: 126.97 });
-    render(<TrafficDashboard />);
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
-    expect(screen.queryByRole("button", { name: "제주 전체" })).toBeNull();
-    fireEvent.click(await within(list).findByRole("button", { name: /주차장2/ }));
+    openAt("/map/parking");
     await waitFor(() => expect(ask).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/현재 위치가 제주 밖이라/)).toBeTruthy();
   });
 
-  it("주정차 단속: 반경 밖이면 없다고 안내, 위치 권한이 없으면 끄고 이유를 보인다", async () => {
+  it("주정차 단속: 반경 밖이면 없다고 안내", async () => {
     stubLocation({ lat: 33.25, lng: 126.56 });
-    render(<TrafficDashboard />);
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    fireEvent.click(await within(list).findByRole("button", { name: /주정차 단속2/ }));
+    openAt("/map/enforcement");
     expect(await screen.findByText("내 위치 반경 1km 안에 주정차 단속 CCTV가 없습니다.(주정차 단속은 제주시 자료만 있음)")).toBeTruthy();
-    expect(screen.getByRole("region", { name: "교통 현황 지도" }).getAttribute("data-facilities")).toBe("0");
-    cleanup();
-
-    stubLocation(null);
-    render(<TrafficDashboard />);
-    const list2 = await screen.findByRole("list", { name: "교통시설물 유형" });
-    const enf = await within(list2).findByRole("button", { name: /주정차 단속2/ });
-    fireEvent.click(enf);
-    expect(await screen.findByText(/내 위치 주변\(주정차 단속·주차장·주유소·LPG 충전소·전기차 충전소\)을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
-    expect(enf.getAttribute("aria-pressed")).toBe("false");
+    expect(map().getAttribute("data-facilities")).toBe("0");
   });
 
-  it("주차장(TASK-017): 켜면 위치 확인 후 반경 1km 안만, 주정차 단속과 함께 켜면 한 줄로 안내, 위치는 한 번만 묻는다", async () => {
-    const ask = stubLocation({ lat: 33.502, lng: 126.536 });
-    render(<TrafficDashboard />);
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    const park = await within(list).findByRole("button", { name: /주차장2/ });
-    expect(screen.getByText(/실시간 남은 칸은 없습니다/)).toBeTruthy();
-    fireEvent.click(park);
-    expect(await screen.findByText("내 위치 반경 1km 안 주차장 1곳(무료 0곳)")).toBeTruthy();
-    const map = screen.getByRole("region", { name: "교통 현황 지도" });
-    expect(map.getAttribute("data-facilities")).toBe("1");
-    fireEvent.click(within(list).getByRole("button", { name: /주정차 단속2/ }));
-    expect(screen.getByText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳 · 주차장 1곳(무료 0곳)")).toBeTruthy();
-    expect(map.getAttribute("data-facilities")).toBe("3");
-    expect(ask).toHaveBeenCalledTimes(1);
-  });
-
-  it("주유소(TASK-018): 반경 3km 안만, 휘발유 최저가 안내, 주차장(1km)과 함께 켜면 반경별로 한 줄", async () => {
+  it("주차장(TASK-017): 반경 1km 안만, 무료 수, 실시간 남은 칸 없음 안내", async () => {
     stubLocation({ lat: 33.502, lng: 126.536 });
-    render(<TrafficDashboard />);
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    fireEvent.click(await within(list).findByRole("button", { name: /주유소3/ }));
+    openAt("/map/parking");
+    expect(await screen.findByText("내 위치 반경 1km 안 주차장 1곳(무료 0곳)")).toBeTruthy();
+    expect(screen.getByText(/실시간 남은 칸은 없습니다/)).toBeTruthy();
+    expect(map().getAttribute("data-facilities")).toBe("1");
+  });
+
+  it("주유소(TASK-018): 반경 3km 안만, 휘발유 최저가 안내", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    openAt("/map/gas");
     expect(await screen.findByText("내 위치 반경 3km 안 주유소 2곳 · 휘발유 최저 1,849원")).toBeTruthy();
-    const map = screen.getByRole("region", { name: "교통 현황 지도" });
-    expect(map.getAttribute("data-facilities")).toBe("2");
-    fireEvent.click(within(list).getByRole("button", { name: /주차장2/ }));
-    expect(screen.getByText("내 위치 반경 1km 안 주차장 1곳(무료 0곳) · 반경 3km 안 주유소 2곳 · 휘발유 최저 1,849원")).toBeTruthy();
+    expect(map().getAttribute("data-facilities")).toBe("2");
     expect(screen.getByText(/제주 ITS 주유소 정보/)).toBeTruthy();
   });
 
-  it("LPG 충전소(범위 변경): 주유소와 따로, 반경 5km·LPG 최저가·목록, 주유소 목록에는 LPG만 파는 곳이 없다", async () => {
+  it("LPG 충전소: 반경 5km·LPG 최저가·목록, 주유소 목록에는 LPG만 파는 곳이 없다", async () => {
     stubLocation({ lat: 33.502, lng: 126.536 });
-    render(<TrafficDashboard />);
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    fireEvent.click(await within(list).findByRole("button", { name: /LPG 충전소1/ }));
+    openAt("/map/lpg");
     expect(await screen.findByText("내 위치 반경 5km 안 LPG 충전소 1곳 · LPG 최저 1,178원")).toBeTruthy();
     const rows = within(screen.getByRole("list", { name: "LPG 충전소 목록" })).getAllByRole("button");
     expect(rows.map((r) => r.textContent)).toEqual(["SK최저가제주LPG충전소1.5km1,178원LPG"]);
-    fireEvent.click(within(list).getByRole("button", { name: /주유소3/ }));
-    expect(within(screen.getByRole("list", { name: "주유소 목록" })).queryByText(/LPG충전소/)).toBeNull();
-    expect(screen.getByText("내 위치 반경 3km 안 주유소 2곳 · 반경 5km 안 LPG 충전소 1곳 · 휘발유 최저 1,849원 · LPG 최저 1,178원")).toBeTruthy();
+    cleanup();
+    openAt("/map/gas");
+    const gasRows = await screen.findByRole("list", { name: "주유소 목록" });
+    expect(within(gasRows).queryByText(/LPG충전소/)).toBeNull();
   });
 
   it("전기차 충전소(TASK-019): 반경 1km, 충전 가능 먼저·가까운 순, 급속만, 충전 가능 수 안내", async () => {
     stubLocation({ lat: 33.502, lng: 126.536 });
-    render(<TrafficDashboard />);
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    fireEvent.click(await within(list).findByRole("button", { name: /전기차 충전소3/ }));
+    openAt("/map/ev");
     expect(await screen.findByText("내 위치 반경 1km 안 전기차 충전소 3곳 · 충전 가능 1곳")).toBeTruthy();
     const rows = () => within(screen.getByRole("list", { name: "전기차 충전소 목록" })).getAllByRole("button").map((r) => r.textContent);
     expect(rows()).toEqual([
@@ -485,32 +523,28 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     ]);
     fireEvent.click(screen.getByRole("button", { name: "⚡ 급속만" }));
     expect(rows()).toEqual(["⚡시청 충전소0.5km · 급속 1/2 · 완속 2/43대충전 가능", "⚡노형 급속충전소0.3km · 급속 ?/3–상태 정보 없음"]);
-    expect(screen.getByRole("region", { name: "교통 현황 지도" }).getAttribute("data-facilities")).toBe("2");
+    expect(map().getAttribute("data-facilities")).toBe("2");
   });
 
   it("전기차 충전소 자료를 못 받으면 안내와 다시 시도", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
     evRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
-    render(<TrafficDashboard />);
+    openAt("/map/ev");
     const msg = await screen.findByText("전기차 충전소 정보를 불러오지 못했습니다.");
     evRespond = () => Response.json(EV);
     fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    expect(await within(list).findByRole("button", { name: /전기차 충전소3/ })).toBeTruthy();
+    expect(await screen.findByText("내 위치 반경 1km 안 전기차 충전소 3곳 · 충전 가능 1곳")).toBeTruthy();
   });
 
   it("반경 안에 주유소가 없으면 '주유소가 없습니다'(조사)", async () => {
     stubLocation({ lat: 33.36, lng: 126.75 });
-    render(<TrafficDashboard />);
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    fireEvent.click(await within(list).findByRole("button", { name: /주유소3/ }));
+    openAt("/map/gas");
     expect(await screen.findByText("내 위치 반경 3km 안에 주유소가 없습니다.")).toBeTruthy();
   });
 
   it("주유소 목록: 휘발유 싼 순, 맨 위 최저가는 '최저가' 표시·금색 칸, 나머지는 최저가와의 차이", async () => {
     stubLocation({ lat: 33.502, lng: 126.536 });
-    render(<TrafficDashboard />);
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    fireEvent.click(await within(list).findByRole("button", { name: /주유소3/ }));
+    openAt("/map/gas");
     const rows = within(await screen.findByRole("list", { name: "주유소 목록" })).getAllByRole("button");
     expect(screen.getByText("반경 3km 주유소 · 휘발유 싼 순")).toBeTruthy();
     expect(rows.map((r) => r.textContent)).toEqual(["알뜰최저가알뜰주유소1.3km · 경유 1,829원1,849원휘발유", "SK도남주유소1.4km · 경유 1,845원1,867원최저가보다 +18원"]);
@@ -521,29 +555,30 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
   it("같은 최저가가 여럿이면 가장 가까운 한 곳만 금색 칸, 나머지는 '최저가와 같음'(TASK-021)", async () => {
     gasRespond = () => Response.json({ ...GAS, stations: GAS.stations.map((r) => (r[0] === "G1" ? ["G1", "SKE", "도남주유소", 1849, 1845, 33.4918, 126.5273, null, "제주시 도남동", ""] : r)) });
     stubLocation({ lat: 33.502, lng: 126.536 });
-    render(<TrafficDashboard />);
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    fireEvent.click(await within(list).findByRole("button", { name: /주유소3/ }));
+    openAt("/map/gas");
     const rows = within(await screen.findByRole("list", { name: "주유소 목록" })).getAllByRole("button");
     expect(rows.map((r) => r.textContent)).toEqual(["알뜰최저가알뜰주유소1.3km · 경유 1,829원1,849원휘발유", "SK도남주유소1.4km · 경유 1,845원1,849원최저가와 같음"]);
     expect(rows[0]!.className).toContain("ring-amber-400");
     expect(rows[1]!.className).not.toContain("ring-amber-400");
   });
 
-  it("주유소: 한도면 '오늘 한도에 도달' 안내", async () => {
+  it("주유소: 한도면 '오늘 한도에 도달' 안내(대시보드 카드는 불러오지 못함)", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
     gasRespond = () => Response.json({ error: { code: "QUOTA_BLOCKED", message: "x", retryAfter: "2026-10-21T15:00:00.000Z" } }, { status: 429 });
-    render(<TrafficDashboard />);
+    openAt("/map/gas");
     expect(await screen.findByText("오늘 주유소 조회 한도에 도달해 표시할 수 없습니다(10월 22일 00:00 이후 다시 확인).")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "← 대시보드" }));
+    expect(screen.getByRole("button", { name: /^주유소/ }).textContent).toBe("주유소–불러오지 못했습니다지도 보기 ›");
   });
 
   it("주유소 자료를 못 받으면 안내와 다시 시도", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
     gasRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
-    render(<TrafficDashboard />);
+    openAt("/map/gas");
     const msg = await screen.findByText("주유소 정보를 불러오지 못했습니다.");
     gasRespond = () => Response.json(GAS);
     fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    expect(await within(list).findByRole("button", { name: /주유소3/ })).toBeTruthy();
+    expect(await screen.findByText("내 위치 반경 3km 안 주유소 2곳 · 휘발유 최저 1,849원")).toBeTruthy();
   });
 
   it("주차장 요금 구분(TASK-022): 무료·유료·혼합·정보 없음", () => {
@@ -565,49 +600,36 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
         ],
       });
     stubLocation({ lat: 33.502, lng: 126.536 });
-    render(<TrafficDashboard />);
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    fireEvent.click(await within(list).findByRole("button", { name: /주차장4/ }));
+    openAt("/map/parking");
     expect(await screen.findByText("내 위치 반경 1km 안 주차장 3곳(무료 1곳)")).toBeTruthy();
     expect(within(screen.getByRole("list", { name: "주차장 요금 범례" })).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["무료", "유료", "일부유료"]);
-    const map = screen.getByRole("region", { name: "교통 현황 지도" });
-    expect(map.getAttribute("data-facilities")).toBe("3");
+    expect(map().getAttribute("data-facilities")).toBe("3");
     const free = screen.getByRole("button", { name: "P 무료만" });
     fireEvent.click(free);
     expect(free.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("내 위치 반경 1km 안 무료 주차장 1곳")).toBeTruthy();
-    expect(map.getAttribute("data-facilities")).toBe("1");
+    expect(status().textContent).toContain("내 위치 반경 1km 안 무료 주차장 1곳");
+    expect(map().getAttribute("data-facilities")).toBe("1");
     fireEvent.click(free);
-    expect(map.getAttribute("data-facilities")).toBe("3");
+    expect(map().getAttribute("data-facilities")).toBe("3");
   });
 
   it("주차장 자료를 못 받으면 안내와 다시 시도", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
     parkingRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
-    render(<TrafficDashboard />);
+    openAt("/map/parking");
     const msg = await screen.findByText("주차장 정보를 불러오지 못했습니다.");
     parkingRespond = () => Response.json(PARKING);
     fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
-    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
-    expect(await within(list).findByRole("button", { name: /주차장2/ })).toBeTruthy();
+    expect(await screen.findByText("내 위치 반경 1km 안 주차장 1곳(무료 0곳)")).toBeTruthy();
   });
 
-  it("주정차 단속 자료를 못 받으면 안내와 다시 시도(제주 ITS 시설물은 그대로)", async () => {
+  it("주정차 단속 자료를 못 받으면 안내와 다시 시도", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
     enforcementRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
-    render(<TrafficDashboard />);
+    openAt("/map/enforcement");
     const msg = await screen.findByText("주정차 단속 CCTV를 불러오지 못했습니다.");
-    const list2 = await screen.findByRole("list", { name: "교통시설물 유형" });
-    expect((within(list2).getByRole("button", { name: /주정차 단속/ }) as HTMLButtonElement).disabled).toBe(true);
     enforcementRespond = () => Response.json(ENFORCEMENT);
     fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
-    expect(await within(list2).findByRole("button", { name: /주정차 단속2/ })).toBeTruthy();
-  });
-
-  it("교통시설물 실패 시 안내와 다시 시도", async () => {
-    facilitiesRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
-    render(<TrafficDashboard />);
-    const msg = await screen.findByText("교통시설물을 불러오지 못했습니다.");
-    facilitiesRespond = () => Response.json(FACILITIES);
-    fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
-    expect(await screen.findByRole("list", { name: "교통시설물 유형" })).toBeTruthy();
+    expect(await screen.findByText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳")).toBeTruthy();
   });
 });

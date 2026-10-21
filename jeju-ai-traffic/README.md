@@ -25,6 +25,7 @@ web/            React 앱 (Vite root, index.html, src/)
   src/features/trip/  출발지·목적지 선택 화면
   src/features/routes/ 경로 비교 결과·지도(RouteMap)·혼잡 표시·추천 이유(ExplanationCard)·길 안내 시작(NavigationPanel)
   src/features/monitor/ 5분 재평가 제어기(monitor)와 화면(MonitorPanel)
+  src/features/traffic/ 교통 현황: / 대시보드 카드, /map/{smooth|slow|congested|enforcement|parking|gas|lpg|ev|incidents|facilities} 항목별 지도 페이지(TASK-025, TrafficApp·views)
   src/services/       API 호출(placesApi, routesApi, explanationsApi), 위치(geolocation), 앱 주소 열기(appLink)
 api/            Vercel Functions — 파일 하나가 엔드포인트 (api/health.ts, api/places.ts, api/routes/compare.ts, api/explanations.ts, api/traffic/incidents.ts, api/traffic/speeds.ts, api/traffic/links.ts, api/traffic/facilities.ts, api/traffic/enforcement.ts, api/traffic/parking.ts, api/traffic/gas.ts, api/traffic/ev.ts)
 api/_lib/       함수 공용 코드 (밑줄 폴더는 Vercel이 엔드포인트로 배포하지 않음)

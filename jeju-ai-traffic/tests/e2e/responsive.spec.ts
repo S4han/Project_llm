@@ -24,11 +24,23 @@ for (const vp of WIDTHS) {
   test.describe(`${vp.name} ${vp.width}px`, () => {
     test.use({ viewport: { width: vp.width, height: vp.height } });
 
-    test("교통 현황: 배치와 가로 스크롤 없음", async ({ page }) => {
-      await page.goto("/traffic");
+    test("교통 현황: 대시보드 카드와 지도 페이지 배치, 가로 스크롤 없음 (TASK-025)", async ({ page }) => {
+      await page.goto("/");
+      const speedCards = page.getByRole("list", { name: "도로 소통 카드" }).getByRole("button");
+      await expect(speedCards.first()).toContainText("2구간");
+      await expect(page.getByRole("list", { name: "내 주변 카드" }).getByRole("button")).toHaveCount(5);
+      await expect(page.getByRole("region", { name: "교통 현황 지도" })).toHaveCount(0);
+      await noHorizontalScroll(page);
+      // 카드는 한 줄에 여러 장(휴대폰도 도로 소통 3장은 한 줄)
+      const [c1, c3] = [(await speedCards.nth(0).boundingBox())!, (await speedCards.nth(2).boundingBox())!];
+      expect(Math.abs(c1.y - c3.y)).toBeLessThan(2);
+      await shot(page, `TASK-025-01-home-${vp.width}`);
+
+      await speedCards.filter({ hasText: "정체" }).click();
+      await expect(page).toHaveURL(/\/map\/congested$/);
       const map = page.getByRole("region", { name: "교통 현황 지도" });
-      const panel = page.getByRole("list", { name: "구간 소통 건수" });
-      await expect(panel.getByRole("button").first()).toHaveText("전체4");
+      const panel = page.getByRole("region", { name: "도로 소통" });
+      await expect(page.getByRole("list", { name: "실시간 정체구간 목록" })).toBeVisible();
       await noHorizontalScroll(page);
       const m = (await map.boundingBox())!;
       const p = (await panel.boundingBox())!;
@@ -36,29 +48,12 @@ for (const vp of WIDTHS) {
         // 지도는 왼쪽, 정보 패널은 오른쪽. 지도는 화면 높이에 가깝게.
         expect(m.x + m.width).toBeLessThanOrEqual(p.x);
         expect(m.height).toBeGreaterThan(vp.height * 0.7);
-      } else if (vp.width >= 768) {
-        // 도로 소통 카드가 맨 위, 그 아래 사건 카드, 큰 지도(화면 높이 약 60%), 사건 목록
-        expect(m.height).toBeGreaterThan(vp.height * 0.5);
-        const speeds = (await page.getByRole("region", { name: "도로 소통" }).boundingBox())!;
-        const kinds = (await page.getByRole("list", { name: "종류별 건수" }).boundingBox())!;
-        const groups = (await page.getByRole("region", { name: /감지된 사건/ }).boundingBox())!;
-        expect(speeds.y).toBeLessThan(kinds.y);
-        expect(kinds.y).toBeLessThan(m.y);
-        expect(groups.y).toBeGreaterThan(m.y + m.height - 1);
       } else {
-        // 휴대폰: 세로 한 줄(도로 소통 → 사건 카드 → 지도)
-        const kinds = (await page.getByRole("list", { name: "종류별 건수" }).boundingBox())!;
-        expect(kinds.y).toBeGreaterThan(p.y);
-        expect(m.y).toBeGreaterThan(kinds.y);
+        // 휴대폰·태블릿 세로: 제목 바로 아래 큰 지도, 그 아래 목록
+        expect(m.height).toBeGreaterThan(vp.height * 0.5);
+        expect(p.y).toBeGreaterThan(m.y + m.height - 1);
       }
-      await shot(page, `TASK-012-05-traffic-${vp.width}`);
-      // 정체 카드를 누르면 실시간 정체구간 목록이 도로 소통 카드 안에 나온다(TASK-015).
-      await page.getByRole("list", { name: "구간 소통 건수" }).getByRole("button", { name: /정체/ }).click();
-      await expect(page.getByRole("list", { name: "실시간 정체구간 목록" })).toBeVisible();
-      await noHorizontalScroll(page);
-      if (process.env.SCREENSHOTS && "TASK-015".startsWith(process.env.SCREENSHOTS)) {
-        await page.getByRole("region", { name: "도로 소통" }).screenshot({ path: `reports/screenshots/TASK-015-03-card-${vp.width}.png` });
-      }
+      await shot(page, `TASK-025-02-congested-${vp.width}`);
     });
 
     test("경로 추천: 배치와 가로 스크롤 없음", async ({ page }) => {
@@ -95,9 +90,9 @@ for (const vp of WIDTHS) {
 test.describe("넓은 화면 간격", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("교통 현황 오른쪽 패널은 지도 높이에 맞춰 벌어지지 않는다", async ({ page }) => {
-    await page.goto("/traffic");
-    await expect(page.getByRole("list", { name: "구간 소통 건수" }).getByRole("button").first()).toHaveText("전체4");
+  test("교통 현황 지도 페이지의 오른쪽 패널은 지도 높이에 맞춰 벌어지지 않는다", async ({ page }) => {
+    await page.goto("/map/smooth");
+    await expect(page.getByRole("list", { name: "구간 소통 건수" }).getByRole("button").first()).toHaveText("원활2");
     const title = (await page.getByRole("heading", { level: 1 }).boundingBox())!;
     // 맨 위 카드(도로 소통)는 제목·갱신 안내 바로 아래
     const first = (await page.getByRole("region", { name: "도로 소통" }).boundingBox())!;

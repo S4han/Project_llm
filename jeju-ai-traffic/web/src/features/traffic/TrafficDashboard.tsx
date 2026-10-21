@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { IncidentKind, SpeedStatus, TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../../shared/contracts/traffic";
 import { isStale } from "../../../../shared/rules/traffic";
 import { distanceMeters } from "../../../../shared/rules/geo";
@@ -15,6 +15,7 @@ import { formatKstTime } from "../trip/format";
 import { revealMap } from "../map/revealMap";
 import { IncidentMap } from "./IncidentMap";
 import { buildCongestionRows, groupByRoad, joinSpeedLines, sectionText } from "./speedLines";
+import { isNearbyView, isSpeedView, VIEW_TITLE, type TrafficView } from "./views";
 
 /** 자동 갱신 간격. 서버는 제주 ITS 결과를 60초 캐시하므로 더 자주 불러도 새 정보가 없다(TASK-012 3. (a)). */
 export const REFRESH_MS = 60_000;
@@ -270,9 +271,40 @@ function enforcementCard(place: string, address: string, rotate: number | null, 
 /** 넓은 화면에서 정보 패널 칸(위쪽 전체 폭 → PC는 오른쪽 칸). */
 const PANEL = "md:col-span-2 xl:col-span-1 xl:col-start-2";
 const EMPTY_IDS: string[] = [];
+const NO_INCIDENTS: TrafficIncident[] = [];
 
-/** 제주 ITS 실시간 교통 현황(TASK-012). 화면이 켜져 있을 때만 1분마다 다시 조회한다. */
-export function TrafficDashboard() {
+/** 불러오기·위치 확인 실패 안내와 다시 시도 버튼. */
+function RetryAlert({ text, onRetry }: { text: string; onRetry: () => void }) {
+  return (
+    <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
+      <span>{text}</span>
+      <button type="button" onClick={onRetry} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
+        다시 시도
+      </button>
+    </div>
+  );
+}
+
+/** 대시보드 카드(TASK-025): 이름·핵심 숫자·한 줄 설명. 누르면 그 항목의 지도 페이지. */
+function DashCard({ title, mark, value, sub, onClick, small = false }: { title: string; mark?: ReactNode; value: string; sub: string; onClick: () => void; small?: boolean }) {
+  return (
+    <button type="button" onClick={onClick} className={`flex w-full flex-col gap-1 rounded-[20px] bg-white p-3 text-left shadow-sm ring-1 ring-grey-200 active:bg-grey-50 ${small ? "min-h-20" : "min-h-28"}`}>
+      <span className="flex items-center gap-1.5 text-sm font-semibold text-grey-700">
+        {mark}
+        <span className="truncate">{title}</span>
+      </span>
+      <span className="whitespace-nowrap text-[clamp(1rem,5vw,1.5rem)] font-bold tabular-nums text-grey-900">{value}</span>
+      <span className="text-xs text-grey-600">{sub}</span>
+      <span className="mt-auto text-xs font-semibold text-brand-700">지도 보기 ›</span>
+    </button>
+  );
+}
+
+/**
+ * 제주 ITS 실시간 교통 현황(TASK-012). 화면이 켜져 있을 때만 1분마다 다시 조회한다.
+ * view가 home이면 지도 없는 대시보드 카드, 그 밖이면 그 항목만 지도에 보이는 페이지(TASK-025). 화면을 바꿔도 받은 자료와 위치는 그대로 둔다.
+ */
+export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNavigate: (view: TrafficView) => void }) {
   const [state, setState] = useState<DashboardState>({ snapshot: null, problem: null, loading: true });
   const [speeds, setSpeeds] = useState<TrafficSpeedsResponse | null>(null);
   const [links, setLinks] = useState<TrafficLinksResponse["links"] | null>(null);
@@ -287,7 +319,7 @@ export function TrafficDashboard() {
   const [facilities, setFacilities] = useState<TrafficFacilitiesResponse | null>(null);
   const [facilitiesLoading, setFacilitiesLoading] = useState(true);
   const [facilitiesProblem, setFacilitiesProblem] = useState(false);
-  const [facilityTypes, setFacilityTypes] = useState<Set<FacilityKey>>(() => new Set());
+  const [facilityTypes, setFacilityTypes] = useState<Set<FacilityKey>>(() => new Set(isNearbyView(view) ? [view] : []));
   // 제주시 주정차 단속 CCTV(TASK-016): 교통시설물 카드의 한 유형으로, 따로 받는다.
   const [enforcement, setEnforcement] = useState<TrafficEnforcementResponse | null>(null);
   const [enforcementLoading, setEnforcementLoading] = useState(true);
@@ -315,9 +347,10 @@ export function TrafficDashboard() {
   const [myLocation, setMyLocation] = useState<Coordinate | null>(null);
   const [locating, setLocating] = useState(false);
   const [locationProblem, setLocationProblem] = useState<string | null>(null);
-  const [showSpeeds, setShowSpeeds] = useState(true);
-  // 도로 소통 상태 카드·도로 목록(TASK-012 소통대시보드)
-  const [speedFilter, setSpeedFilter] = useState<SpeedStatus | "all">("all");
+  // 화면을 열 때 위치 확인이 끝났는지(TASK-023). 끝났는데 위치가 없으면 주변 페이지에서 다시 확인한다.
+  const [homeChecked, setHomeChecked] = useState(false);
+  // 도로 소통 상태·도로 목록(TASK-012 소통대시보드). 도로 소통 페이지의 상태(TASK-025).
+  const [speedFilter, setSpeedFilter] = useState<SpeedStatus | "all">(isSpeedView(view) ? view : "all");
   const [roadKey, setRoadKey] = useState<string | null>(null);
   const [roadLimit, setRoadLimit] = useState(ROAD_PAGE);
   // 실시간 정체구간(TASK-015): 누른 줄의 첫 구간 ID
@@ -328,6 +361,21 @@ export function TrafficDashboard() {
   const lastLoad = useRef(0);
   const seq = useRef(0);
   const mapBox = useRef<HTMLDivElement>(null);
+  const showSpeeds = isSpeedView(view);
+  // 화면이 바뀌면 그 화면에 맞게 켤 유형·도로 상태를 다시 정하고 고른 것을 닫는다(렌더 중 조정, 효과 없이).
+  const [shownView, setShownView] = useState(view);
+  if (shownView !== view) {
+    setShownView(view);
+    setFacilityTypes(new Set(isNearbyView(view) ? [view] : []));
+    setSpeedFilter(isSpeedView(view) ? view : "all");
+    setRoadKey(null);
+    setChainKey(null);
+    setRoadLimit(ROAD_PAGE);
+    setChainLimit(CHAIN_PAGE);
+    setKind("all");
+    setGasFocus(null);
+    setLocationProblem(null);
+  }
 
   const load = useCallback(async () => {
     const id = ++seq.current;
@@ -528,25 +576,28 @@ export function TrafficDashboard() {
     return counts;
   }, [facilities, enforcement, parking, gas, ev]);
   // 반경 안 주유소와 휘발유 최저가(TASK-018 3.(a)).
+  // 반경 계산은 켠 유형과 상관없이 한다(대시보드 카드 요약에도 씀, TASK-025). 지도·목록은 켠 유형만.
   const nearGas = useMemo(
-    () => (facilityTypes.has("GAS") && myLocation ? (gas?.stations ?? []).filter((s) => isGasStation(s) && distanceMeters(myLocation, { lat: s[5], lng: s[6] }) <= (NEARBY_RADIUS.GAS ?? 3000)) : []),
-    [facilityTypes, myLocation, gas],
+    () => (myLocation ? (gas?.stations ?? []).filter((s) => isGasStation(s) && distanceMeters(myLocation, { lat: s[5], lng: s[6] }) <= (NEARBY_RADIUS.GAS ?? 3000)) : []),
+    [myLocation, gas],
   );
   // 반경 안 LPG 충전소와 LPG 최저가(TASK-018 범위 변경 "LPG충전소 유형을 따로").
   const nearLpg = useMemo(
-    () => (facilityTypes.has("LPG") && myLocation ? (gas?.stations ?? []).filter((s) => isLpgStation(s) && distanceMeters(myLocation, { lat: s[5], lng: s[6] }) <= (NEARBY_RADIUS.LPG ?? 5000)) : []),
-    [facilityTypes, myLocation, gas],
+    () => (myLocation ? (gas?.stations ?? []).filter((s) => isLpgStation(s) && distanceMeters(myLocation, { lat: s[5], lng: s[6] }) <= (NEARBY_RADIUS.LPG ?? 5000)) : []),
+    [myLocation, gas],
   );
+  const nearEnf = useMemo(() => (myLocation ? (enforcement?.cameras ?? []).filter((c) => distanceMeters(myLocation, { lat: c[6], lng: c[7] }) <= (NEARBY_RADIUS.ENF ?? 1000)) : []), [myLocation, enforcement]);
+  const nearPark = useMemo(() => (myLocation ? (parking?.lots ?? []).filter((l) => distanceMeters(myLocation, { lat: l[8], lng: l[9] }) <= (NEARBY_RADIUS.PARK ?? 1000)) : []), [myLocation, parking]);
   // 반경 안 전기차 충전소(TASK-019). "급속만"이면 급속 충전기가 있는 곳만. 목록은 충전 가능 → 정보 없음 → 모두 사용 중, 같으면 가까운 순.
-  const evList = useMemo(() => {
-    if (!facilityTypes.has("EV") || !myLocation) return [];
+  const evNear = useMemo(() => {
+    if (!myLocation) return [];
     const rank = (s: EvStationRow) => (evAvail(s) === null ? 1 : evAvail(s)! > 0 ? 0 : 2);
     return (ev?.stations ?? [])
-      .filter((s) => !evFastOnly || s[5] > 0)
       .map((s) => ({ s, meters: distanceMeters(myLocation, { lat: s[3], lng: s[4] }) }))
       .filter((r) => r.meters <= (NEARBY_RADIUS.EV ?? 1000))
       .sort((a, b) => rank(a.s) - rank(b.s) || a.meters - b.meters);
-  }, [facilityTypes, myLocation, ev, evFastOnly]);
+  }, [myLocation, ev]);
+  const evList = useMemo(() => (evFastOnly ? evNear.filter((r) => r.s[5] > 0) : evNear), [evNear, evFastOnly]);
   const evAvailCount = evList.filter((r) => (evAvail(r.s) ?? 0) > 0).length;
   const lowLpg = nearLpg.reduce<number | null>((m, s) => (s[7] !== null && (m === null || s[7] < m) ? s[7] : m), null);
   const lowGasoline = nearGas.reduce<number | null>((m, s) => (s[3] !== null && (m === null || s[3] < m) ? s[3] : m), null);
@@ -576,7 +627,7 @@ export function TrafficDashboard() {
       ...(facilities?.facilities ?? [])
         .filter((f) => facilityTypes.has(f[1]))
         .map(([id, type, name, model, lat, lng]): FacilityPoint => ({ id, type, name, model, lat, lng })),
-      ...(facilityTypes.has("PARK") && myLocation ? (parking?.lots ?? []).filter((l) => distanceMeters(myLocation, { lat: l[8], lng: l[9] }) <= (NEARBY_RADIUS.PARK ?? 1000) && (!parkFreeOnly || parkingFeeKind(l[7]) === "FREE")) : []).map(
+      ...(facilityTypes.has("PARK") ? nearPark.filter((l) => !parkFreeOnly || parkingFeeKind(l[7]) === "FREE") : []).map(
         ([id, name, se, type, address, spaces, hours, fee, lat, lng]): FacilityPoint => {
           // 요금 구분 색(TASK-022 1.(a)): 무료 초록·유료 파랑·일부유료 주황·정보 없음 회색. 시내에서 겹쳐 평소에는 색 동그라미 "P",
           // 확대 17 이상에서만 "P 무료" 글자, 멀리 보면 점(TASK-024 1.(a)). 무료는 위에 그린다(2.(a)).
@@ -594,7 +645,7 @@ export function TrafficDashboard() {
           };
         },
       ),
-      ...(facilityTypes.has("ENF") && myLocation ? (enforcement?.cameras ?? []).filter((c) => distanceMeters(myLocation, { lat: c[6], lng: c[7] }) <= (NEARBY_RADIUS.ENF ?? 1000)) : []).map(
+      ...(facilityTypes.has("ENF") ? nearEnf : []).map(
         ([id, place, address, rotate, audit, oper, lat, lng]): FacilityPoint => ({
           id: `ENF-${id}`,
           type: "ENF",
@@ -605,7 +656,7 @@ export function TrafficDashboard() {
           card: enforcementCard(place, address, rotate, audit, oper),
         }),
       ),
-      ...nearGas.map(([id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel]): FacilityPoint => {
+      ...(facilityTypes.has("GAS") ? nearGas : []).map(([id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel]): FacilityPoint => {
         const b = gasBrand(brand);
         const low = id === lowGasId;
         return {
@@ -619,7 +670,7 @@ export function TrafficDashboard() {
           card: gasCard({ id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel }, low, gas?.builtAt, "GAS"),
         };
       }),
-      ...nearLpg.map(([id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel]): FacilityPoint => {
+      ...(facilityTypes.has("LPG") ? nearLpg : []).map(([id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel]): FacilityPoint => {
         const b = gasBrand(brand);
         const low = id === lowLpgId;
         return {
@@ -633,7 +684,7 @@ export function TrafficDashboard() {
           card: gasCard({ id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel }, low, gas?.builtAt, "LPG"),
         };
       }),
-      ...evList.map(({ s }): FacilityPoint => {
+      ...(facilityTypes.has("EV") ? evList : []).map(({ s }): FacilityPoint => {
         const avail = evAvail(s);
         return {
           id: `EV-${s[0]}`,
@@ -647,7 +698,7 @@ export function TrafficDashboard() {
         };
       }),
     ],
-    [facilities, facilityTypes, enforcement, parking, parkFreeOnly, myLocation, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev],
+    [facilities, facilityTypes, nearEnf, nearPark, parkFreeOnly, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev],
   );
   const nearbyOn = NEARBY_KEYS.filter((k) => facilityTypes.has(k));
   const nearbyCount = (k: FacilityKey) => facilityPoints.filter((p) => p.type === k).length;
@@ -659,8 +710,8 @@ export function TrafficDashboard() {
     .map((r) => radiusText(r, nearbyOn.filter((k) => (NEARBY_RADIUS[k] ?? 1000) === r)))
     .join(" · ")
     .replace(/^/, "내 위치 ")
-    .concat(lowGasoline !== null ? ` · 휘발유 최저 ${won(lowGasoline)}` : "")
-    .concat(lowLpg !== null ? ` · LPG 최저 ${won(lowLpg)}` : "")
+    .concat(facilityTypes.has("GAS") && lowGasoline !== null ? ` · 휘발유 최저 ${won(lowGasoline)}` : "")
+    .concat(facilityTypes.has("LPG") && lowLpg !== null ? ` · LPG 최저 ${won(lowLpg)}` : "")
     .concat(facilityTypes.has("EV") && evList.length ? ` · 충전 가능 ${evAvailCount.toLocaleString("ko-KR")}곳` : "");
   function radiusText(r: number, keys: FacilityKey[]): string {
     const km = `${r / 1000}km`;
@@ -679,14 +730,16 @@ export function TrafficDashboard() {
   useEffect(() => {
     let alive = true;
     void getCurrentLocation(undefined, ENFORCEMENT_LOCATION_ACCURACY_METERS).then((r) => {
-      if (alive && r.kind === "ok") setMyLocation((prev) => prev ?? r.location);
+      if (!alive) return;
+      if (r.kind === "ok") setMyLocation((prev) => prev ?? r.location);
+      setHomeChecked(true);
     });
     return () => {
       alive = false;
     };
   }, []);
   /** 현재 위치를 한 번 확인한다. 실패하면 위치 기반 유형(주정차 단속·주차장)을 끄고 이유를 보인다. */
-  const locate = async () => {
+  const locate = useCallback(async () => {
     setLocating(true);
     setLocationProblem(null);
     const r = await getCurrentLocation(undefined, ENFORCEMENT_LOCATION_ACCURACY_METERS);
@@ -705,11 +758,21 @@ export function TrafficDashboard() {
     };
     setLocationProblem(`내 위치 주변(주정차 단속·주차장·주유소·LPG 충전소·전기차 충전소)을 표시하지 못했습니다: ${reason[r.kind]}`);
     setFacilityTypes((prev) => new Set([...prev].filter((k) => !NEARBY_KEYS.includes(k))));
+  }, []);
+  // 주변 페이지를 열었는데 위치가 없으면(열 때 확인 실패) 한 번 더 확인한다. 실패 이유는 페이지에 보인다.
+  const needLocation = isNearbyView(view) && homeChecked && !myLocation && !locating && !locationProblem;
+  useEffect(() => {
+    if (!needLocation) return;
+    const t = setTimeout(() => void locate(), 0);
+    return () => clearTimeout(t);
+  }, [needLocation, locate]);
+  /** 주변 페이지에서 위치 확인을 다시 시도한다(실패하면 꺼 둔 그 유형을 다시 켠다). */
+  const retryLocate = () => {
+    if (isNearbyView(view)) setFacilityTypes(new Set([view]));
+    void locate();
   };
+  /** CCTV 등 교통시설물 페이지에서 제주 ITS 유형을 켜고 끈다(주변 유형은 페이지마다 하나로 정해짐, TASK-025). */
   const toggleFacility = (t: FacilityKey) => {
-    const nearby = NEARBY_KEYS.includes(t);
-    if (nearby && !facilityTypes.has(t) && !myLocation && !locating) void locate();
-    if (nearby) setLocationProblem(null);
     setFacilityTypes((prev) => {
       const next = new Set(prev);
       if (next.has(t)) next.delete(t);
@@ -728,14 +791,6 @@ export function TrafficDashboard() {
         : "구간 속도 정보 미확보(제주 ITS 조회 실패)"
       : null;
 
-  const chooseSpeed = (s: SpeedStatus | "all") => {
-    setSpeedFilter(s);
-    setRoadKey(null);
-    setChainKey(null);
-    setRoadLimit(ROAD_PAGE);
-    setChainLimit(CHAIN_PAGE);
-    setShowSpeeds(true);
-  };
   const focusRoad = (key: string) => {
     setRoadKey((k) => (k === key ? null : key));
     setChainKey(null);
@@ -746,7 +801,6 @@ export function TrafficDashboard() {
   const focusChain = (key: string) => {
     setChainKey((k) => (k === key ? null : key));
     setRoadKey(null);
-    setShowSpeeds(true);
     clearFocus();
     revealMap(mapBox.current);
   };
@@ -762,390 +816,185 @@ export function TrafficDashboard() {
     revealMap(mapBox.current);
   };
 
-  return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 bg-grey-100 p-4 md:max-w-5xl xl:max-w-[96rem]">
-      {/*
-        반응형(TASK-012 반응형): 휴대폰은 세로 한 줄. 태블릿(md)은 도로 소통·사건 카드를 넓게, 그 아래 큰 지도와 사건 목록.
-        PC·아이패드 가로(xl)는 왼쪽에 화면 높이의 지도를 고정하고 오른쪽에 정보 패널.
-      */}
-      <main className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_auto_auto_auto_auto_auto_1fr]">
-        <div className={`flex items-center justify-between gap-2 ${PANEL}`}>
-          <h1 className="text-[26px] font-bold tracking-tight text-grey-900">제주 실시간 교통 현황</h1>
-          <a href="/route" className="shrink-0 text-sm font-semibold text-brand-700">
-            경로 추천 →
-          </a>
-        </div>
-        <div className={`flex items-center justify-between gap-2 ${PANEL}`}>
-          <p className="text-sm text-grey-600">
-            제주 ITS 도로 소통·돌발·통제·공사
-            {state.snapshot && ` · ${formatKstTime(state.snapshot.observedAt)} 조회`}
-            {state.snapshot?.incidents.some((i) => i.source === "mock") && " · 모의 데이터"}
-          </p>
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={state.loading}
-            className="min-h-12 shrink-0 rounded-2xl bg-white px-4 font-semibold text-grey-700 disabled:opacity-50"
-          >
-            {state.loading ? "조회 중…" : "새로고침"}
-          </button>
-        </div>
-
-        <div aria-live="polite" className={`flex flex-col gap-2 text-sm ${PANEL}`}>
-          {state.problem && (
-            <p role="alert" className="rounded-2xl bg-red-50 p-3 text-red-800">
-              {state.problem}
-              {state.snapshot && ` · 마지막 성공 ${formatKstTime(state.snapshot.observedAt)}`}
-            </p>
-          )}
-          {stale && state.snapshot && (
-            <p role="alert" className="rounded-2xl bg-amber-100 p-3 text-amber-900">
-              오래된 정보입니다({Math.floor((now.getTime() - Date.parse(state.snapshot.observedAt)) / 60_000)}분 전 조회).
-            </p>
-          )}
-        </div>
-
-        <section aria-labelledby="speeds-heading" className={`flex flex-col gap-3 rounded-[20px] bg-white p-4 ${PANEL}`}>
+  // 공통: 조회 시각·새로고침, 실패·오래됨 안내, 화면 아래 고지
+  const statusRow = (
+    <div className={`flex items-center justify-between gap-2 ${view === "home" ? "" : PANEL}`}>
+      <p className="text-sm text-grey-600">
+        제주 ITS 도로 소통·돌발·통제·공사
+        {state.snapshot && ` · ${formatKstTime(state.snapshot.observedAt)} 조회`}
+        {state.snapshot?.incidents.some((i) => i.source === "mock") && " · 모의 데이터"}
+      </p>
+      <button
+        type="button"
+        onClick={refresh}
+        disabled={state.loading}
+        className="min-h-12 shrink-0 rounded-2xl bg-white px-4 font-semibold text-grey-700 disabled:opacity-50"
+      >
+        {state.loading ? "조회 중…" : "새로고침"}
+      </button>
+    </div>
+  );
+  const alerts = (state.problem || (stale && state.snapshot)) && (
+    <div aria-live="polite" className={`flex flex-col gap-2 text-sm ${view === "home" ? "" : PANEL}`}>
+      {state.problem && (
+        <p role="alert" className="rounded-2xl bg-red-50 p-3 text-red-800">
+          {state.problem}
+          {state.snapshot && ` · 마지막 성공 ${formatKstTime(state.snapshot.observedAt)}`}
+        </p>
+      )}
+      {stale && state.snapshot && (
+        <p role="alert" className="rounded-2xl bg-amber-100 p-3 text-amber-900">
+          오래된 정보입니다({Math.floor((now.getTime() - Date.parse(state.snapshot.observedAt)) / 60_000)}분 전 조회).
+        </p>
+      )}
+    </div>
+  );
+  const footer = (
+    <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
+      <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
+      <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 교통 현황을 열 때 한 번 확인하며(허용한 경우), 이 기기에서 지도 위치와 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
+      <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS</p>
+    </footer>
+  );
+  if (view === "home") {
+    // 대시보드(TASK-025 1.(a)): 카드마다 핵심 숫자 한 줄, 누르면 그 항목의 지도 페이지. 내 위치가 있으면 반경 요약, 없으면 제주 전체 수.
+    const here = myLocation !== null;
+    const nearbyCard = (k: "ENF" | "PARK" | "GAS" | "LPG" | "EV"): { value: string; sub: string } => {
+      const loading = { ENF: enforcementLoading, PARK: parkingLoading, GAS: gasLoading, LPG: gasLoading, EV: evLoading }[k];
+      const failed = { ENF: enforcementProblem, PARK: parkingProblem, GAS: gasProblem !== null, LPG: gasProblem !== null, EV: evProblem }[k];
+      if (loading) return { value: "–", sub: "불러오는 중…" };
+      if (failed) return { value: "–", sub: "불러오지 못했습니다" };
+      const km = `${(NEARBY_RADIUS[k] ?? 1000) / 1000}km`;
+      const all = `${facilityCounts[k].toLocaleString("ko-KR")}곳`;
+      switch (k) {
+        case "ENF":
+          return here ? { value: `${nearEnf.length.toLocaleString("ko-KR")}곳`, sub: `반경 ${km} 안` } : { value: all, sub: "제주시 전체" };
+        case "PARK": {
+          const free = (list: typeof nearPark) => list.filter((l) => parkingFeeKind(l[7]) === "FREE").length.toLocaleString("ko-KR");
+          return here ? { value: `${nearPark.length.toLocaleString("ko-KR")}곳`, sub: `반경 ${km} · 무료 ${free(nearPark)}곳` } : { value: all, sub: `제주 전체 · 무료 ${free(parking?.lots ?? [])}곳` };
+        }
+        case "GAS":
+          return here ? (lowGasoline !== null ? { value: won(lowGasoline), sub: `반경 ${km} 휘발유 최저 · ${nearGas.length}곳` } : { value: "없음", sub: `반경 ${km} 안 주유소` }) : { value: all, sub: "제주 전체" };
+        case "LPG":
+          return here ? (lowLpg !== null ? { value: won(lowLpg), sub: `반경 ${km} LPG 최저 · ${nearLpg.length}곳` } : { value: "없음", sub: `반경 ${km} 안 LPG 충전소` }) : { value: all, sub: "제주 전체" };
+        case "EV": {
+          const avail = evNear.filter((r) => (evAvail(r.s) ?? 0) > 0).length;
+          return here ? { value: `${avail.toLocaleString("ko-KR")}곳`, sub: `반경 ${km} 충전 가능 · 전체 ${evNear.length}곳` } : { value: all, sub: "제주 전체" };
+        }
+      }
+    };
+    const itsCount = FACILITY_ORDER.filter((t) => !NEARBY_KEYS.includes(t)).reduce((n, t) => n + facilityCounts[t], 0);
+    const speedSub: Record<SpeedStatus, string> = { smooth: "30km/h 이상", slow: "15~30km/h", congested: "15km/h 미만" };
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 bg-grey-100 p-4 md:max-w-5xl">
+        <main className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-2">
-            <div>
-              <h2 id="speeds-heading" className="font-bold text-grey-900">
-                도로 소통
+            <h1 className="text-[26px] font-bold tracking-tight text-grey-900">제주 실시간 교통 현황</h1>
+            <a href="/route" className="shrink-0 text-sm font-semibold text-brand-700">
+              경로 추천 →
+            </a>
+          </div>
+          {statusRow}
+          {alerts}
+          <section aria-labelledby="dash-speeds" className="flex flex-col gap-2">
+            <h2 id="dash-speeds" className="font-bold text-grey-900">
+              도로 소통
+            </h2>
+            <ul aria-label="도로 소통 카드" className="grid grid-cols-3 gap-2">
+              {SPEED_ORDER.map((st) => (
+                <li key={st}>
+                  <DashCard
+                    title={STATUS_STYLE[st].label}
+                    mark={<span className={`inline-block h-2 w-4 rounded ${STATUS_STYLE[st].bar}`} aria-hidden="true" />}
+                    value={speedLines.length ? `${speedCounts.find(([k]) => k === st)![1].toLocaleString("ko-KR")}구간` : "–"}
+                    sub={speedLines.length ? speedSub[st] : linksProblem || (speedsError && !speeds) ? "불러오지 못했습니다" : "불러오는 중…"}
+                    onClick={() => onNavigate(st)}
+                  />
+                </li>
+              ))}
+            </ul>
+            {(speedProblem || speedStale) && <p className="text-xs text-amber-800">{speedProblem ?? "오래된 구간 속도입니다(15분 넘게 갱신되지 않음)."}</p>}
+          </section>
+          <section aria-labelledby="dash-nearby" className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+              <h2 id="dash-nearby" className="font-bold text-grey-900">
+                내 주변
               </h2>
-              <p className="text-xs text-grey-600">
-                화면이 켜져 있을 때 1분마다 자동 갱신{speeds && ` · 마지막 조회 ${formatKstTime(now.toISOString())}`}
-                {speeds && speedsBusy && <span className="ml-1 font-semibold text-brand-700">· 갱신 중…</span>}
+              <p role="status" aria-label="대시보드 위치 기준" className="text-xs text-grey-600">
+                {here ? "내 위치 기준(이 기기에서만 사용)" : homeChecked ? "위치 허용 시 내 주변 · 지금은 제주 전체" : "현재 위치 확인 중…"}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowSpeeds((v) => !v)}
-              aria-pressed={showSpeeds}
-              className={`min-h-12 shrink-0 whitespace-nowrap rounded-2xl border px-3 text-sm font-semibold ${showSpeeds ? "border-brand-600 bg-brand-50 text-brand-800" : "border-grey-300 bg-white text-grey-700"}`}
-            >
-              {showSpeeds ? "지도에 표시 중" : "지도에 표시"}
-            </button>
-          </div>
-          <ul aria-label="구간 소통 건수" className="grid grid-cols-4 gap-2">
-            {([["all", speedLines.length], ...speedCounts] as const).map(([s, n]) => (
-              <li key={s}>
-                <button
-                  type="button"
-                  onClick={() => chooseSpeed(s)}
-                  aria-pressed={speedFilter === s}
-                  className={`flex min-h-16 w-full flex-col items-center justify-center rounded-2xl p-2 ${speedFilter === s ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
-                >
-                  <span className="flex items-center gap-1 text-xs text-grey-600">
-                    {s !== "all" && <span className={`inline-block h-1.5 w-3 rounded ${STATUS_STYLE[s].bar}`} aria-hidden="true" />}
-                    {s === "all" ? "전체" : STATUS_STYLE[s].label}
-                  </span>
-                  {/* 다섯 자리(11,906)도 휴대폰 폭 카드에서 한 줄에 들어가도록 폭에 맞춰 글자를 줄이고 줄바꿈하지 않는다. */}
-                  <span className="whitespace-nowrap text-[clamp(0.85rem,4vw,1.125rem)] font-bold tabular-nums text-grey-900">
-                    {speedLines.length ? n.toLocaleString("ko-KR") : "–"}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-grey-600">
-            제주 ITS 구간 평균속도(원활 30km/h 이상 · 서행 15~30 · 정체 15 미만)
-            {speeds?.observedAt && ` · ${formatKstTime(speeds.observedAt)} 기준`}
-            {speeds?.source === "mock" && " · 모의 데이터"}. 속도 정보가 없는 도로는 표시하지 않습니다.
-          </p>
-          {showProgress && (
-            <ol role="status" aria-label="도로 소통 처리 현황" className="flex flex-col gap-1 rounded bg-brand-50 p-2 text-sm text-brand-900">
-              <li>
-                {linksLoading ? (
-                  <>
-                    <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
-                    ① 도로 모양 불러오는 중… {linksSeconds}초
-                    <span className="block text-xs text-brand-800">처음 한 번은 최대 1분 걸릴 수 있어요.</span>
-                  </>
-                ) : (
-                  <>① 도로 모양 {links ? "✓" : "실패"}</>
-                )}
-              </li>
-              <li>
-                {firstSpeeds ? (
-                  <>
-                    <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
-                    ② 구간 속도 불러오는 중…
-                  </>
-                ) : (
-                  <>② 구간 속도 {speeds ? "✓" : "실패"}</>
-                )}
-              </li>
-            </ol>
-          )}
-          {linksProblem && (
-            <div role="alert" className="flex items-center justify-between gap-2 rounded bg-amber-50 p-2 text-sm text-amber-900">
-              <span>{linksProblem}</span>
-              <button type="button" onClick={retryLinks} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
-                다시 시도
-              </button>
-            </div>
-          )}
-          {!linksProblem && speedsError && !speeds && !speedsBusy && (
-            <div role="alert" className="flex items-center justify-between gap-2 rounded bg-amber-50 p-2 text-sm text-amber-900">
-              <span>구간 속도를 불러오지 못했습니다. 네트워크 연결을 확인하세요.</span>
-              <button type="button" onClick={refresh} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
-                다시 시도
-              </button>
-            </div>
-          )}
-          {!linksProblem && (speedProblem || speedStale) && (
-            <p role="alert" className="rounded bg-amber-50 p-2 text-sm text-amber-900">
-              {speedProblem ?? "오래된 구간 속도입니다(15분 넘게 갱신되지 않음)."}
-            </p>
-          )}
-          {(speedFilter === "slow" || speedFilter === "congested") && speedLines.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <h3 className="text-sm font-semibold text-grey-700">
-                실시간 {STATUS_STYLE[speedFilter].label}구간 {chains.length.toLocaleString("ko-KR")}곳 · 느린 순
-              </h3>
-              <p className="text-xs text-grey-600">같은 도로에서 이어진 구간은 한 줄로 묶었습니다. 누르면 지도에서 보여 줍니다.</p>
-              {chains.length === 0 ? (
-                <p className="text-sm text-grey-600">현재 {STATUS_STYLE[speedFilter].label} 구간이 없습니다.</p>
-              ) : (
-                <ul aria-label={`실시간 ${STATUS_STYLE[speedFilter].label}구간 목록`} className="flex flex-col gap-1">
-                  {chains.slice(0, chainLimit).map((c) => (
-                    <li key={c.key}>
-                      <button
-                        type="button"
-                        onClick={() => focusChain(c.key)}
-                        aria-pressed={c.key === chainKey}
-                        className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ${c.key === chainKey ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
-                      >
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-1.5">
-                            <span className="truncate font-semibold text-grey-900">{c.label}</span>
-                            <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold ${c.status === "congested" ? "bg-red-600 text-white" : "bg-slow text-grey-900"}`}>{STATUS_STYLE[c.status].label}</span>
-                          </span>
-                          <span className="block text-grey-700">{sectionText(c)}</span>
-                        </span>
-                        <span className="shrink-0 text-right">
-                          <span className="block font-bold tabular-nums text-grey-900">{c.avgKmh}km/h</span>
-                          <span className="block text-xs font-semibold text-brand-700">{c.key === chainKey ? "지도에 표시 중" : "지도 ›"}</span>
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {chains.length > chainLimit && (
-                <button type="button" onClick={() => setChainLimit((n) => n + CHAIN_PAGE)} className="min-h-12 rounded-2xl bg-grey-100 font-semibold text-grey-700">
-                  더 보기 ({(chains.length - chainLimit).toLocaleString("ko-KR")}곳 남음)
-                </button>
-              )}
-            </div>
-          )}
-          {speedFilter === "smooth" && speedLines.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <h3 className="text-sm font-semibold text-grey-700">
-                {STATUS_STYLE[speedFilter].label} 도로 {roads.length.toLocaleString("ko-KR")}곳 · 구간이 많은 순
-              </h3>
-              {roads.length === 0 ? (
-                <p className="text-sm text-grey-600">현재 {STATUS_STYLE[speedFilter].label} 구간이 없습니다.</p>
-              ) : (
-                <ul aria-label={`${STATUS_STYLE[speedFilter].label} 도로 목록`} className="flex flex-col gap-1">
-                  {roads.slice(0, roadLimit).map((r) => (
-                    <li key={r.key}>
-                      <button
-                        type="button"
-                        onClick={() => focusRoad(r.key)}
-                        aria-pressed={r.key === roadKey}
-                        className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ${r.key === roadKey ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
-                      >
-                        <span>
-                          <span className="font-semibold text-grey-900">{r.label}</span>
-                          <span className="text-grey-700">
-                            {" "}
-                            · {STATUS_STYLE[speedFilter].label} {r.count}구간 · 평균 {r.avgKmh}km/h
-                          </span>
-                        </span>
-                        <span className="shrink-0 text-xs font-semibold text-brand-700">{r.key === roadKey ? "지도에 표시 중" : "지도에서 보기 ›"}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {roads.length > roadLimit && (
-                <button
-                  type="button"
-                  onClick={() => setRoadLimit((n) => n + ROAD_PAGE)}
-                  className="min-h-12 rounded-2xl bg-grey-100 font-semibold text-grey-700"
-                >
-                  더 보기 ({(roads.length - roadLimit).toLocaleString("ko-KR")}곳 남음)
-                </button>
-              )}
-            </div>
-          )}
-        </section>
-
-        <section aria-labelledby="facilities-heading" className={`flex flex-col gap-3 rounded-[20px] bg-white p-4 ${PANEL}`}>
-          <div>
-            <h2 id="facilities-heading" className="font-bold text-grey-900">
-              교통시설물
-            </h2>
-            <p className="text-xs text-grey-600">
-              제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV·웹카메라 점을 누르면 제주 ITS 교통정보센터(새 창)로 연결되며, 사이트의 CCTV 메뉴에서 같은 위치를 고르면 영상을 볼 수 있습니다. 주정차 단속은
-              제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다{enforcement?.source === "mock" && "(모의 데이터)"}. 주차장은 전국주차장정보표준데이터(제주시·서귀포시)로 위치·면수·요금·운영 시간만 있고 실시간 남은 칸은 없습니다
-              {parking?.source === "mock" && "(모의 데이터)"}. 주유소는 제주 ITS 주유소 정보(오피넷 가격, 휘발유·경유·LPG, 1시간마다 다시 조회){gas?.source === "mock" && "(모의 데이터)"}입니다. LPG 충전소는 같은 자료의 LPG 판매 정보입니다. 전기차 충전소는 제주 ITS 충전소·충전 가능 정보(30분마다 갱신){ev?.source === "mock" && "(모의 데이터)"}입니다. 주정차 단속·주차장·전기차 충전소(반경 1km)·주유소(반경 3km)·LPG 충전소(반경 5km)는 켜면 현재 위치를 한 번 확인해 반경 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나 저장하지 않습니다).
-            </p>
-          </div>
-          {(facilitiesLoading || enforcementLoading || parkingLoading || gasLoading || evLoading) && (
-            <p role="status" aria-label="교통시설물 처리 현황" className="rounded-2xl bg-brand-50 p-2 text-sm text-brand-900">
-              <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
-              교통시설물 불러오는 중…
-            </p>
-          )}
-          {facilitiesProblem && (
-            <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
-              <span>교통시설물을 불러오지 못했습니다.</span>
-              <button type="button" onClick={retryFacilities} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
-                다시 시도
-              </button>
-            </div>
-          )}
-          {(facilities || enforcement || parking || gas || ev) && (
-            <ul aria-label="교통시설물 유형" className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
-              {FACILITY_ORDER.map((t) => {
-                const on = facilityTypes.has(t);
-                const n = facilityCounts[t];
+            <ul aria-label="내 주변 카드" className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+              {(["ENF", "PARK", "GAS", "LPG", "EV"] as const).map((k) => {
+                const c = nearbyCard(k);
                 return (
-                  <li key={t}>
-                    <button
-                      type="button"
-                      onClick={() => toggleFacility(t)}
-                      aria-pressed={on}
-                      disabled={n === 0}
-                      className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-2xl px-3 text-left text-sm disabled:opacity-40 ${on ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span
-                          className="inline-block h-3 w-3 shrink-0 rounded-full"
-                          style={{ backgroundColor: FACILITY_STYLE[t].color, boxShadow: FACILITY_STYLE[t].stroke ? `inset 0 0 0 2px ${FACILITY_STYLE[t].stroke}` : undefined }}
-                          aria-hidden="true"
-                        />
-                        <span className="truncate font-semibold text-grey-800">{FACILITY_STYLE[t].short}</span>
-                      </span>
-                      <span className="shrink-0 tabular-nums text-grey-700">{n.toLocaleString("ko-KR")}</span>
-                    </button>
+                  <li key={k}>
+                    <DashCard
+                      title={FACILITY_STYLE[k].short}
+                      mark={<span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: FACILITY_STYLE[k].color, boxShadow: FACILITY_STYLE[k].stroke ? `inset 0 0 0 2px ${FACILITY_STYLE[k].stroke}` : undefined }} aria-hidden="true" />}
+                      value={c.value}
+                      sub={c.sub}
+                      onClick={() => onNavigate(k)}
+                    />
                   </li>
                 );
               })}
             </ul>
-          )}
-          {facilities && facilities.failedTypes.length > 0 && (
-            <p className="text-xs text-amber-800">일부 유형({facilities.failedTypes.map((t) => FACILITY_STYLE[t].short).join(", ")})은 받지 못했습니다. 잠시 뒤 다시 확인됩니다.</p>
-          )}
-          {nearbyOn.length > 0 && (
-            <div role="status" aria-label="내 위치 주변 조회 범위" className="flex items-center justify-between gap-2 rounded-2xl bg-grey-100 p-2 text-sm text-grey-800">
-              <span>
-                {locating || !myLocation ? "현재 위치 확인 중…" : nearbyText}
-              </span>
-              {myLocation && !locating && (
-                <button type="button" onClick={() => void locate()} className="min-h-12 shrink-0 rounded-2xl bg-white px-3 font-semibold text-grey-700">
-                  위치 다시 확인
-                </button>
-              )}
-            </div>
-          )}
-          {facilityTypes.has("PARK") && myLocation && !locating && (
-            <div className="flex items-center justify-between gap-2">
-              <ul aria-label="주차장 요금 범례" className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-grey-700">
-                {(["FREE", "PAID", "MIXED"] as const).map((k) => (
-                  <li key={k} className="flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PARKING_FEE_STYLE[k].color }} aria-hidden="true" />
-                    {PARKING_FEE_STYLE[k].label}
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                onClick={() => setParkFreeOnly((v) => !v)}
-                aria-pressed={parkFreeOnly}
-                className={`min-h-11 shrink-0 rounded-xl px-3 text-sm font-semibold ${parkFreeOnly ? "bg-green-600 text-white" : "bg-grey-100 text-grey-700"}`}
-              >
-                P 무료만
-              </button>
-            </div>
-          )}
-          {facilityTypes.has("GAS") && myLocation && !locating && gasList.length > 0 && (
-            <FuelList title="반경 3km 주유소 · 휘발유 싼 순" label="주유소 목록" fuel="휘발유" rows={gasList} low={lowGasoline} lowId={lowGasId} limit={gasLimit} onMore={() => setGasLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("GAS", id)} />
-          )}
-          {facilityTypes.has("EV") && myLocation && !locating && ev && (
-            <EvList rows={evList} fastOnly={evFastOnly} onFastOnly={() => setEvFastOnly((v) => !v)} limit={evLimit} onMore={() => setEvLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("EV", id)} />
-          )}
-          {facilityTypes.has("LPG") && myLocation && !locating && lpgList.length > 0 && (
-            <FuelList title="반경 5km LPG 충전소 · LPG 싼 순" label="LPG 충전소 목록" fuel="LPG" rows={lpgList} low={lowLpg} lowId={lowLpgId} limit={lpgLimit} onMore={() => setLpgLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("LPG", id)} />
-          )}
-          {locationProblem && (
-            <p role="alert" className="rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
-              {locationProblem}
-            </p>
-          )}
-          {evProblem && (
-            <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
-              <span>전기차 충전소 정보를 불러오지 못했습니다.</span>
-              <button type="button" onClick={retryEv} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
-                다시 시도
-              </button>
-            </div>
-          )}
-          {gasProblem && (
-            <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
-              <span>{gasProblem}</span>
-              <button type="button" onClick={retryGas} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
-                다시 시도
-              </button>
-            </div>
-          )}
-          {parkingProblem && (
-            <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
-              <span>주차장 정보를 불러오지 못했습니다.</span>
-              <button type="button" onClick={retryParking} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
-                다시 시도
-              </button>
-            </div>
-          )}
-          {enforcementProblem && (
-            <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
-              <span>주정차 단속 CCTV를 불러오지 못했습니다.</span>
-              <button type="button" onClick={retryEnforcement} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
-                다시 시도
-              </button>
-            </div>
-          )}
-        </section>
-
-        <ul aria-label="종류별 건수" className={`grid grid-cols-4 gap-2 ${PANEL}`}>
-          {(["all", ...KINDS] as const).map((k) => {
-            const count = k === "all" ? all.length : all.filter((i) => i.kind === k).length;
-            return (
-              <li key={k}>
-                <button
-                  type="button"
-                  onClick={() => chooseKind(k)}
-                  aria-pressed={kind === k}
-                  className={`flex min-h-16 w-full flex-col items-center justify-center rounded-2xl p-2 ${kind === k ? "bg-brand-50 ring-2 ring-brand-600" : "bg-white"}`}
-                >
-                  <span className="text-xs text-grey-600">{k === "all" ? "전체" : INCIDENT_LABEL[k]}</span>
-                  <span className="text-xl font-bold text-grey-900">{state.snapshot ? count : "–"}</span>
-                </button>
+          </section>
+          <section aria-labelledby="dash-more" className="flex flex-col gap-2">
+            <h2 id="dash-more" className="font-bold text-grey-900">
+              그 밖의 정보
+            </h2>
+            <ul aria-label="그 밖의 정보 카드" className="grid grid-cols-2 gap-2">
+              <li>
+                <DashCard title="돌발·통제·공사" value={state.snapshot ? `${all.length.toLocaleString("ko-KR")}건` : "–"} sub="제주 ITS 감지" onClick={() => onNavigate("incidents")} small />
               </li>
-            );
-          })}
-        </ul>
+              <li>
+                <DashCard title="CCTV 등 교통시설물" value={facilities ? `${itsCount.toLocaleString("ko-KR")}곳` : "–"} sub={facilitiesProblem ? "불러오지 못했습니다" : "VMS·CCTV·웹카메라 등"} onClick={() => onNavigate("facilities")} small />
+              </li>
+            </ul>
+          </section>
+        </main>
+        {footer}
+      </div>
+    );
+  }
 
+  // 항목별 지도 페이지(TASK-025 2.(a)): 위에 "← 대시보드"·제목, 지도에는 그 항목만, 아래(넓은 화면은 오른쪽)에 그 항목의 목록.
+  const nearbyView = isNearbyView(view) ? view : null;
+  const nearbyNote: Record<"ENF" | "PARK" | "GAS" | "LPG" | "EV", string> = {
+    ENF: `제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다${enforcement?.source === "mock" ? "(모의 데이터)" : ""}.`,
+    PARK: `전국주차장정보표준데이터(제주시·서귀포시)로 위치·면수·요금·운영 시간만 있고 실시간 남은 칸은 없습니다${parking?.source === "mock" ? "(모의 데이터)" : ""}.`,
+    GAS: `제주 ITS 주유소 정보(오피넷 가격, 휘발유·경유·LPG, 1시간마다 다시 조회)${gas?.source === "mock" ? "(모의 데이터)" : ""}입니다.`,
+    LPG: `제주 ITS 주유소 정보의 LPG 판매 정보(1시간마다 다시 조회)${gas?.source === "mock" ? "(모의 데이터)" : ""}입니다.`,
+    EV: `제주 ITS 충전소·충전 가능 정보(30분마다 갱신)${ev?.source === "mock" ? "(모의 데이터)" : ""}입니다.`,
+  };
+  const nearbyLoading = nearbyView ? { ENF: enforcementLoading, PARK: parkingLoading, GAS: gasLoading, LPG: gasLoading, EV: evLoading }[nearbyView] : false;
+  return (
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 bg-grey-100 p-4 md:max-w-5xl xl:max-w-[96rem]">
+      {/*
+        반응형(TASK-012 반응형): 휴대폰은 세로 한 줄. 태블릿(md)은 정보 패널을 넓게, 그 아래 큰 지도.
+        PC·아이패드 가로(xl)는 왼쪽에 화면 높이의 지도를 고정하고 오른쪽에 정보 패널.
+      */}
+      <main className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_auto_auto_auto_auto_auto_1fr]">
+        <div className={`flex items-center gap-2 ${PANEL}`}>
+          <button type="button" onClick={() => onNavigate("home")} className="min-h-12 shrink-0 rounded-2xl bg-white px-3 font-semibold text-grey-700">
+            ← 대시보드
+          </button>
+          <h1 className="min-w-0 truncate text-[22px] font-bold tracking-tight text-grey-900">{VIEW_TITLE[view]}</h1>
+        </div>
+        {statusRow}
+        {alerts}
 
+        {/* 휴대폰에서는 지도를 제목 바로 아래에 둔다(지도 페이지, TASK-025). 넓은 화면은 왼쪽 칸에 고정. */}
         <div ref={mapBox} className="flex flex-col gap-2 md:col-span-2 xl:sticky xl:top-4 xl:col-span-1 xl:col-start-1 xl:row-span-7 xl:row-start-1 xl:self-start">
           <IncidentMap
-            incidents={shown}
-            focus={incidentFocus.focus}
+            incidents={view === "incidents" ? shown : NO_INCIDENTS}
+            focus={view === "incidents" ? incidentFocus.focus : null}
             viewKey={kind}
             speedLines={showSpeeds ? filteredLines : EMPTY_LINES}
             speedObservedAt={speeds?.observedAt ?? null}
-            heightClass="h-80 md:h-[60vh] xl:h-[calc(100dvh-7rem)]"
+            heightClass="h-[55vh] md:h-[60vh] xl:h-[calc(100dvh-7rem)]"
             overlay={mapOverlay}
             facilities={facilityPoints}
             nearby={nearbyOn.length > 0 && myLocation ? { ...myLocation, radiusMeters: nearbyMaxRadius } : null}
@@ -1153,7 +1002,7 @@ export function TrafficDashboard() {
             openFacility={gasFocus}
             highlightIds={showSpeeds ? highlightIds : EMPTY_IDS}
           />
-          <IncidentFocusBar state={incidentFocus} />
+          {view === "incidents" && <IncidentFocusBar state={incidentFocus} />}
           {chain && (
             <div role="status" className="flex flex-wrap items-center gap-2 rounded-2xl bg-brand-50 p-2 text-sm text-brand-900">
               <span className="mr-auto font-semibold">
@@ -1176,7 +1025,309 @@ export function TrafficDashboard() {
           )}
         </div>
 
-        {state.snapshot && groups.length > 0 && (
+        {showSpeeds && (
+          <section aria-labelledby="speeds-heading" className={`flex flex-col gap-3 rounded-[20px] bg-white p-4 ${PANEL}`}>
+            <div>
+              <h2 id="speeds-heading" className="font-bold text-grey-900">
+                도로 소통
+              </h2>
+              <p className="text-xs text-grey-600">
+                화면이 켜져 있을 때 1분마다 자동 갱신{speeds && ` · 마지막 조회 ${formatKstTime(now.toISOString())}`}
+                {speeds && speedsBusy && <span className="ml-1 font-semibold text-brand-700">· 갱신 중…</span>}
+              </p>
+            </div>
+            <ul aria-label="구간 소통 건수" className="grid grid-cols-3 gap-2">
+              {speedCounts.map(([st, n]) => (
+                <li key={st}>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate(st)}
+                    aria-pressed={speedFilter === st}
+                    className={`flex min-h-16 w-full flex-col items-center justify-center rounded-2xl p-2 ${speedFilter === st ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
+                  >
+                    <span className="flex items-center gap-1 text-xs text-grey-600">
+                      <span className={`inline-block h-1.5 w-3 rounded ${STATUS_STYLE[st].bar}`} aria-hidden="true" />
+                      {STATUS_STYLE[st].label}
+                    </span>
+                    {/* 다섯 자리(11,906)도 휴대폰 폭 카드에서 한 줄에 들어가도록 폭에 맞춰 글자를 줄이고 줄바꿈하지 않는다. */}
+                    <span className="whitespace-nowrap text-[clamp(0.85rem,4vw,1.125rem)] font-bold tabular-nums text-grey-900">
+                      {speedLines.length ? n.toLocaleString("ko-KR") : "–"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-grey-600">
+              제주 ITS 구간 평균속도(원활 30km/h 이상 · 서행 15~30 · 정체 15 미만)
+              {speeds?.observedAt && ` · ${formatKstTime(speeds.observedAt)} 기준`}
+              {speeds?.source === "mock" && " · 모의 데이터"}. 속도 정보가 없는 도로는 표시하지 않습니다.
+            </p>
+            {showProgress && (
+              <ol role="status" aria-label="도로 소통 처리 현황" className="flex flex-col gap-1 rounded bg-brand-50 p-2 text-sm text-brand-900">
+                <li>
+                  {linksLoading ? (
+                    <>
+                      <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
+                      ① 도로 모양 불러오는 중… {linksSeconds}초
+                      <span className="block text-xs text-brand-800">처음 한 번은 최대 1분 걸릴 수 있어요.</span>
+                    </>
+                  ) : (
+                    <>① 도로 모양 {links ? "✓" : "실패"}</>
+                  )}
+                </li>
+                <li>
+                  {firstSpeeds ? (
+                    <>
+                      <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
+                      ② 구간 속도 불러오는 중…
+                    </>
+                  ) : (
+                    <>② 구간 속도 {speeds ? "✓" : "실패"}</>
+                  )}
+                </li>
+              </ol>
+            )}
+            {linksProblem && (
+              <div role="alert" className="flex items-center justify-between gap-2 rounded bg-amber-50 p-2 text-sm text-amber-900">
+                <span>{linksProblem}</span>
+                <button type="button" onClick={retryLinks} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
+                  다시 시도
+                </button>
+              </div>
+            )}
+            {!linksProblem && speedsError && !speeds && !speedsBusy && (
+              <div role="alert" className="flex items-center justify-between gap-2 rounded bg-amber-50 p-2 text-sm text-amber-900">
+                <span>구간 속도를 불러오지 못했습니다. 네트워크 연결을 확인하세요.</span>
+                <button type="button" onClick={refresh} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
+                  다시 시도
+                </button>
+              </div>
+            )}
+            {!linksProblem && (speedProblem || speedStale) && (
+              <p role="alert" className="rounded bg-amber-50 p-2 text-sm text-amber-900">
+                {speedProblem ?? "오래된 구간 속도입니다(15분 넘게 갱신되지 않음)."}
+              </p>
+            )}
+            {(speedFilter === "slow" || speedFilter === "congested") && speedLines.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <h3 className="text-sm font-semibold text-grey-700">
+                  실시간 {STATUS_STYLE[speedFilter].label}구간 {chains.length.toLocaleString("ko-KR")}곳 · 느린 순
+                </h3>
+                <p className="text-xs text-grey-600">같은 도로에서 이어진 구간은 한 줄로 묶었습니다. 누르면 지도에서 보여 줍니다.</p>
+                {chains.length === 0 ? (
+                  <p className="text-sm text-grey-600">현재 {STATUS_STYLE[speedFilter].label} 구간이 없습니다.</p>
+                ) : (
+                  <ul aria-label={`실시간 ${STATUS_STYLE[speedFilter].label}구간 목록`} className="flex flex-col gap-1">
+                    {chains.slice(0, chainLimit).map((c) => (
+                      <li key={c.key}>
+                        <button
+                          type="button"
+                          onClick={() => focusChain(c.key)}
+                          aria-pressed={c.key === chainKey}
+                          className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ${c.key === chainKey ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
+                        >
+                          <span className="min-w-0">
+                            <span className="flex items-center gap-1.5">
+                              <span className="truncate font-semibold text-grey-900">{c.label}</span>
+                              <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold ${c.status === "congested" ? "bg-red-600 text-white" : "bg-slow text-grey-900"}`}>{STATUS_STYLE[c.status].label}</span>
+                            </span>
+                            <span className="block text-grey-700">{sectionText(c)}</span>
+                          </span>
+                          <span className="shrink-0 text-right">
+                            <span className="block font-bold tabular-nums text-grey-900">{c.avgKmh}km/h</span>
+                            <span className="block text-xs font-semibold text-brand-700">{c.key === chainKey ? "지도에 표시 중" : "지도 ›"}</span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {chains.length > chainLimit && (
+                  <button type="button" onClick={() => setChainLimit((n) => n + CHAIN_PAGE)} className="min-h-12 rounded-2xl bg-grey-100 font-semibold text-grey-700">
+                    더 보기 ({(chains.length - chainLimit).toLocaleString("ko-KR")}곳 남음)
+                  </button>
+                )}
+              </div>
+            )}
+            {speedFilter === "smooth" && speedLines.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <h3 className="text-sm font-semibold text-grey-700">
+                  {STATUS_STYLE[speedFilter].label} 도로 {roads.length.toLocaleString("ko-KR")}곳 · 구간이 많은 순
+                </h3>
+                {roads.length === 0 ? (
+                  <p className="text-sm text-grey-600">현재 {STATUS_STYLE[speedFilter].label} 구간이 없습니다.</p>
+                ) : (
+                  <ul aria-label={`${STATUS_STYLE[speedFilter].label} 도로 목록`} className="flex flex-col gap-1">
+                    {roads.slice(0, roadLimit).map((r) => (
+                      <li key={r.key}>
+                        <button
+                          type="button"
+                          onClick={() => focusRoad(r.key)}
+                          aria-pressed={r.key === roadKey}
+                          className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ${r.key === roadKey ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
+                        >
+                          <span>
+                            <span className="font-semibold text-grey-900">{r.label}</span>
+                            <span className="text-grey-700">
+                              {" "}
+                              · {STATUS_STYLE[speedFilter].label} {r.count}구간 · 평균 {r.avgKmh}km/h
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-xs font-semibold text-brand-700">{r.key === roadKey ? "지도에 표시 중" : "지도에서 보기 ›"}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {roads.length > roadLimit && (
+                  <button
+                    type="button"
+                    onClick={() => setRoadLimit((n) => n + ROAD_PAGE)}
+                    className="min-h-12 rounded-2xl bg-grey-100 font-semibold text-grey-700"
+                  >
+                    더 보기 ({(roads.length - roadLimit).toLocaleString("ko-KR")}곳 남음)
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {view === "incidents" && (
+          <ul aria-label="종류별 건수" className={`grid grid-cols-4 gap-2 ${PANEL}`}>
+            {(["all", ...KINDS] as const).map((k) => {
+              const count = k === "all" ? all.length : all.filter((i) => i.kind === k).length;
+              return (
+                <li key={k}>
+                  <button
+                    type="button"
+                    onClick={() => chooseKind(k)}
+                    aria-pressed={kind === k}
+                    className={`flex min-h-16 w-full flex-col items-center justify-center rounded-2xl p-2 ${kind === k ? "bg-brand-50 ring-2 ring-brand-600" : "bg-white"}`}
+                  >
+                    <span className="text-xs text-grey-600">{k === "all" ? "전체" : INCIDENT_LABEL[k]}</span>
+                    <span className="text-xl font-bold text-grey-900">{state.snapshot ? count : "–"}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {view === "facilities" && (
+          <section aria-labelledby="facilities-heading" className={`flex flex-col gap-3 rounded-[20px] bg-white p-4 ${PANEL}`}>
+            <div>
+              <h2 id="facilities-heading" className="font-bold text-grey-900">
+                교통시설물
+              </h2>
+              <p className="text-xs text-grey-600">
+                제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV·웹카메라 점을 누르면 제주 ITS 교통정보센터(새 창)로 연결되며, 사이트의 CCTV 메뉴에서 같은 위치를 고르면 영상을 볼 수 있습니다.
+              </p>
+            </div>
+            {facilitiesLoading && (
+              <p role="status" aria-label="교통시설물 처리 현황" className="rounded-2xl bg-brand-50 p-2 text-sm text-brand-900">
+                <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
+                교통시설물 불러오는 중…
+              </p>
+            )}
+            {facilitiesProblem && <RetryAlert text="교통시설물을 불러오지 못했습니다." onRetry={retryFacilities} />}
+            {facilities && (
+              <ul aria-label="교통시설물 유형" className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
+                {FACILITY_ORDER.filter((t) => !NEARBY_KEYS.includes(t)).map((t) => {
+                  const on = facilityTypes.has(t);
+                  const n = facilityCounts[t];
+                  return (
+                    <li key={t}>
+                      <button
+                        type="button"
+                        onClick={() => toggleFacility(t)}
+                        aria-pressed={on}
+                        disabled={n === 0}
+                        className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-2xl px-3 text-left text-sm disabled:opacity-40 ${on ? "bg-brand-50 ring-2 ring-brand-600" : "bg-grey-100"}`}
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="inline-block h-3 w-3 shrink-0 rounded-full"
+                            style={{ backgroundColor: FACILITY_STYLE[t].color, boxShadow: FACILITY_STYLE[t].stroke ? `inset 0 0 0 2px ${FACILITY_STYLE[t].stroke}` : undefined }}
+                            aria-hidden="true"
+                          />
+                          <span className="truncate font-semibold text-grey-800">{FACILITY_STYLE[t].short}</span>
+                        </span>
+                        <span className="shrink-0 tabular-nums text-grey-700">{n.toLocaleString("ko-KR")}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {facilities && facilities.failedTypes.length > 0 && (
+              <p className="text-xs text-amber-800">일부 유형({facilities.failedTypes.map((t) => FACILITY_STYLE[t].short).join(", ")})은 받지 못했습니다. 잠시 뒤 다시 확인됩니다.</p>
+            )}
+          </section>
+        )}
+
+        {nearbyView && (
+          <section aria-labelledby="nearby-heading" className={`flex flex-col gap-3 rounded-[20px] bg-white p-4 ${PANEL}`}>
+            <div>
+              <h2 id="nearby-heading" className="font-bold text-grey-900">
+                내 위치 반경 {(NEARBY_RADIUS[nearbyView] ?? 1000) / 1000}km
+              </h2>
+              <p className="text-xs text-grey-600">{nearbyNote[nearbyView]} 위치는 이 기기에서 거리 계산에만 쓰고 보내거나 저장하지 않습니다.</p>
+            </div>
+            {nearbyLoading && (
+              <p role="status" aria-label="교통시설물 처리 현황" className="rounded-2xl bg-brand-50 p-2 text-sm text-brand-900">
+                <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
+                {VIEW_TITLE[nearbyView]} 불러오는 중…
+              </p>
+            )}
+            {!locationProblem && (
+              <div role="status" aria-label="내 위치 주변 조회 범위" className="flex items-center justify-between gap-2 rounded-2xl bg-grey-100 p-2 text-sm text-grey-800">
+                <span>{locating || !myLocation ? "현재 위치 확인 중…" : nearbyText}</span>
+                {myLocation && !locating && (
+                  <button type="button" onClick={() => void locate()} className="min-h-12 shrink-0 rounded-2xl bg-white px-3 font-semibold text-grey-700">
+                    위치 다시 확인
+                  </button>
+                )}
+              </div>
+            )}
+            {locationProblem && <RetryAlert text={locationProblem} onRetry={retryLocate} />}
+            {nearbyView === "PARK" && myLocation && !locating && (
+              <div className="flex items-center justify-between gap-2">
+                <ul aria-label="주차장 요금 범례" className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-grey-700">
+                  {(["FREE", "PAID", "MIXED"] as const).map((k) => (
+                    <li key={k} className="flex items-center gap-1">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PARKING_FEE_STYLE[k].color }} aria-hidden="true" />
+                      {PARKING_FEE_STYLE[k].label}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => setParkFreeOnly((v) => !v)}
+                  aria-pressed={parkFreeOnly}
+                  className={`min-h-11 shrink-0 rounded-xl px-3 text-sm font-semibold ${parkFreeOnly ? "bg-green-600 text-white" : "bg-grey-100 text-grey-700"}`}
+                >
+                  P 무료만
+                </button>
+              </div>
+            )}
+            {nearbyView === "GAS" && myLocation && !locating && gasList.length > 0 && (
+              <FuelList title="반경 3km 주유소 · 휘발유 싼 순" label="주유소 목록" fuel="휘발유" rows={gasList} low={lowGasoline} lowId={lowGasId} limit={gasLimit} onMore={() => setGasLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("GAS", id)} />
+            )}
+            {nearbyView === "EV" && myLocation && !locating && ev && (
+              <EvList rows={evList} fastOnly={evFastOnly} onFastOnly={() => setEvFastOnly((v) => !v)} limit={evLimit} onMore={() => setEvLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("EV", id)} />
+            )}
+            {nearbyView === "LPG" && myLocation && !locating && lpgList.length > 0 && (
+              <FuelList title="반경 5km LPG 충전소 · LPG 싼 순" label="LPG 충전소 목록" fuel="LPG" rows={lpgList} low={lowLpg} lowId={lowLpgId} limit={lpgLimit} onMore={() => setLpgLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("LPG", id)} />
+            )}
+            {nearbyView === "EV" && evProblem && <RetryAlert text="전기차 충전소 정보를 불러오지 못했습니다." onRetry={retryEv} />}
+            {(nearbyView === "GAS" || nearbyView === "LPG") && gasProblem && <RetryAlert text={gasProblem} onRetry={retryGas} />}
+            {nearbyView === "PARK" && parkingProblem && <RetryAlert text="주차장 정보를 불러오지 못했습니다." onRetry={retryParking} />}
+            {nearbyView === "ENF" && enforcementProblem && <RetryAlert text="주정차 단속 CCTV를 불러오지 못했습니다." onRetry={retryEnforcement} />}
+          </section>
+        )}
+
+        {view === "incidents" && state.snapshot && groups.length > 0 && (
           <section aria-labelledby="groups-heading" className={`flex flex-col gap-2 self-start rounded-[20px] bg-white pt-4 ${PANEL}`}>
             <h2 id="groups-heading" className="px-4 font-bold text-grey-900">
               감지된 사건 {shown.length}건
@@ -1184,18 +1335,14 @@ export function TrafficDashboard() {
             <IncidentGroupList groups={groups} focusedKey={incidentFocus.focusedKey} onFocus={focusGroup} />
           </section>
         )}
-        {state.snapshot && shown.length === 0 && (
+        {view === "incidents" && state.snapshot && shown.length === 0 && (
           <p className={`self-start rounded-2xl bg-grey-100 p-3 text-sm text-grey-700 ${PANEL}`}>
             {kind === "all" ? "현재 제주 ITS에 감지된 돌발·통제·공사가 없습니다." : `현재 제주 ITS에 감지된 ${INCIDENT_LABEL[kind]} 정보가 없습니다.`} 모든 도로의 사건이
             제공되지는 않으므로, 도로에 이상이 없다는 뜻은 아닙니다.
           </p>
         )}
       </main>
-      <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
-        <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
-        <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 교통 현황을 열 때 한 번 확인하며(허용한 경우), 이 기기에서 지도 위치와 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
-        <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS</p>
-      </footer>
+      {footer}
     </div>
   );
 }
