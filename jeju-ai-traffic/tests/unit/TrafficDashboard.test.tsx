@@ -62,12 +62,12 @@ const PARKING: TrafficParkingResponse = {
 
 const GAS: TrafficGasResponse = {
   stations: [
-    ["G1", "SKE", "도남주유소", 1867, 1845, 33.4918, 126.5273],
-    ["G2", "RTO", "알뜰주유소", 1849, 1829, 33.505, 126.55],
-    ["G3", "GSC", "중문주유소", 1899, 1879, 33.25, 126.41],
+    ["G1", "SKE", "도남주유소", 1867, 1845, 33.4918, 126.5273, null, "제주시 도남동", ""],
+    ["G2", "RTO", "알뜰주유소", 1849, 1829, 33.505, 126.55, null, "제주시", ""],
+    ["G3", "GSC", "중문주유소", 1899, 1879, 33.25, 126.41, null, "서귀포시", ""],
   ],
   builtAt: AT,
-  source: "opinet",
+  source: "jejuIts",
 };
 
 let respond: () => Response;
@@ -414,7 +414,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(map.getAttribute("data-facilities")).toBe("2");
     fireEvent.click(within(list).getByRole("button", { name: /주차장2/ }));
     expect(screen.getByText("내 위치 반경 1km 안 주차장 1곳 · 반경 3km 안 주유소 2곳 · 휘발유 최저 1,849원")).toBeTruthy();
-    expect(screen.getByText(/오피넷 판매가격/)).toBeTruthy();
+    expect(screen.getByText(/제주 ITS 주유소 정보/)).toBeTruthy();
   });
 
   it("반경 안에 주유소가 없으면 '주유소가 없습니다'(조사)", async () => {
@@ -437,10 +437,10 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(rows[1]!.className).not.toContain("ring-amber-400");
   });
 
-  it("주유소: 오피넷 한도면 '오늘 한도에 도달' 안내", async () => {
+  it("주유소: 한도면 '오늘 한도에 도달' 안내", async () => {
     gasRespond = () => Response.json({ error: { code: "QUOTA_BLOCKED", message: "x", retryAfter: "2026-10-21T15:00:00.000Z" } }, { status: 429 });
     render(<TrafficDashboard />);
-    expect(await screen.findByText("오늘 오피넷 가격 조회 한도에 도달해 주유소를 표시할 수 없습니다(10월 22일 00:00 이후 다시 확인).")).toBeTruthy();
+    expect(await screen.findByText("오늘 주유소 조회 한도에 도달해 표시할 수 없습니다(10월 22일 00:00 이후 다시 확인).")).toBeTruthy();
   });
 
   it("주유소 자료를 못 받으면 안내와 다시 시도", async () => {

@@ -120,7 +120,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await page.goto("/");
     const list = page.getByRole("list", { name: "교통시설물 유형" });
     const buttons = list.getByRole("button");
-    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속3", "주차장3", "주유소4"]);
+    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속3", "주차장3", "주유소5"]);
     const map = page.getByRole("region", { name: "교통 현황 지도" });
     await expect(map).toHaveAttribute("data-facilities", "0");
     await list.getByRole("button", { name: /^CCTV/ }).click();
@@ -257,9 +257,10 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소 (TASK-0
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
     await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /주유소/ }).click();
-    await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 3km 안 주유소 3곳 · 휘발유 최저 1,849원");
+    await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 3km 안 주유소 4곳 · 휘발유 최저 1,849원");
     const map = page.getByRole("region", { name: "교통 현황 지도" });
-    await expect(map.locator(".gas-pin")).toHaveCount(3);
+    await expect(map.locator(".gas-pin")).toHaveCount(4);
+    await expect(map.locator(".gas-pin").filter({ hasText: "LPG 1,178" })).toHaveCount(1);
     await expect(map.locator(".gas-pin-low")).toHaveCount(1);
     await expect(map.locator(".gas-pin-low")).toContainText("알뜰1,849최저");
     await map.scrollIntoViewIfNeeded();
@@ -278,7 +279,8 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소 (TASK-0
     await page.goto("/");
     await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /주유소/ }).click();
     const rows = page.getByRole("list", { name: "주유소 목록" }).getByRole("button");
-    await expect(rows).toHaveCount(3);
+    await expect(rows).toHaveCount(4);
+    await expect(rows.last()).toContainText("LPG 1,178원");
     await expect(rows.first()).toContainText("최저가");
     await expect(rows.first()).toContainText("모의 알뜰주유소");
     await expect(rows.nth(1)).toContainText("최저가보다 +");

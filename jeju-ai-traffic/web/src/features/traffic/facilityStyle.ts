@@ -19,6 +19,9 @@ export const GAS_BRANDS: Record<string, { name: string; mark: string; color: str
   RTX: { name: "고속도로 알뜰", mark: "알뜰", color: "#4b8b3b" },
   NHO: { name: "농협 알뜰", mark: "NH", color: "#2f7d32" },
   ETC: { name: "자가상표", mark: "기타", color: "#6b7280" },
+  NCO: { name: "자가상표", mark: "기타", color: "#6b7280" },
+  SKG: { name: "SK가스", mark: "SK", color: "#e2231a" },
+  E1G: { name: "E1", mark: "E1", color: "#d71920" },
 };
 export const gasBrand = (code: string) => GAS_BRANDS[code] ?? { name: code || "상표 정보 없음", mark: "기타", color: "#6b7280" };
 

@@ -15,7 +15,7 @@ Vercel → 프로젝트 → Settings → Environment Variables. Production·Prev
 | `KAKAO_REST_API_KEY` | 카카오 길찾기·로컬 검색 (Sensitive) | 모의 데이터 |
 | `ROUTES_PROVIDER=kakao` | 경로 실호출 켜기 | 모의 경로 |
 | `PLACES_PROVIDER=kakao` | 장소 검색 실호출 켜기 | 모의 장소 |
-| `JEJU_ITS_API_KEY` | 제주 ITS (Sensitive, 국외 IP 차단 → icn1에서만 동작) | 모의 사건 |
+| `JEJU_ITS_API_KEY` | 제주 ITS (Sensitive, 국외 IP 차단 → icn1에서만 동작). 돌발 정보와 C-ITS 주유소(TASK-018)·전기차 충전소 API가 이 키에 열림 | 모의 사건·주유소 |
 | `TRAFFIC_PROVIDER=jejuIts` | 교통 사건 실호출 켜기 | 모의 사건 |
 | `AI_PROVIDER=cloudflare` | AI 설명 켜기 | 규칙 기반 설명만 |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_TOKEN` | Workers AI (토큰은 Workers AI 권한만, Sensitive) | 규칙 기반 설명만 |
@@ -23,7 +23,6 @@ Vercel → 프로젝트 → Settings → Environment Variables. Production·Prev
 | `JEJU_ITS_FACILITY_API_KEY` (선택) | 제주 ITS 교통시설물정보 전용 키. 없으면 `JEJU_ITS_TRAFFIC_API_KEY` 사용(TASK-013) | 시설물 모의 |
 | `VWORLD_API_KEY` | 브이월드 2D 데이터 API 키 (Sensitive, 서비스 주소 `https://jeju-its-probe.vercel.app` 등록, TASK-012). `VWORLD_DOMAIN`으로 등록 주소 변경 가능 | `/traffic` 구간 모양 모의 |
 | `DATA_GO_KR_API_KEY` | 공공데이터포털 인증키(Sensitive). TASK-016 제주시 주정차 단속 CCTV, TASK-017 전국주차장정보표준데이터(데이터마다 포털 활용신청 필요). 인코딩 키(`%` 포함)·일반 키 모두 가능 | 주정차 단속·주차장 모의 |
-| `OPINET_API_KEY` | 오피넷 유가정보 무료 API 키(Sensitive, TASK-018 주유소·가격) | 주유소 모의 |
 | `CF_AI_MODEL` (선택) | 모델 이름 | 기본 `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
 
 **긴급 차단**: 공급자 변수(`ROUTES_PROVIDER` 등)를 지우거나 다른 값으로 바꾸고 재배포하면 해당 공급자 호출이 0이 된다(경로·장소는 모의 데이터로 바뀌므로 공개 서비스에서는 사실상 점검 상태가 된다). AI는 `AI_PROVIDER`만 지우면 규칙 설명으로 계속 동작한다.
@@ -36,7 +35,6 @@ Vercel → 프로젝트 → Settings → Environment Variables. Production·Prev
 | 제주 ITS | 공개 기준 없음 | — | 6,000건 (경로 조회·`/traffic` 사건·구간 속도 공통, 함수별로 따로 셈) |
 | 브이월드 데이터 API | 키별 일일 한도(브이월드 콘솔에서 확인) | 오류로 차단 | 400건 (구간 모양·지점 이름 1회 생성에 약 66건 = 교통링크 38쪽 + 교통노드 28쪽, 결과는 CDN 30일 보관. 지점 이름을 못 받으면 1시간 뒤 다시 생성) |
 | 공공데이터포털(주정차 단속 CCTV·주차장 표준데이터) | 데이터별 개발계정 한도(주정차 단속 10,000) | 오류로 차단 | 500건 공통 (주정차 단속 1회 1건, 주차장 1회 약 2~3건. 결과는 서버 하루·CDN 7일 보관) |
-| 오피넷 유가정보 | 무료 키 하루 300건(사용자 확인) | 오류로 차단 | 250건 (1회 생성 약 90건 = 육각 배치 45곳 × 휘발유·경유, 서버·CDN 하루 보관. Preview·Production이 따로 받으므로 새 배포를 자주 열면 한도에 닿을 수 있음. 실패·한도면 인스턴스의 마지막 목록을 10분 보관하며 줌) |
 | Cloudflare Workers AI | 일 10,000 Neurons (UTC 0시) | Free 플랜은 오류로 차단 | 200건 (1건 약 14 Neurons) |
 
 - 내부 한도는 **KST 자정**에 초기화되고, 공급자가 429를 주면 그 공급자를 다음 KST 자정까지 막는다.

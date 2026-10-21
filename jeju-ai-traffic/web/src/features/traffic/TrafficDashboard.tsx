@@ -54,19 +54,27 @@ const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 /** 주유소 목록을 한 번에 보여 줄 줄 수(TASK-018). */
 const GAS_PAGE = 5;
 
-/** 주유소 카드(TASK-018): 상표 표시·이름, 최저가·셀프 칩, 휘발유·경유 가격 줄, 기준, 경로 안내 버튼. */
-function gasCard(s: { id: string; brand: string; name: string; gasoline: number | null; diesel: number | null; lat: number; lng: number }, low: boolean, builtAt: string | undefined): PopupCard {
+type GasStation = { id: string; brand: string; name: string; gasoline: number | null; diesel: number | null; lat: number; lng: number; lpg: number | null; address: string; tel: string };
+
+/** 주유소 카드(TASK-018): 상표 표시·이름, 최저가·셀프·LPG 칩, 휘발유·경유(·LPG) 가격 줄, 주소·전화·기준, 경로 안내 버튼. LPG만 파는 충전소는 LPG만. */
+function gasCard(s: GasStation, low: boolean, builtAt: string | undefined): PopupCard {
   const b = gasBrand(s.brand);
+  const lpgOnly = s.gasoline === null && s.diesel === null && s.lpg !== null;
   return {
     badge: { text: b.mark, color: b.color, textColor: b.textColor },
-    kicker: `주유소 · ${b.name}`,
+    kicker: `${lpgOnly ? "LPG 충전소" : "주유소"} · ${b.name}`,
     title: s.name || "이름 없는 주유소",
-    chips: [low ? "반경 안 휘발유 최저가" : "", /셀프|self/i.test(s.name) ? "셀프" : ""].filter(Boolean),
+    chips: [low ? "반경 안 휘발유 최저가" : "", /셀프|self/i.test(s.name) ? "셀프" : "", s.lpg !== null && !lpgOnly ? "LPG" : ""].filter(Boolean),
     rows: [
-      { label: "휘발유", lines: [s.gasoline !== null ? `${won(s.gasoline)}/L` : "판매 정보 없음"] },
-      { label: "경유", lines: [s.diesel !== null ? `${won(s.diesel)}/L` : "판매 정보 없음"] },
+      ...(lpgOnly
+        ? []
+        : [
+            { label: "휘발유", lines: [s.gasoline !== null ? `${won(s.gasoline)}/L` : "판매 정보 없음"] },
+            { label: "경유", lines: [s.diesel !== null ? `${won(s.diesel)}/L` : "판매 정보 없음"] },
+          ]),
+      ...(s.lpg !== null ? [{ label: "LPG", lines: [`${won(s.lpg)}/L`] }] : []),
     ],
-    footer: `오피넷 판매가격${builtAt ? ` · ${formatKstTime(builtAt)} 기준` : ""}(하루 1번 갱신)`,
+    footer: [[s.address, s.tel].filter(Boolean).join(" · "), `제주 ITS(오피넷 가격)${builtAt ? ` · ${formatKstTime(builtAt)} 조회` : ""}`].filter(Boolean).join("\n"),
     action: { href: parkingRouteHref({ id: s.id, name: s.name, address: b.name, lat: s.lat, lng: s.lng }), label: "현재 위치에서 경로 안내" },
   };
 }
@@ -132,7 +140,7 @@ export function TrafficDashboard() {
   const [parking, setParking] = useState<TrafficParkingResponse | null>(null);
   const [parkingLoading, setParkingLoading] = useState(true);
   const [parkingProblem, setParkingProblem] = useState(false);
-  // 주유소(TASK-018, 오피넷): 서버가 제주 전체를 받아 두고 화면이 반경만 거른다(내 위치는 보내지 않음).
+  // 주유소(TASK-018, 제주 ITS 주유소 정보): 서버가 제주 전체를 받아 두고 화면이 반경만 거른다(내 위치는 보내지 않음).
   const [gas, setGas] = useState<TrafficGasResponse | null>(null);
   const [gasLoading, setGasLoading] = useState(true);
   const [gasProblem, setGasProblem] = useState<string | null>(null);
@@ -245,7 +253,7 @@ export function TrafficDashboard() {
       r.ok
         ? null
         : r.error.code === "QUOTA_BLOCKED"
-          ? `오늘 오피넷 가격 조회 한도에 도달해 주유소를 표시할 수 없습니다${r.error.retryAfter ? `(${formatKstTime(r.error.retryAfter)} 이후 다시 확인)` : "(내일 다시 확인)"}.`
+          ? `오늘 주유소 조회 한도에 도달해 표시할 수 없습니다${r.error.retryAfter ? `(${formatKstTime(r.error.retryAfter)} 이후 다시 확인)` : "(내일 다시 확인)"}.`
           : "주유소 정보를 불러오지 못했습니다.",
     );
     if (r.ok) setGas(r.data);
@@ -377,7 +385,7 @@ export function TrafficDashboard() {
           card: enforcementCard(place, address, rotate, audit, oper),
         }),
       ),
-      ...nearGas.map(([id, brand, name, gasoline, diesel, lat, lng]): FacilityPoint => {
+      ...nearGas.map(([id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel]): FacilityPoint => {
         const b = gasBrand(brand);
         const low = lowGasoline !== null && gasoline === lowGasoline;
         return {
@@ -387,8 +395,9 @@ export function TrafficDashboard() {
           model: "",
           lat,
           lng,
-          pin: { mark: b.mark, price: gasoline !== null ? gasoline.toLocaleString("ko-KR") : null, color: b.color, textColor: b.textColor, low },
-          card: gasCard({ id, brand, name, gasoline, diesel, lat, lng }, low, gas?.builtAt),
+          // 가격 표시는 휘발유, LPG만 파는 곳은 "LPG 1,178"
+          pin: { mark: b.mark, price: gasoline !== null ? gasoline.toLocaleString("ko-KR") : lpg !== null ? `LPG ${lpg.toLocaleString("ko-KR")}` : null, color: b.color, textColor: b.textColor, low },
+          card: gasCard({ id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel }, low, gas?.builtAt),
         };
       }),
     ],
@@ -718,7 +727,7 @@ export function TrafficDashboard() {
             <p className="text-xs text-grey-600">
               제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV·웹카메라 점을 누르면 제주 ITS 교통정보센터(새 창)로 연결되며, 사이트의 CCTV 메뉴에서 같은 위치를 고르면 영상을 볼 수 있습니다. 주정차 단속은
               제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다{enforcement?.source === "mock" && "(모의 데이터)"}. 주차장은 전국주차장정보표준데이터(제주시·서귀포시)로 위치·면수·요금·운영 시간만 있고 실시간 남은 칸은 없습니다
-              {parking?.source === "mock" && "(모의 데이터)"}. 주유소는 오피넷 판매가격(휘발유·경유, 하루 1번 갱신){gas?.source === "mock" && "(모의 데이터)"}입니다. 주정차 단속·주차장(반경 1km)·주유소(반경 3km)는 켜면 현재 위치를 한 번 확인해 반경 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나 저장하지 않습니다).
+              {parking?.source === "mock" && "(모의 데이터)"}. 주유소는 제주 ITS 주유소 정보(오피넷 가격, 휘발유·경유·LPG, 1시간마다 다시 조회){gas?.source === "mock" && "(모의 데이터)"}입니다. 주정차 단속·주차장(반경 1km)·주유소(반경 3km)는 켜면 현재 위치를 한 번 확인해 반경 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나 저장하지 않습니다).
             </p>
           </div>
           {(facilitiesLoading || enforcementLoading || parkingLoading || gasLoading) && (
@@ -783,7 +792,7 @@ export function TrafficDashboard() {
             <div className="flex flex-col gap-1">
               <h3 className="text-sm font-semibold text-grey-700">반경 3km 주유소 · 휘발유 싼 순</h3>
               <ul aria-label="주유소 목록" className="flex flex-col gap-1.5">
-                {gasList.slice(0, gasLimit).map(({ s: [id, brand, name, gasoline, diesel], meters }) => {
+                {gasList.slice(0, gasLimit).map(({ s: [id, brand, name, gasoline, diesel, , , lpg], meters }) => {
                   const b = gasBrand(brand);
                   const low = lowGasoline !== null && gasoline === lowGasoline;
                   return (
@@ -802,7 +811,7 @@ export function TrafficDashboard() {
                             <span className="truncate font-semibold text-grey-900">{name || "이름 없는 주유소"}</span>
                           </span>
                           <span className="block text-xs text-grey-600">
-                            {(meters / 1000).toFixed(1)}km · 경유 {diesel !== null ? won(diesel) : "정보 없음"}
+                            {(meters / 1000).toFixed(1)}km · {gasoline === null && diesel === null && lpg !== null ? `LPG ${won(lpg)}` : `경유 ${diesel !== null ? won(diesel) : "정보 없음"}`}
                           </span>
                         </span>
                         <span className="shrink-0 text-right">
@@ -929,7 +938,7 @@ export function TrafficDashboard() {
       <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
         <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
         <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 주정차 단속·주차장·주유소를 켤 때만 한 번 확인하며, 이 기기에서 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
-        <p>지도 © OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 가격 오피넷(한국석유공사)</p>
+        <p>지도 © OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사)</p>
       </footer>
     </div>
   );

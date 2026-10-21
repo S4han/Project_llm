@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_BUDGETS, MemoryQuotaStore, QuotaGuard } from "../../api/_lib/policies/quota";
 import { RateLimiter } from "../../api/_lib/policies/rateLimit";
 import { TtlCache } from "../../api/_lib/policies/ttlCache";
-import { createMockGasProvider, createOpinetGasProvider, jejuGrid, parseAround, type GasSnapshot } from "../../api/_lib/providers/opinetGas";
-import { handleTrafficGas, resetGasLastGood, selectGasProvider, type TrafficGasDeps } from "../../api/_lib/trafficGas";
-import { distanceMeters, isInJeju } from "../../shared/rules/geo";
+import { createJejuItsGasProvider, createMockGasProvider, joinGas, type GasSnapshot } from "../../api/_lib/providers/jejuItsGas";
+import { handleTrafficGas, selectGasProvider, type TrafficGasDeps } from "../../api/_lib/trafficGas";
+import { distanceMeters } from "../../shared/rules/geo";
 import { katecToWgs84, wgs84ToKatec } from "../../shared/rules/katec";
 
-const NOW = new Date("2026-10-21T06:00:00.000Z");
-// TASK-018 시험 응답 표본(제주시청 부근 반경 5km, 휘발유)
-const OIL = { UNI_ID: "A0030897", POLL_DIV_CD: "SKE", OS_NM: "도남주유소", PRICE: 1867, DISTANCE: 932, GIS_X_COOR: 263350.5777, GIS_Y_COOR: 100509.1776 };
+const NOW = new Date("2026-10-21T06:30:00.000Z");
+// TASK-018 제주 ITS 시험 응답 표본(돌발 키, 224곳)
+const INFO = { id: "A0001863", poll: "SKG", gpoll: "SKG", osnm: "SK행복충전 제주오케이충전소", zip: "690232", adr: "제주 제주시 일주서로 7588 (이호이동)", tel: "064-749-5188", lpgyn: "Y", gisxcoor: "256834.4", gisycoor: "100958.2" };
+const PRICE = { id: "A0001863", gasoline: 0, premium_gasoline: 0, diesel: 0, lpg: 1178 };
+const ok = (info: unknown[]) => ({ result: "success", info_cnt: info.length, info });
 
 describe("KATEC 좌표 변환 (TASK-018)", () => {
   it("proj4 KATEC 정의 값과 같고(1cm 안), 왕복 오차 1cm 안", () => {
@@ -18,92 +20,66 @@ describe("KATEC 좌표 변환 (TASK-018)", () => {
     expect(Math.abs(k.x - 263722.2)).toBeLessThan(0.01);
     expect(Math.abs(k.y - 101365.13)).toBeLessThan(0.01);
     expect(distanceMeters(katecToWgs84(k), { lat: 33.4996, lng: 126.5312 })).toBeLessThan(0.01);
-    // 시험 응답의 도남주유소 → 제주시 도남동
+    // 오피넷 시험 응답의 도남주유소 → 제주시 도남동
     const p = katecToWgs84({ x: 263350.5777, y: 100509.1776 });
     expect(p.lat).toBeCloseTo(33.4918, 3);
     expect(p.lng).toBeCloseTo(126.5273, 3);
   });
 });
 
-describe("오피넷 주유소 (TASK-018)", () => {
-  it("응답 해석: KATEC → 위도·경도, 가격 0은 null, RESULT.OIL 없으면 장애", () => {
-    const rows = parseAround({ RESULT: { OIL: [OIL, { ...OIL, UNI_ID: "Z", PRICE: 0 }, { ...OIL, UNI_ID: "Y", GIS_X_COOR: 0 }] } });
-    expect(rows.map((r) => [r.id, r.brand, r.name, r.price])).toEqual([["A0030897", "SKE", "도남주유소", 1867], ["Z", "SKE", "도남주유소", null]]);
-    expect(rows[0]!.lat).toBeCloseTo(33.4918, 3);
-    expect(() => parseAround({ RESULT: {} })).toThrow();
+describe("제주 ITS 주유소 (TASK-018 범위 변경)", () => {
+  it("기본정보+가격 합치기: KATEC → 위도·경도, 가격 0은 null, 상표 없으면 충전소 상표, 좌표 없음 제외, 실패 결과는 장애", () => {
+    const rows = joinGas(
+      ok([INFO, { ...INFO, id: "B", poll: " ", gpoll: "E1G", gisxcoor: "" }, { ...INFO, id: "C", poll: "SKE", osnm: "도남주유소", gisxcoor: "263350.5777", gisycoor: "100509.1776" }]),
+      ok([PRICE, { id: "C", gasoline: 1867, premium_gasoline: 0, diesel: 1845, lpg: 0 }]),
+    );
+    expect(rows.map((r) => [r[0], r[1], r[2], r[3], r[4], r[7], r[8], r[9]])).toEqual([
+      ["A0001863", "SKG", "SK행복충전 제주오케이충전소", null, null, 1178, "제주 제주시 일주서로 7588 (이호이동)", "064-749-5188"],
+      ["C", "SKE", "도남주유소", 1867, 1845, null, "제주 제주시 일주서로 7588 (이호이동)", "064-749-5188"],
+    ]);
+    expect(rows[1]![5]).toBeCloseTo(33.4918, 3);
+    expect(() => joinGas({ result: "code not registered", info: [] }, ok([]))).toThrow(/code not registered/);
   });
 
-  it("격자: 육각 배치 약 45곳(1회 약 90건 < 하루 한도 300), 모두 제주 범위, 주요 마을이 5km 원 안", () => {
-    const grid = jejuGrid();
-    expect(grid.length).toBeGreaterThan(38);
-    expect(grid.length).toBeLessThanOrEqual(48);
-    expect(grid.every((c) => isInJeju(c))).toBe(true);
-    for (const town of [{ lat: 33.215, lng: 126.25 }, { lat: 33.46, lng: 126.93 }, { lat: 33.505, lng: 126.955 }, { lat: 33.33, lng: 126.83 }, { lat: 33.465, lng: 126.32 }, { lat: 33.33, lng: 126.17 }, { lat: 33.3, lng: 126.165 }, { lat: 33.5, lng: 126.9 }, { lat: 33.54, lng: 126.67 }, { lat: 33.4918, lng: 126.5273 }]) {
-      expect(Math.min(...grid.map((c) => distanceMeters(c, town)))).toBeLessThan(5000);
-    }
-  });
-
-  it("공급자: 격자마다 휘발유·경유 1건씩, 주유소 ID로 합친다(text/html 응답도 JSON으로 읽음)", async () => {
+  it("공급자: 기본정보·가격 2건, code=키", async () => {
     const urls: URL[] = [];
     const fetchImpl = (async (u: string) => {
       const url = new URL(u);
       urls.push(url);
-      const diesel = url.searchParams.get("prodcd") === "D047";
-      // 칸마다 다른 주유소 3곳 + 모든 칸에 나오는 도남주유소(합쳐서 120곳 이상이 되게)
-      const cell = `${url.searchParams.get("x")}-${url.searchParams.get("y")}`;
-      const own = [1, 2, 3].map((n) => ({ ...OIL, UNI_ID: `${cell}-${n}`, PRICE: 1900 }));
-      return new Response(JSON.stringify({ RESULT: { OIL: [{ ...OIL, PRICE: diesel ? 1845 : 1867 }, ...own] } }), { headers: { "content-type": "text/html; charset=utf-8" } });
+      return Response.json(url.pathname.endsWith("infoGasInfoList") ? ok([INFO]) : ok([PRICE]));
     }) as unknown as typeof fetch;
-    const p = createOpinetGasProvider("k", fetchImpl);
+    const p = createJejuItsGasProvider("k", fetchImpl);
     const snap = await p.fetchStations();
-    expect(p.calls).toBe(jejuGrid().length * 2);
-    expect(urls).toHaveLength(p.calls);
-    expect(urls[0]!.searchParams.get("radius")).toBe("5000");
-    expect(urls[0]!.searchParams.get("out")).toBe("json");
-    // 좌표는 정수(시험에서 확인된 형식)
-    expect(urls.every((u) => /^\d+$/.test(u.searchParams.get("x")!) && /^\d+$/.test(u.searchParams.get("y")!))).toBe(true);
-    expect(new Set(urls.map((u) => u.searchParams.get("x") + "," + u.searchParams.get("y"))).size).toBe(jejuGrid().length);
-    expect(snap.stations[0]).toEqual(["A0030897", "SKE", "도남주유소", 1867, 1845, expect.any(Number), expect.any(Number)]);
-    expect(snap.stations).toHaveLength(1 + jejuGrid().length * 3);
-    expect(snap.meta).toEqual({ calls: p.calls, nonEmpty: p.calls, distinctResults: p.calls });
+    expect(p.calls).toBe(2);
+    expect(urls.map((u) => u.pathname).sort()).toEqual(["/api/infoGasInfoList", "/api/infoGasPriceList"]);
+    expect(urls[0]!.searchParams.get("code")).toBe("k");
+    expect(snap.stations).toHaveLength(1);
   });
 
-  it("합친 결과가 120곳 미만이면 한도 소진으로 보고 실패(rate_limited, 보관하지 않음)", async () => {
-    const fetchImpl = (async () => new Response(JSON.stringify({ RESULT: { OIL: [OIL] } }))) as unknown as typeof fetch;
-    await expect(createOpinetGasProvider("k", fetchImpl).fetchStations()).rejects.toMatchObject({ kind: "rate_limited" });
-    const empty = (async () => new Response(JSON.stringify({ RESULT: { OIL: [] } }))) as unknown as typeof fetch;
-    await expect(createOpinetGasProvider("k", empty).fetchStations()).rejects.toMatchObject({ kind: "rate_limited" });
-  });
-
-  it("GET /api/traffic/gas: CDN 하루, 메모리 캐시(사용량 = 호출 수), 처음부터 실패면 503", async () => {
-    resetGasLastGood();
+  it("GET /api/traffic/gas: CDN 1시간, 메모리 캐시(제주 ITS 사용량 2), 실패는 503", async () => {
     const guard = new QuotaGuard(new MemoryQuotaStore(), DEFAULT_BUDGETS, () => NOW);
+    const p = createJejuItsGasProvider("k", (async (u: string) => Response.json(new URL(u).pathname.endsWith("infoGasInfoList") ? ok([INFO]) : ok([PRICE]))) as unknown as typeof fetch);
     const deps: TrafficGasDeps = {
-      gas: createMockGasProvider(),
-      cache: new TtlCache<GasSnapshot>(86_400_000, () => NOW.getTime()),
+      gas: p,
+      cache: new TtlCache<GasSnapshot>(3_600_000, () => NOW.getTime()),
       guard,
       limiter: new RateLimiter(10, 60_000, () => NOW.getTime()),
       now: () => NOW,
     };
     const req = (ip: string) => new Request("http://localhost/api/traffic/gas", { headers: { "x-real-ip": ip } });
     const res = await handleTrafficGas(req("1.1.1.1"), deps);
-    expect(res.headers.get("cache-control")).toBe("public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400");
-    expect((await res.json()).stations).toHaveLength(4);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=600, s-maxage=3600, stale-while-revalidate=600");
+    expect((await res.json()).stations).toHaveLength(1);
     await handleTrafficGas(req("2.2.2.2"), deps);
-    expect((deps.gas as ReturnType<typeof createMockGasProvider>).fetches).toBe(1);
-    expect((await guard.status("opinet")).used).toBe(1);
-    const failing: TrafficGasDeps = { ...deps, gas: { id: "opinet", calls: 2, fetchStations: async () => Promise.reject(new Error("down")) }, cache: new TtlCache<GasSnapshot>(86_400_000, () => NOW.getTime()) };
-    // 다시 받다가 실패하면 마지막 목록을 10분만 보관하며 준다
-    const stale = await handleTrafficGas(req("3.3.3.3"), failing);
-    expect(stale.status).toBe(200);
-    expect(stale.headers.get("cache-control")).toBe("public, max-age=600, s-maxage=600");
-    expect((await stale.json()).stations).toHaveLength(4);
-    resetGasLastGood();
-    expect((await handleTrafficGas(req("4.4.4.4"), { ...failing, cache: new TtlCache<GasSnapshot>(86_400_000, () => NOW.getTime()) })).status).toBe(503);
+    expect((await guard.status("jejuIts")).used).toBe(2);
+    const failing: TrafficGasDeps = { ...deps, gas: { id: "jejuIts", calls: 2, fetchStations: async () => Promise.reject(new Error("down")) }, cache: new TtlCache<GasSnapshot>(3_600_000, () => NOW.getTime()) };
+    expect((await handleTrafficGas(req("3.3.3.3"), failing)).status).toBe(503);
   });
 
-  it("공급자 선택: OPINET_API_KEY가 있을 때만 실제", () => {
+  it("공급자 선택: TRAFFIC_PROVIDER=jejuIts와 돌발 키가 있을 때만 실제", () => {
     expect("fetches" in selectGasProvider({})).toBe(true);
-    expect("fetches" in selectGasProvider({ OPINET_API_KEY: "k" })).toBe(false);
+    expect("fetches" in selectGasProvider({ JEJU_ITS_API_KEY: "k" })).toBe(true);
+    expect("fetches" in selectGasProvider({ TRAFFIC_PROVIDER: "jejuIts", JEJU_ITS_API_KEY: "k" })).toBe(false);
+    expect(createMockGasProvider().calls).toBe(1);
   });
 });

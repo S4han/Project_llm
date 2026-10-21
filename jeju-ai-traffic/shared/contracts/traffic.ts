@@ -102,17 +102,15 @@ export interface TrafficParkingResponse {
   source: "dataGoKr" | "mock";
 }
 
-/** 오피넷 상표 코드(TASK-018 시험: SKE·GSC·HDO·SOL·RTO). 그 밖의 코드도 올 수 있다. */
+/** 오피넷 상표 코드(제주 ITS도 같은 코드: SKE·GSC·HDO·SOL·RTO·RTX·NHO·ETC, LPG 충전소 SKG·E1G). 그 밖의 코드도 올 수 있다. */
 export type GasBrand = string;
 
 /**
- * GET /api/traffic/gas 응답(TASK-018). 오피넷 유가정보 반경 내 주유소(제주 전체를 반경 5km 원으로 나눠 받음).
- * stations[i] = [주유소 ID, 상표 코드, 이름, 휘발유 가격(원/L, 없으면 null), 경유 가격(원/L, 없으면 null), 위도, 경도].
+ * GET /api/traffic/gas 응답(TASK-018, 범위 변경으로 제주 ITS 주유소 기본정보·가격).
+ * stations[i] = [주유소 ID(오피넷), 상표 코드, 이름, 휘발유·경유 원/L(없으면 null), 위도, 경도, LPG 원/L(없으면 null), 주소, 전화].
  */
 export interface TrafficGasResponse {
-  /** 진단용(맨 앞에 둔다): 부른 칸 수, 주유소가 온 칸 수, 칸별 결과 가짓수. 모의면 없음. */
-  meta?: { calls: number; nonEmpty: number; distinctResults: number };
-  stations: [string, GasBrand, string, number | null, number | null, number, number][];
+  stations: [string, GasBrand, string, number | null, number | null, number, number, number | null, string, string][];
   builtAt: IsoDateTime;
-  source: "opinet" | "mock";
+  source: "jejuIts" | "mock";
 }
