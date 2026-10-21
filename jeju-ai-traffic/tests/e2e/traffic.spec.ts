@@ -334,21 +334,3 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await shot(page, "TASK-019-02-card");
   });
 });
-
-test.describe("바탕지도 고해상도 (TASK-020)", () => {
-  // 휴대폰처럼 픽셀이 2배인 화면
-  test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
-
-  test("고해상도 화면에서는 CARTO Voyager @2x 그림을 요청하고, 출처에 CARTO를 표시", async ({ page }) => {
-    const tiles: string[] = [];
-    await page.route(/basemaps\.cartocdn\.com/, (route) => {
-      tiles.push(route.request().url());
-      return route.abort();
-    });
-    await page.goto("/");
-    await expect.poll(() => tiles.length).toBeGreaterThan(0);
-    expect(tiles.every((u) => /^https:\/\/[abcd]\.basemaps\.cartocdn\.com\/rastertiles\/voyager\/\d+\/\d+\/\d+@2x\.png$/.test(u))).toBe(true);
-    await expect(page.locator(".leaflet-control-attribution")).toContainText("CARTO");
-    await expect(page.locator("footer")).toContainText("© CARTO");
-  });
-});

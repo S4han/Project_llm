@@ -36,12 +36,11 @@ export function useLeafletMap() {
     let map: L.Map;
     try {
       map = L.map(el, { zoomControl: true, attributionControl: true });
-      // 바탕지도: CARTO Voyager(같은 OpenStreetMap 자료). 고해상도 화면에서는 {r}이 "@2x"가 되어 두 배 해상도 그림을 받는다
-      // (OSM 기본 타일은 한 배라 휴대폰에서 흐렸음, TASK-020 (a)). 키 없음, 비상업 무료·출처 표시 조건.
-      const tiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        subdomains: "abcd",
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 기여자 &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      // 바탕지도: OpenStreetMap 기본 타일. CARTO Voyager로 바꿨으나 지금은 키 없이 쓰면 "API KEY REQUIRED" 글자가 덮여
+      // 되돌렸다(TASK-020 점검, 2026-10-21). 고해상도 바탕지도는 사용자 결정 뒤 다시 바꾼다.
+      const tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 18,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 기여자',
       });
       let loaded = 0;
       let errors = 0;
