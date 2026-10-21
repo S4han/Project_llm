@@ -3,6 +3,9 @@ import L from "leaflet";
 import type { TrafficIncident } from "../../../../shared/contracts/traffic";
 import { addFacilityMarkers, addIncidentMarkers, addSpeedLines, FOCUS_ZOOM, popupCard, toLatLng, updateSpeedLineWeights, useLeafletMap, type FacilityPoint, type IncidentFocus, type SpeedLine } from "../map/leafletMap";
 
+/** 내 위치 기준으로 열 때의 확대 수준. 휴대폰 폭에서 주변 약 3km가 보인다(TASK-023 2.(a)). */
+export const HOME_ZOOM = 14;
+
 /** 제주도 전체가 보이는 범위. */
 const JEJU_BOUNDS: [[number, number], [number, number]] = [
   [33.11, 126.14],
@@ -29,13 +32,15 @@ interface Props {
   nearby?: { lat: number; lng: number; radiusMeters: number } | null;
   /** 바뀌면 그 시설물로 옮기고 카드를 연다(주유소 목록, TASK-018). seq는 같은 곳을 다시 고를 때 구분용. */
   openFacility?: { id: string; seq: number } | null;
+  /** 화면을 열 때 확인한 내 위치(TASK-023). 있으면 제주 전체 대신 내 위치 기준으로 열고 "제주 전체" 버튼을 보인다. */
+  home?: { lat: number; lng: number } | null;
 }
 
 const NO_IDS: string[] = [];
 const NO_FACILITIES: FacilityPoint[] = [];
 
 /** 제주 전체 교통 사건 지도(TASK-012). */
-export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null, facilities = NO_FACILITIES, nearby = null, openFacility = null }: Props) {
+export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null, facilities = NO_FACILITIES, nearby = null, openFacility = null, home = null }: Props) {
   const { attach, mapRef, layerRef, mapReady, failed, tilesFailed } = useLeafletMap();
   const speedLayer = useRef<L.LayerGroup | null>(null);
   const polylines = useRef<L.Polyline[]>([]);
@@ -67,12 +72,30 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
   const nearbyLat = nearby?.lat;
   const nearbyLng = nearby?.lng;
   const nearbyRadius = nearby?.radiusMeters;
+  const homeLat = home?.lat;
+  const homeLng = home?.lng;
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
     if (!nearbyLayer.current || !map.hasLayer(nearbyLayer.current)) nearbyLayer.current = L.layerGroup().addTo(map);
     nearbyLayer.current.clearLayers();
-    if (nearbyLat === undefined || nearbyLng === undefined || nearbyRadius === undefined) return;
+    if (nearbyLat === undefined || nearbyLng === undefined || nearbyRadius === undefined) {
+      // 주변 유형을 켜지 않았어도 내 위치 점은 보인다(TASK-023).
+      if (homeLat === undefined || homeLng === undefined) return;
+      L.circleMarker(toLatLng({ lat: homeLat, lng: homeLng }), { radius: 7, color: "#fff", weight: 2, fillColor: "#2272eb", fillOpacity: 1 })
+        .bindPopup(
+          popupCard({
+            badge: { text: "나", color: "#2272eb" },
+            kicker: "현재 위치",
+            title: "내 위치",
+            chips: [],
+            rows: [],
+            footer: "위치는 이 기기에서 지도 표시에만 쓰고 보내거나 저장하지 않습니다.",
+          }),
+        )
+        .addTo(nearbyLayer.current);
+      return;
+    }
     const center = toLatLng({ lat: nearbyLat, lng: nearbyLng });
     L.circle(center, { radius: nearbyRadius, color: "#111827", weight: 1.5, dashArray: "6 6", fillColor: "#facc15", fillOpacity: 0.08, interactive: false }).addTo(nearbyLayer.current);
     L.circleMarker(center, { radius: 7, color: "#fff", weight: 2, fillColor: "#2272eb", fillOpacity: 1 })
@@ -87,7 +110,7 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
         }),
       )
       .addTo(nearbyLayer.current);
-  }, [mapReady, mapRef, nearbyLat, nearbyLng, nearbyRadius]);
+  }, [mapReady, mapRef, nearbyLat, nearbyLng, nearbyRadius, homeLat, homeLng]);
 
   // 확대 수준이 바뀌면 선 두께만 바꾼다(다시 그리지 않음).
   useEffect(() => {
@@ -135,8 +158,9 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
     if (currentLat !== undefined && currentLng !== undefined) map.setView(toLatLng({ lat: currentLat, lng: currentLng }), FOCUS_ZOOM);
     else if (highlightBounds) map.fitBounds(highlightBounds, { padding: [24, 24], maxZoom: 15 });
     else if (nearbyLat !== undefined && nearbyLng !== undefined && nearbyRadius !== undefined) map.fitBounds(L.latLng(nearbyLat, nearbyLng).toBounds(nearbyRadius * 2), { padding: [12, 12] });
+    else if (homeLat !== undefined && homeLng !== undefined) map.setView(toLatLng({ lat: homeLat, lng: homeLng }), HOME_ZOOM);
     else map.fitBounds(JEJU_BOUNDS);
-  }, [mapReady, mapRef, currentLat, currentLng, viewKey, highlightBounds, nearbyLat, nearbyLng, nearbyRadius]);
+  }, [mapReady, mapRef, currentLat, currentLng, viewKey, highlightBounds, nearbyLat, nearbyLng, nearbyRadius, homeLat, homeLng]);
 
   if (failed) {
     return (
@@ -149,6 +173,15 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
     <div className="flex flex-col gap-1">
       <div className="relative">
         <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} data-facilities={facilities.length} data-nearby={nearby ? "1" : "0"} className={`${heightClass} w-full overflow-hidden rounded-[20px] bg-grey-200`} />
+        {home && mapReady && (
+          <button
+            type="button"
+            onClick={() => mapRef.current?.fitBounds(JEJU_BOUNDS)}
+            className="absolute bottom-6 left-2 z-[500] min-h-11 rounded-xl bg-white px-3 text-sm font-semibold text-grey-800 shadow-md ring-1 ring-grey-300"
+          >
+            제주 전체
+          </button>
+        )}
         {overlay && (
           <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center">
             <p className="rounded-2xl bg-white/85 px-4 py-2 text-sm font-semibold text-grey-700 shadow">{overlay}</p>

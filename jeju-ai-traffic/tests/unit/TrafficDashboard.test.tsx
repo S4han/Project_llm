@@ -363,13 +363,14 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(map.getAttribute("data-facilities")).toBe("1");
   });
 
-  it("주정차 단속 CCTV(TASK-016): 교통시설물 카드의 한 유형, 기본 꺼짐. 켜면 현재 위치를 확인해 반경 1km 안만 지도에", async () => {
+  it("주정차 단속 CCTV(TASK-016): 교통시설물 카드의 한 유형, 기본 꺼짐. 켜면 (화면을 열 때 확인한) 위치 기준 반경 1km 안만 지도에", async () => {
     const ask = stubLocation({ lat: 33.502, lng: 126.536 });
     render(<TrafficDashboard />);
     const list = await screen.findByRole("list", { name: "교통시설물 유형" });
     const enf = await within(list).findByRole("button", { name: /주정차 단속2/ });
     expect(enf.getAttribute("aria-pressed")).toBe("false");
-    expect(ask).not.toHaveBeenCalled();
+    // 화면을 열 때 한 번 확인한다(TASK-023). 켤 때는 그 위치를 그대로 쓴다.
+    expect(ask).toHaveBeenCalledTimes(1);
     const map = screen.getByRole("region", { name: "교통 현황 지도" });
     fireEvent.click(enf);
     expect(await screen.findByText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳")).toBeTruthy();
@@ -384,6 +385,30 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(ask).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "위치 다시 확인" }));
     await waitFor(() => expect(ask).toHaveBeenCalledTimes(2));
+  });
+
+  it("화면을 열 때 위치를 한 번 확인해 지도를 내 위치 기준으로, 거부하면 안내 없이 제주 전체(TASK-023)", async () => {
+    const ask = stubLocation({ lat: 33.502, lng: 126.536 });
+    render(<TrafficDashboard />);
+    expect(await screen.findByRole("button", { name: "제주 전체" })).toBeTruthy();
+    expect(ask).toHaveBeenCalledTimes(1);
+    cleanup();
+    stubLocation(null);
+    render(<TrafficDashboard />);
+    expect(await screen.findByText("감지된 사건 5건")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "제주 전체" })).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("제주 밖이면 제주 전체로 열고, 주변 유형을 켤 때 다시 확인한다(TASK-023)", async () => {
+    const ask = stubLocation({ lat: 37.56, lng: 126.97 });
+    render(<TrafficDashboard />);
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: "제주 전체" })).toBeNull();
+    fireEvent.click(await within(list).findByRole("button", { name: /주차장2/ }));
+    await waitFor(() => expect(ask).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/현재 위치가 제주 밖이라/)).toBeTruthy();
   });
 
   it("주정차 단속: 반경 밖이면 없다고 안내, 위치 권한이 없으면 끄고 이유를 보인다", async () => {

@@ -180,6 +180,30 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await expect(map).toHaveAttribute("data-nearby", "0");
   });
 
+  test("내 위치 기준으로 열기(TASK-023): 위치를 허용하면 내 위치 중심 확대·파란 점, '제주 전체'로 전체 보기", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+    const all = page.getByRole("button", { name: "제주 전체" });
+    await expect(all).toBeVisible();
+    await map.scrollIntoViewIfNeeded();
+    await expect(map.locator(".leaflet-control-zoom-in")).toBeVisible();
+    // 내 위치 파란 점이 지도 가운데에 있다
+    const dot = map.locator('path.leaflet-interactive[fill="#2272eb"]');
+    await expect(dot).toHaveCount(1);
+    const box = (await map.boundingBox())!;
+    const d = (await dot.boundingBox())!;
+    expect(Math.abs(d.x + d.width / 2 - (box.x + box.width / 2))).toBeLessThan(10);
+    expect(Math.abs(d.y + d.height / 2 - (box.y + box.height / 2))).toBeLessThan(10);
+    if (process.env.SCREENSHOTS === "TASK-023") await map.screenshot({ path: "reports/screenshots/TASK-023-01-home.png" });
+    await all.click();
+    await page.waitForTimeout(500);
+    // 제주 전체로 줄이면 내 위치 점은 가운데에서 벗어난다(제주시 북쪽)
+    const d2 = (await dot.boundingBox())!;
+    expect(box.y + box.height / 2 - (d2.y + d2.height / 2)).toBeGreaterThan(20);
+    if (process.env.SCREENSHOTS === "TASK-023") await map.screenshot({ path: "reports/screenshots/TASK-023-02-jeju.png" });
+  });
+
   test("주차장(TASK-017): 켜면 반경 1km 안 주차장만, 주정차 단속과 함께 켜기", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");

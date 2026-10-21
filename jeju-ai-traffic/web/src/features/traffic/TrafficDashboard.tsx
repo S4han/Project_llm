@@ -672,6 +672,17 @@ export function TrafficDashboard() {
     const particle = keys.at(-1) === "PARK" ? "이" : "가";
     return `${none}${particle} 없습니다.${keys.includes("ENF") ? "(주정차 단속은 제주시 자료만 있음)" : ""}`;
   }
+  // 화면을 열 때 위치를 한 번 확인한다(TASK-023 1.(a)). 되면 지도를 내 위치 기준으로 열고 주변 유형에도 그대로 쓴다(3.(a)).
+  // 거부·시간 초과·부정확·제주 밖이면 안내 없이 기존처럼 제주 전체. 좌표는 이 기기 메모리에만 둔다.
+  useEffect(() => {
+    let alive = true;
+    void getCurrentLocation(undefined, ENFORCEMENT_LOCATION_ACCURACY_METERS).then((r) => {
+      if (alive && r.kind === "ok") setMyLocation((prev) => prev ?? r.location);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   /** 현재 위치를 한 번 확인한다. 실패하면 위치 기반 유형(주정차 단속·주차장)을 끄고 이유를 보인다. */
   const locate = async () => {
     setLocating(true);
@@ -1136,6 +1147,7 @@ export function TrafficDashboard() {
             overlay={mapOverlay}
             facilities={facilityPoints}
             nearby={nearbyOn.length > 0 && myLocation ? { ...myLocation, radiusMeters: nearbyMaxRadius } : null}
+            home={myLocation}
             openFacility={gasFocus}
             highlightIds={showSpeeds ? highlightIds : EMPTY_IDS}
           />
@@ -1179,7 +1191,7 @@ export function TrafficDashboard() {
       </main>
       <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
         <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
-        <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 주정차 단속·주차장·주유소·LPG·전기차 충전소를 켤 때만 한 번 확인하며, 이 기기에서 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
+        <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 교통 현황을 열 때 한 번 확인하며(허용한 경우), 이 기기에서 지도 위치와 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
         <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS</p>
       </footer>
     </div>
