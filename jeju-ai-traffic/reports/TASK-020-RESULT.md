@@ -2,45 +2,43 @@
 
 - 보고일: 2026-10-21 / 실행 주체: Claude
 - 승인 근거: 사용자 "계획 승인: TASK-020 (a)" (2026-10-21)
+- 범위 변경: 사용자 "브이월드 배경지도 사용하는건 어때?" → "지도 키 등록 완료" (2026-10-21) — CARTO 대신 브이월드
 - 상태: **결과 검토** (완료 승인 대기, `main` 미반영)
 
-## 1. 원인
-- 바탕지도로 쓰던 OpenStreetMap 기본 타일은 256×256 픽셀(한 배 해상도)이다.
-- 휴대폰 화면은 픽셀이 2~3배 촘촘해서 그림을 늘려 보여 주므로 흐리게 보였다(사용자 휴대폰 캡처).
-- 도로 소통 선·가격 표시는 화면이 직접 그리므로 선명했다.
+## 1. 경과
+- 원인: OpenStreetMap 기본 타일은 256px 한 배 해상도라 휴대폰에서 늘어나 흐리게 보였다.
+- (a) CARTO Voyager로 바꿨으나, CARTO는 이제 키 없이 쓰면 지도 전체에 "API KEY REQUIRED" 글자가 덮였다(아이패드 캡처). 조사 때 확인하지 못한 부분이다. OSM으로 되돌렸다.
+- 사용자가 브이월드 바탕지도를 고르고, 지도용 키를 새로 받아 Vercel에 `VITE_VWORLD_MAP_KEY`(구성, Production+Preview)로 등록했다.
 
 ## 2. 변경 파일
 | 파일 | 변경 |
 |---|---|
-| `web/src/features/map/leafletMap.ts` | 바탕지도를 CARTO Voyager(`{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png`, 하위 주소 a~d, 최대 확대 19)로 교체. 고해상도 화면에서는 Leaflet이 `{r}`을 `@2x`로 바꿔 두 배 해상도 그림을 받는다. 지도 안 출처에 © CARTO 추가 |
-| `web/src/App.tsx`, `web/src/features/traffic/TrafficDashboard.tsx` | 하단 출처 "지도 © OpenStreetMap 기여자 © CARTO" |
-| `tests/e2e/*.spec.ts` | 바탕 그림 차단 대상에 CARTO 추가, 고해상도(2배) 화면에서 @2x 요청·출처 확인 테스트 신규 |
-| `tests/unit/App.test.tsx` | 하단 출처에 CARTO 확인 |
+| `web/src/features/map/leafletMap.ts` | `addBaseTiles`·`vworldTileUrl` 신규. 키가 있으면 브이월드 WMTS 흰색(`api.vworld.kr/req/wmts/1.0.0/{키}/white/{z}/{y}/{x}.png`, 최대 확대 18), 없으면 OSM. 브이월드 그림을 한 장도 못 받고 4장 실패하면 OSM으로 자동 전환. OSM까지 실패하면 기존 안내 |
+| `web/src/App.tsx`, `web/src/features/traffic/TrafficDashboard.tsx` | 하단 출처 "지도 © 브이월드(국토교통부)·OpenStreetMap 기여자" |
+| `tests/unit/basemap.test.ts` | 신규 4건: 주소 형식, 키 없음→OSM, 4장 실패→OSM 전환·OSM 실패 시 안내, 한 장이라도 받으면 유지 |
+| `tests/e2e/*.spec.ts` | 바탕 그림 차단 대상을 OSM·브이월드로(CARTO 제거) |
+| `scripts/check-secrets.mjs` | 지도용 키는 공개 키라 검사 대상이 아님을 주석으로 명시(검사 목록에 없음) |
+| `.env.example` | `VITE_VWORLD_MAP_KEY` 이름·설명(값 없음) |
 | `TASK_STATUS.md`, `tasks/TASK-020.md`, `DECISIONS.md` | 수정 |
 
 ## 3. 구현 요약
-- 교통 현황과 경로 추천 화면이 같은 지도 부품을 쓰므로 둘 다 바뀐다.
-- 같은 OpenStreetMap 자료라 지명은 OSM 원래 이름(한국어)이다. 연한 색 스타일이라 도로 소통 색과 가격 표시가 더 잘 보인다.
-- 키가 필요 없다. CARTO 기본 지도는 비상업 사용이 무료이고, 출처 표시(© CARTO, © OpenStreetMap) 조건이다. 지도 안과 하단에 표시했다.
-- 바탕 그림을 못 불러올 때 나오는 안내("지도 배경을 불러오지 못했습니다 …")는 그대로다.
+- 교통 현황과 경로 추천이 같은 지도 부품이라 둘 다 바뀐다.
+- 흰색 스타일: 사용자가 스타일을 정하지 않아 안내한 기본값. 바탕이 연해 도로 소통 색·가격 표시가 잘 보이고, 지명은 국토교통부 자료의 한국어다.
+- 지도용 키는 화면 코드에 들어간다(브라우저가 그림을 직접 받음). 브이월드에 등록한 사이트 주소에서만 동작하는 공개 키다. 서버 전용 키(`VWORLD_API_KEY` 등)와 섞지 않았다.
+- 키 값은 보지도, 기록하지도 않았다.
 
 ## 4. 테스트·빌드
 | 명령 | 결과 |
 |---|---|
-| `npm run check:release` | 통과 — 단위 **304건**, lint·typecheck·build, 비밀정보 의심 없음, 취약점 0건 |
-| `npx playwright test` | **48건** 통과 |
+| `npm run check:release` | 통과 — 단위 **308건**, lint·typecheck·build, 비밀정보 의심 없음, 취약점 0건 |
+| `npx playwright test` | **47건** 통과 |
 
-신규 e2e: 픽셀 2배 화면에서 지도가 요청하는 그림 주소가 모두 `https://[a-d].basemaps.cartocdn.com/rastertiles/voyager/z/x/y@2x.png` 형식이다. 지도 출처와 하단 출처에 CARTO가 있다.
+## 5. 확인하지 못한 것·위험
+- **실제 화면은 확인하지 못했다.** 작업 환경에는 지도용 키가 없고 브이월드 지도 주소에 접속할 수 없다. Preview에서 확인이 필요하다.
+- 브이월드 그림도 256px라 휴대폰에서 "두 배 선명"은 아니다. 다만 글자가 굵고 크게 그려진 한국 지도라 OSM보다 읽기 쉬울 것으로 본다. 부족하면 고해상도 화면에서 한 단계 더 확대된 그림을 받는 방법(글자는 작아짐)을 따로 검토할 수 있다.
+- 브이월드에 등록한 서비스 URL과 접속 주소가 다르면(예: Preview 주소 미등록) 브이월드 그림이 거부되고 OSM 지도로 바뀐다. 그 경우 화면은 예전 지도처럼 보인다.
+- 브이월드 바탕지도는 최대 확대 18까지다(기존과 같음).
 
-## 5. 확인하지 못한 것
-- 작업 환경에서는 CARTO 그림 주소가 막혀 있어(프록시 403), **실제 선명도와 모양은 확인하지 못했다.** Preview에서 확인이 필요하다.
-- 캡처: 바탕 그림이 막힌 환경이라 비교 캡처는 의미가 없어 만들지 않았다.
-
-## 6. 비용·위험
-- 비용은 0원이다(키 없음).
-- CARTO 무료 기본 지도는 비상업 조건이다. 상업적으로 쓰게 되면 CARTO 이용 조건을 다시 봐야 한다. 지금은 비상업 운영 전제다(TASK-011 고지와 같음).
-- 고해상도 그림은 크기가 커서 데이터 사용량이 늘 수 있다(타일당 약 2~4배).
-
-## 7. 확인 요청
-- Preview를 휴대폰으로 열어 지도 글자·도로가 선명한지, 색이 보기 좋은지 봐 주세요.
+## 6. 확인 요청
+- Preview(작업 브랜치)와 가능하면 휴대폰에서 지도를 열어, 바탕이 흰색 한국 지도(브이월드)로 나오는지 봐 주세요. 예전 OSM 모양이면 브이월드 서비스 URL에 그 주소가 등록됐는지 확인이 필요합니다.
 - 괜찮으면 `완료 승인: TASK-020`, Production 반영은 `main 반영`으로 지시해 주세요.

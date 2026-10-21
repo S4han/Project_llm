@@ -3,7 +3,7 @@ import { shot, uniqueClient } from "./client";
 
 test.beforeEach(async ({ page }) => {
   await page.setExtraHTTPHeaders(uniqueClient());
-  await page.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.abort());
+  await page.route(/tile\.openstreetmap\.org|api\.vworld\.kr\/req\/wmts/, (route) => route.abort());
 });
 
 test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모의 사건)", () => {

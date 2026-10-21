@@ -20,8 +20,47 @@ export interface IncidentFocus {
 /** 사건 한 곳을 확대해 보여 줄 때의 확대 수준. 제주 ITS는 좌표 한 점만 준다. */
 export const FOCUS_ZOOM = 16;
 
+const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 기여자';
+const VWORLD_ATTRIBUTION = '&copy; <a href="https://www.vworld.kr">브이월드</a>(국토교통부)';
+
+/** 브이월드 WMTS 흰색 바탕지도 주소. 지도용 키는 서비스 URL(도메인)에 묶인 공개 키라 화면 코드에 들어가도 된다. */
+export function vworldTileUrl(key: string): string {
+  return `https://api.vworld.kr/req/wmts/1.0.0/${encodeURIComponent(key)}/white/{z}/{y}/{x}.png`;
+}
+
 /**
- * OSM 배경의 Leaflet 지도. 컨테이너가 붙을 때 만들고 떨어질 때 지운다(콜백 ref 정리 함수).
+ * 바탕지도(TASK-020). 지도용 키(VITE_VWORLD_MAP_KEY)가 있으면 브이월드 흰색, 없으면 OpenStreetMap.
+ * 브이월드 타일을 한 장도 못 받고 4장 실패하면(키·도메인 불일치 등) OpenStreetMap으로 바꾼다.
+ * OpenStreetMap까지 못 받으면 onFailed.
+ */
+export function addBaseTiles(map: L.Map, vworldKey: string | undefined, onFailed: () => void): void {
+  const watch = (tiles: L.TileLayer, onDead: () => void) => {
+    let loaded = 0;
+    let errors = 0;
+    let dead = false;
+    tiles.on("tileload", () => (loaded += 1));
+    tiles.on("tileerror", () => {
+      errors += 1;
+      if (!dead && loaded === 0 && errors >= 4) {
+        dead = true;
+        onDead();
+      }
+    });
+    tiles.addTo(map);
+  };
+  const addOsm = () => watch(L.tileLayer(OSM_URL, { maxZoom: 18, attribution: OSM_ATTRIBUTION }), onFailed);
+  const key = vworldKey?.trim();
+  if (!key) return addOsm();
+  const vworld = L.tileLayer(vworldTileUrl(key), { maxZoom: 18, attribution: VWORLD_ATTRIBUTION });
+  watch(vworld, () => {
+    map.removeLayer(vworld);
+    addOsm();
+  });
+}
+
+/**
+ * 브이월드(키 없으면 OSM) 배경의 Leaflet 지도. 컨테이너가 붙을 때 만들고 떨어질 때 지운다(콜백 ref 정리 함수).
  * 그릴 것은 layer에 넣는다. 지도를 만들지 못하면 failed, 배경 타일을 못 받으면 tilesFailed.
  */
 export function useLeafletMap() {
@@ -36,20 +75,7 @@ export function useLeafletMap() {
     let map: L.Map;
     try {
       map = L.map(el, { zoomControl: true, attributionControl: true });
-      // 바탕지도: OpenStreetMap 기본 타일. CARTO Voyager로 바꿨으나 지금은 키 없이 쓰면 "API KEY REQUIRED" 글자가 덮여
-      // 되돌렸다(TASK-020 점검, 2026-10-21). 고해상도 바탕지도는 사용자 결정 뒤 다시 바꾼다.
-      const tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 18,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 기여자',
-      });
-      let loaded = 0;
-      let errors = 0;
-      tiles.on("tileload", () => (loaded += 1));
-      tiles.on("tileerror", () => {
-        errors += 1;
-        if (loaded === 0 && errors >= 4) setTilesFailed(true);
-      });
-      tiles.addTo(map);
+      addBaseTiles(map, import.meta.env.VITE_VWORLD_MAP_KEY, () => setTilesFailed(true));
       layerRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
       setMapReady(true);

@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
+// VITE_VWORLD_MAP_KEY(브이월드 지도용 키, TASK-020)는 서비스 URL에 묶인 공개 키라 화면 코드에 들어가는 것이 정상이므로 검사하지 않는다.
 const SECRET_NAMES = ["KAKAO_REST_API_KEY", "JEJU_ITS_API_KEY", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_AI_TOKEN"];
 
 const RULES = [

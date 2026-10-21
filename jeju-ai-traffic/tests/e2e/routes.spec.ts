@@ -101,7 +101,7 @@ test("목적지 근처 도로 없음 안내", async ({ page }) => {
 });
 
 test.describe("지도 (OSM 타일 차단 상태)", () => {
-  test.beforeEach(async ({ page }) => page.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.abort()));
+  test.beforeEach(async ({ page }) => page.route(/tile\.openstreetmap\.org|api\.vworld\.kr\/req\/wmts/, (route) => route.abort()));
 
   test("경로 선·혼잡 구간·사건 표시, 카드 선택 시 강조 변경, 배경 실패 안내 (AC-007-01~04)", async ({ page }) => {
     await setup(page, "서귀포", "서귀포시청 제1청사");
@@ -180,7 +180,7 @@ test.describe("지도 (OSM 타일 차단 상태)", () => {
 });
 
 test.describe("추천 이유", () => {
-  test.beforeEach(async ({ page }) => page.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.abort()));
+  test.beforeEach(async ({ page }) => page.route(/tile\.openstreetmap\.org|api\.vworld\.kr\/req\/wmts/, (route) => route.abort()));
 
   test("AI 미설정: 규칙 기반 설명과 근거", async ({ page }) => {
     await setup(page, "서귀포", "서귀포시청 제1청사");
@@ -225,7 +225,7 @@ test.describe("길 안내 시작 (FR-008)", () => {
       geolocation: { ...AIRPORT, accuracy: 15 },
     });
     const page = await context.newPage();
-    await page.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.abort());
+    await page.route(/tile\.openstreetmap\.org|api\.vworld\.kr\/req\/wmts/, (route) => route.abort());
     await setup(page, "서귀포", "서귀포시청 제1청사");
     await page.getByRole("button", { name: "경로 조회" }).click();
     await page.getByRole("button", { name: "길 안내 시작" }).click();
@@ -251,7 +251,7 @@ test.describe("길 안내 시작 (FR-008)", () => {
 test.describe("교통상황 재평가 (FR-009)", () => {
   test("시작 시 즉시 1회, 브라우저 시계 5분 경과 후 다시 1회 (purpose: reevaluation)", async ({ page }) => {
     await page.clock.install();
-    await page.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.abort());
+    await page.route(/tile\.openstreetmap\.org|api\.vworld\.kr\/req\/wmts/, (route) => route.abort());
     const purposes: string[] = [];
     page.on("request", (req) => {
       if (req.url().endsWith("/api/routes/compare") && req.method() === "POST") {
@@ -282,7 +282,7 @@ test.describe("교통상황 재평가 (FR-009)", () => {
 test.describe("경로 변경 안내 (FR-010)", () => {
   // 조회는 카카오 추천 1개뿐이라(TASK-011 경로방식 (a)) 느린 경로 하나를 응답에 덧붙여 비교 규칙을 확인한다.
   test("느린 경로를 따라가면 안내, '변경'하면 지도 강조가 바뀐다 (응답 대체)", async ({ page }) => {
-    await page.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.abort());
+    await page.route(/tile\.openstreetmap\.org|api\.vworld\.kr\/req\/wmts/, (route) => route.abort());
     await page.route("**/api/routes/compare", async (route) => {
       const body = await (await route.fetch()).json();
       const base = body.routes[0];
