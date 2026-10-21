@@ -36,9 +36,12 @@ export function useLeafletMap() {
     let map: L.Map;
     try {
       map = L.map(el, { zoomControl: true, attributionControl: true });
-      const tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 18,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 기여자',
+      // 바탕지도: CARTO Voyager(같은 OpenStreetMap 자료). 고해상도 화면에서는 {r}이 "@2x"가 되어 두 배 해상도 그림을 받는다
+      // (OSM 기본 타일은 한 배라 휴대폰에서 흐렸음, TASK-020 (a)). 키 없음, 비상업 무료·출처 표시 조건.
+      const tiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        subdomains: "abcd",
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 기여자 &copy; <a href="https://carto.com/attributions">CARTO</a>',
       });
       let loaded = 0;
       let errors = 0;

@@ -12,7 +12,7 @@ const WIDTHS = [
 test.use({ permissions: ["geolocation"], geolocation: { latitude: 33.5066, longitude: 126.4929, accuracy: 15 } });
 test.beforeEach(async ({ page }) => {
   await page.setExtraHTTPHeaders(uniqueClient());
-  await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
+  await page.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.abort());
 });
 
 async function noHorizontalScroll(page: Page) {
