@@ -56,27 +56,91 @@ const GAS_PAGE = 5;
 
 type GasStation = { id: string; brand: string; name: string; gasoline: number | null; diesel: number | null; lat: number; lng: number; lpg: number | null; address: string; tel: string };
 
-/** 주유소 카드(TASK-018): 상표 표시·이름, 최저가·셀프·LPG 칩, 휘발유·경유(·LPG) 가격 줄, 주소·전화·기준, 경로 안내 버튼. LPG만 파는 충전소는 LPG만. */
-function gasCard(s: GasStation, low: boolean, builtAt: string | undefined): PopupCard {
+/** 휘발유·경유를 파는 곳(가격이 하나도 없으면 주유소로 본다). LPG만 파는 충전소는 빠진다. */
+const isGasStation = (s: TrafficGasResponse["stations"][number]) => s[3] !== null || s[4] !== null || s[7] === null;
+/** LPG를 파는 곳(주유소 겸 LPG 충전소 포함). */
+const isLpgStation = (s: TrafficGasResponse["stations"][number]) => s[7] !== null;
+
+/**
+ * 주유소·LPG 충전소 카드(TASK-018): 상표 표시·이름, 최저가·셀프 칩, 가격 줄, 주소·전화·기준, 경로 안내 버튼.
+ * kind가 LPG면 LPG 가격을 먼저, 주유소면 휘발유·경유를 먼저(파는 것만) 보여 준다.
+ */
+function gasCard(s: GasStation, low: boolean, builtAt: string | undefined, kind: "GAS" | "LPG"): PopupCard {
   const b = gasBrand(s.brand);
-  const lpgOnly = s.gasoline === null && s.diesel === null && s.lpg !== null;
+  const lpgRow = s.lpg !== null ? [{ label: "LPG", lines: [`${won(s.lpg)}/L`] }] : [];
+  const fuelRows =
+    s.gasoline === null && s.diesel === null && kind === "LPG"
+      ? []
+      : [
+          { label: "휘발유", lines: [s.gasoline !== null ? `${won(s.gasoline)}/L` : "판매 정보 없음"] },
+          { label: "경유", lines: [s.diesel !== null ? `${won(s.diesel)}/L` : "판매 정보 없음"] },
+        ];
   return {
     badge: { text: b.mark, color: b.color, textColor: b.textColor },
-    kicker: `${lpgOnly ? "LPG 충전소" : "주유소"} · ${b.name}`,
-    title: s.name || "이름 없는 주유소",
-    chips: [low ? "반경 안 휘발유 최저가" : "", /셀프|self/i.test(s.name) ? "셀프" : "", s.lpg !== null && !lpgOnly ? "LPG" : ""].filter(Boolean),
-    rows: [
-      ...(lpgOnly
-        ? []
-        : [
-            { label: "휘발유", lines: [s.gasoline !== null ? `${won(s.gasoline)}/L` : "판매 정보 없음"] },
-            { label: "경유", lines: [s.diesel !== null ? `${won(s.diesel)}/L` : "판매 정보 없음"] },
-          ]),
-      ...(s.lpg !== null ? [{ label: "LPG", lines: [`${won(s.lpg)}/L`] }] : []),
-    ],
+    kicker: `${kind === "LPG" ? "LPG 충전소" : "주유소"} · ${b.name}`,
+    title: s.name || (kind === "LPG" ? "이름 없는 충전소" : "이름 없는 주유소"),
+    chips: [low ? (kind === "LPG" ? "반경 안 LPG 최저가" : "반경 안 휘발유 최저가") : "", /셀프|self/i.test(s.name) ? "셀프" : "", kind === "GAS" && s.lpg !== null ? "LPG" : ""].filter(Boolean),
+    rows: kind === "LPG" ? [...lpgRow, ...fuelRows] : [...fuelRows, ...lpgRow],
     footer: [[s.address, s.tel].filter(Boolean).join(" · "), `제주 ITS(오피넷 가격)${builtAt ? ` · ${formatKstTime(builtAt)} 조회` : ""}`].filter(Boolean).join("\n"),
     action: { href: parkingRouteHref({ id: s.id, name: s.name, address: b.name, lat: s.lat, lng: s.lng }), label: "현재 위치에서 경로 안내" },
   };
+}
+
+interface FuelRow {
+  id: string;
+  brand: string;
+  name: string;
+  /** 정렬·강조 기준 가격(주유소는 휘발유, LPG 충전소는 LPG). */
+  price: number | null;
+  /** 둘째 줄의 보조 정보(예: "경유 1,845원"). */
+  sub: string;
+  meters: number;
+}
+
+/** 주유소·LPG 충전소 목록(TASK-018): 싼 순, 최저가는 맨 위 금색 칸·"최저가" 표시·가격 크게, 나머지는 최저가와의 차이. */
+function FuelList({ title, label, fuel, rows, low, limit, onMore, onPick }: { title: string; label: string; fuel: string; rows: FuelRow[]; low: number | null; limit: number; onMore: () => void; onPick: (id: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <h3 className="text-sm font-semibold text-grey-700">{title}</h3>
+      <ul aria-label={label} className="flex flex-col gap-1.5">
+        {rows.slice(0, limit).map((r) => {
+          const b = gasBrand(r.brand);
+          const isLow = low !== null && r.price === low;
+          return (
+            <li key={r.id}>
+              <button
+                type="button"
+                onClick={() => onPick(r.id)}
+                className={`flex min-h-14 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm ${isLow ? "bg-amber-50 ring-2 ring-amber-400" : "bg-grey-100"}`}
+              >
+                <span className="flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg px-1 text-xs font-extrabold" style={{ backgroundColor: b.color, color: b.textColor ?? "#fff" }} aria-hidden="true">
+                  {b.mark}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    {isLow && <span className="shrink-0 rounded-md bg-amber-400 px-1.5 py-0.5 text-xs font-bold text-grey-900">최저가</span>}
+                    <span className="truncate font-semibold text-grey-900">{r.name || "이름 없는 곳"}</span>
+                  </span>
+                  <span className="block text-xs text-grey-600">
+                    {(r.meters / 1000).toFixed(1)}km{r.sub && ` · ${r.sub}`}
+                  </span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className={`block font-bold tabular-nums ${isLow ? "text-lg text-amber-700" : "text-grey-900"}`}>{r.price !== null ? won(r.price) : "–"}</span>
+                  <span className="block text-xs text-grey-500">{r.price === null ? `${fuel} 정보 없음` : isLow ? fuel : `최저가보다 +${(r.price - (low ?? r.price)).toLocaleString("ko-KR")}원`}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {rows.length > limit && (
+        <button type="button" onClick={onMore} className="min-h-12 rounded-2xl bg-grey-100 font-semibold text-grey-700">
+          더 보기 ({(rows.length - limit).toLocaleString("ko-KR")}곳 남음)
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** 주차장 카드 팝업(TASK-017): 머리(P·이름), 구분 칩·면수, 운영·요금 줄, 주소, 경로 안내 버튼. */
@@ -147,6 +211,7 @@ export function TrafficDashboard() {
   // 주유소 목록(휘발유 싼 순)에서 고른 곳과 보여 줄 줄 수
   const [gasFocus, setGasFocus] = useState<{ id: string; seq: number } | null>(null);
   const [gasLimit, setGasLimit] = useState(GAS_PAGE);
+  const [lpgLimit, setLpgLimit] = useState(GAS_PAGE);
   // 내 위치(주정차 단속 반경 조회용). 이 화면 메모리에만 두고 서버로 보내거나 저장하지 않는다.
   const [myLocation, setMyLocation] = useState<Coordinate | null>(null);
   const [locating, setLocating] = useState(false);
@@ -338,24 +403,38 @@ export function TrafficDashboard() {
     for (const f of facilities?.facilities ?? []) counts[f[1]] += 1;
     counts.ENF = enforcement?.cameras.length ?? 0;
     counts.PARK = parking?.lots.length ?? 0;
-    counts.GAS = gas?.stations.length ?? 0;
+    counts.GAS = gas?.stations.filter(isGasStation).length ?? 0;
+    counts.LPG = gas?.stations.filter(isLpgStation).length ?? 0;
     return counts;
   }, [facilities, enforcement, parking, gas]);
   // 반경 안 주유소와 휘발유 최저가(TASK-018 3.(a)).
   const nearGas = useMemo(
-    () => (facilityTypes.has("GAS") && myLocation ? (gas?.stations ?? []).filter((s) => distanceMeters(myLocation, { lat: s[5], lng: s[6] }) <= (NEARBY_RADIUS.GAS ?? 3000)) : []),
+    () => (facilityTypes.has("GAS") && myLocation ? (gas?.stations ?? []).filter((s) => isGasStation(s) && distanceMeters(myLocation, { lat: s[5], lng: s[6] }) <= (NEARBY_RADIUS.GAS ?? 3000)) : []),
     [facilityTypes, myLocation, gas],
   );
+  // 반경 안 LPG 충전소와 LPG 최저가(TASK-018 범위 변경 "LPG충전소 유형을 따로").
+  const nearLpg = useMemo(
+    () => (facilityTypes.has("LPG") && myLocation ? (gas?.stations ?? []).filter((s) => isLpgStation(s) && distanceMeters(myLocation, { lat: s[5], lng: s[6] }) <= (NEARBY_RADIUS.LPG ?? 5000)) : []),
+    [facilityTypes, myLocation, gas],
+  );
+  const lowLpg = nearLpg.reduce<number | null>((m, s) => (s[7] !== null && (m === null || s[7] < m) ? s[7] : m), null);
   const lowGasoline = nearGas.reduce<number | null>((m, s) => (s[3] !== null && (m === null || s[3] < m) ? s[3] : m), null);
   // 목록: 휘발유 싼 순(가격 없음은 아래), 같으면 가까운 순.
-  const gasList = useMemo(() => {
-    if (!myLocation) return [];
-    return nearGas
-      .map((s) => ({ s, meters: distanceMeters(myLocation, { lat: s[5], lng: s[6] }) }))
-      .sort((a, b) => Number(a.s[3] === null) - Number(b.s[3] === null) || (a.s[3] ?? 0) - (b.s[3] ?? 0) || a.meters - b.meters);
-  }, [nearGas, myLocation]);
-  const focusGas = (id: string) => {
-    setGasFocus((prev) => ({ id: `GAS-${id}`, seq: (prev?.seq ?? 0) + 1 }));
+  const toFuelRows = (list: TrafficGasResponse["stations"], kind: "GAS" | "LPG", here: Coordinate): FuelRow[] =>
+    list
+      .map(([id, brand, name, gasoline, diesel, lat, lng, lpg]) => ({
+        id,
+        brand,
+        name,
+        price: kind === "GAS" ? gasoline : lpg,
+        sub: kind === "GAS" ? `경유 ${diesel !== null ? won(diesel) : "정보 없음"}` : gasoline !== null ? `휘발유 ${won(gasoline)}` : "",
+        meters: distanceMeters(here, { lat, lng }),
+      }))
+      .sort((a, b) => Number(a.price === null) - Number(b.price === null) || (a.price ?? 0) - (b.price ?? 0) || a.meters - b.meters);
+  const gasList = myLocation ? toFuelRows(nearGas, "GAS", myLocation) : [];
+  const lpgList = myLocation ? toFuelRows(nearLpg, "LPG", myLocation) : [];
+  const focusFuel = (kind: "GAS" | "LPG", id: string) => {
+    setGasFocus((prev) => ({ id: `${kind}-${id}`, seq: (prev?.seq ?? 0) + 1 }));
     revealMap(mapBox.current);
   };
   const facilityPoints = useMemo<FacilityPoint[]>(
@@ -395,24 +474,38 @@ export function TrafficDashboard() {
           model: "",
           lat,
           lng,
-          // 가격 표시는 휘발유, LPG만 파는 곳은 "LPG 1,178"
-          pin: { mark: b.mark, price: gasoline !== null ? gasoline.toLocaleString("ko-KR") : lpg !== null ? `LPG ${lpg.toLocaleString("ko-KR")}` : null, color: b.color, textColor: b.textColor, low },
-          card: gasCard({ id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel }, low, gas?.builtAt),
+          pin: { mark: b.mark, price: gasoline !== null ? gasoline.toLocaleString("ko-KR") : null, color: b.color, textColor: b.textColor, low },
+          card: gasCard({ id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel }, low, gas?.builtAt, "GAS"),
+        };
+      }),
+      ...nearLpg.map(([id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel]): FacilityPoint => {
+        const b = gasBrand(brand);
+        const low = lowLpg !== null && lpg === lowLpg;
+        return {
+          id: `LPG-${id}`,
+          type: "LPG",
+          name,
+          model: "",
+          lat,
+          lng,
+          pin: { mark: b.mark, price: lpg !== null ? `LPG ${lpg.toLocaleString("ko-KR")}` : null, color: b.color, textColor: b.textColor, low },
+          card: gasCard({ id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel }, low, gas?.builtAt, "LPG"),
         };
       }),
     ],
-    [facilities, facilityTypes, enforcement, parking, myLocation, nearGas, lowGasoline, gas],
+    [facilities, facilityTypes, enforcement, parking, myLocation, nearGas, lowGasoline, nearLpg, lowLpg, gas],
   );
   const nearbyOn = NEARBY_KEYS.filter((k) => facilityTypes.has(k));
   const nearbyCount = (k: FacilityKey) => facilityPoints.filter((p) => p.type === k).length;
-  const nearbyLabel: Partial<Record<FacilityKey, string>> = { ENF: "주정차 단속 CCTV", PARK: "주차장", GAS: "주유소" };
+  const nearbyLabel: Partial<Record<FacilityKey, string>> = { ENF: "주정차 단속 CCTV", PARK: "주차장", GAS: "주유소", LPG: "LPG 충전소" };
   // 반경이 같은 유형끼리 한 덩어리로: "내 위치 반경 1km 안 주정차 단속 CCTV 2곳 · 주차장 1곳 · 반경 3km 안 주유소 5곳 · 휘발유 최저 1,849원"
   const nearbyMaxRadius = Math.max(0, ...nearbyOn.map((k) => NEARBY_RADIUS[k] ?? 1000));
   const nearbyText = [...new Set(nearbyOn.map((k) => NEARBY_RADIUS[k] ?? 1000))]
     .map((r) => radiusText(r, nearbyOn.filter((k) => (NEARBY_RADIUS[k] ?? 1000) === r)))
     .join(" · ")
     .replace(/^/, "내 위치 ")
-    .concat(lowGasoline !== null ? ` · 휘발유 최저 ${won(lowGasoline)}` : "");
+    .concat(lowGasoline !== null ? ` · 휘발유 최저 ${won(lowGasoline)}` : "")
+    .concat(lowLpg !== null ? ` · LPG 최저 ${won(lowLpg)}` : "");
   function radiusText(r: number, keys: FacilityKey[]): string {
     const km = `${r / 1000}km`;
     const total = keys.reduce((s, k) => s + nearbyCount(k), 0);
@@ -441,7 +534,7 @@ export function TrafficDashboard() {
       inaccurate: `위치가 부정확합니다(오차 약 ${"accuracyMeters" in r ? r.accuracyMeters : "?"}m). 실외나 와이파이가 켜진 곳에서 다시 시도하세요.`,
       outsideJeju: "현재 위치가 제주 밖이라 내 위치 주변을 표시할 수 없습니다.",
     };
-    setLocationProblem(`내 위치 주변(주정차 단속·주차장·주유소)을 표시하지 못했습니다: ${reason[r.kind]}`);
+    setLocationProblem(`내 위치 주변(주정차 단속·주차장·주유소·LPG 충전소)을 표시하지 못했습니다: ${reason[r.kind]}`);
     setFacilityTypes((prev) => new Set([...prev].filter((k) => !NEARBY_KEYS.includes(k))));
   };
   const toggleFacility = (t: FacilityKey) => {
@@ -727,7 +820,7 @@ export function TrafficDashboard() {
             <p className="text-xs text-grey-600">
               제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV·웹카메라 점을 누르면 제주 ITS 교통정보센터(새 창)로 연결되며, 사이트의 CCTV 메뉴에서 같은 위치를 고르면 영상을 볼 수 있습니다. 주정차 단속은
               제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다{enforcement?.source === "mock" && "(모의 데이터)"}. 주차장은 전국주차장정보표준데이터(제주시·서귀포시)로 위치·면수·요금·운영 시간만 있고 실시간 남은 칸은 없습니다
-              {parking?.source === "mock" && "(모의 데이터)"}. 주유소는 제주 ITS 주유소 정보(오피넷 가격, 휘발유·경유·LPG, 1시간마다 다시 조회){gas?.source === "mock" && "(모의 데이터)"}입니다. 주정차 단속·주차장(반경 1km)·주유소(반경 3km)는 켜면 현재 위치를 한 번 확인해 반경 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나 저장하지 않습니다).
+              {parking?.source === "mock" && "(모의 데이터)"}. 주유소는 제주 ITS 주유소 정보(오피넷 가격, 휘발유·경유·LPG, 1시간마다 다시 조회){gas?.source === "mock" && "(모의 데이터)"}입니다. LPG 충전소는 같은 자료의 LPG 판매 정보입니다. 주정차 단속·주차장(반경 1km)·주유소(반경 3km)·LPG 충전소(반경 5km)는 켜면 현재 위치를 한 번 확인해 반경 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나 저장하지 않습니다).
             </p>
           </div>
           {(facilitiesLoading || enforcementLoading || parkingLoading || gasLoading) && (
@@ -789,48 +882,10 @@ export function TrafficDashboard() {
             </div>
           )}
           {facilityTypes.has("GAS") && myLocation && !locating && gasList.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <h3 className="text-sm font-semibold text-grey-700">반경 3km 주유소 · 휘발유 싼 순</h3>
-              <ul aria-label="주유소 목록" className="flex flex-col gap-1.5">
-                {gasList.slice(0, gasLimit).map(({ s: [id, brand, name, gasoline, diesel, , , lpg], meters }) => {
-                  const b = gasBrand(brand);
-                  const low = lowGasoline !== null && gasoline === lowGasoline;
-                  return (
-                    <li key={id}>
-                      <button
-                        type="button"
-                        onClick={() => focusGas(id)}
-                        className={`flex min-h-14 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm ${low ? "bg-amber-50 ring-2 ring-amber-400" : "bg-grey-100"}`}
-                      >
-                        <span className="flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg px-1 text-xs font-extrabold" style={{ backgroundColor: b.color, color: b.textColor ?? "#fff" }} aria-hidden="true">
-                          {b.mark}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-1.5">
-                            {low && <span className="shrink-0 rounded-md bg-amber-400 px-1.5 py-0.5 text-xs font-bold text-grey-900">최저가</span>}
-                            <span className="truncate font-semibold text-grey-900">{name || "이름 없는 주유소"}</span>
-                          </span>
-                          <span className="block text-xs text-grey-600">
-                            {(meters / 1000).toFixed(1)}km · {gasoline === null && diesel === null && lpg !== null ? `LPG ${won(lpg)}` : `경유 ${diesel !== null ? won(diesel) : "정보 없음"}`}
-                          </span>
-                        </span>
-                        <span className="shrink-0 text-right">
-                          <span className={`block font-bold tabular-nums ${low ? "text-lg text-amber-700" : "text-grey-900"}`}>{gasoline !== null ? won(gasoline) : "–"}</span>
-                          <span className="block text-xs text-grey-500">
-                            {gasoline === null ? "휘발유 정보 없음" : low ? "휘발유" : `최저가보다 +${(gasoline - (lowGasoline ?? gasoline)).toLocaleString("ko-KR")}원`}
-                          </span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              {gasList.length > gasLimit && (
-                <button type="button" onClick={() => setGasLimit((n) => n + GAS_PAGE)} className="min-h-12 rounded-2xl bg-grey-100 font-semibold text-grey-700">
-                  더 보기 ({(gasList.length - gasLimit).toLocaleString("ko-KR")}곳 남음)
-                </button>
-              )}
-            </div>
+            <FuelList title="반경 3km 주유소 · 휘발유 싼 순" label="주유소 목록" fuel="휘발유" rows={gasList} low={lowGasoline} limit={gasLimit} onMore={() => setGasLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("GAS", id)} />
+          )}
+          {facilityTypes.has("LPG") && myLocation && !locating && lpgList.length > 0 && (
+            <FuelList title="반경 5km LPG 충전소 · LPG 싼 순" label="LPG 충전소 목록" fuel="LPG" rows={lpgList} low={lowLpg} limit={lpgLimit} onMore={() => setLpgLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("LPG", id)} />
           )}
           {locationProblem && (
             <p role="alert" className="rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
@@ -937,7 +992,7 @@ export function TrafficDashboard() {
       </main>
       <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
         <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
-        <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 주정차 단속·주차장·주유소를 켤 때만 한 번 확인하며, 이 기기에서 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
+        <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 주정차 단속·주차장·주유소·LPG 충전소를 켤 때만 한 번 확인하며, 이 기기에서 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
         <p>지도 © OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사)</p>
       </footer>
     </div>

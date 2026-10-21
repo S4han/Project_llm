@@ -120,7 +120,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await page.goto("/");
     const list = page.getByRole("list", { name: "교통시설물 유형" });
     const buttons = list.getByRole("button");
-    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속3", "주차장3", "주유소5"]);
+    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속3", "주차장3", "주유소4", "LPG 충전소1"]);
     const map = page.getByRole("region", { name: "교통 현황 지도" });
     await expect(map).toHaveAttribute("data-facilities", "0");
     await list.getByRole("button", { name: /^CCTV/ }).click();
@@ -257,10 +257,9 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소 (TASK-0
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
     await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /주유소/ }).click();
-    await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 3km 안 주유소 4곳 · 휘발유 최저 1,849원");
+    await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 3km 안 주유소 3곳 · 휘발유 최저 1,849원");
     const map = page.getByRole("region", { name: "교통 현황 지도" });
-    await expect(map.locator(".gas-pin")).toHaveCount(4);
-    await expect(map.locator(".gas-pin").filter({ hasText: "LPG 1,178" })).toHaveCount(1);
+    await expect(map.locator(".gas-pin")).toHaveCount(3);
     await expect(map.locator(".gas-pin-low")).toHaveCount(1);
     await expect(map.locator(".gas-pin-low")).toContainText("알뜰1,849최저");
     await map.scrollIntoViewIfNeeded();
@@ -279,8 +278,7 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소 (TASK-0
     await page.goto("/");
     await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /주유소/ }).click();
     const rows = page.getByRole("list", { name: "주유소 목록" }).getByRole("button");
-    await expect(rows).toHaveCount(4);
-    await expect(rows.last()).toContainText("LPG 1,178원");
+    await expect(rows).toHaveCount(3);
     await expect(rows.first()).toContainText("최저가");
     await expect(rows.first()).toContainText("모의 알뜰주유소");
     await expect(rows.nth(1)).toContainText("최저가보다 +");
@@ -290,5 +288,25 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소 (TASK-0
     const card = page.locator(".leaflet-popup .popup-card");
     await expect(card).toBeVisible();
     await expect(card.locator(".popup-card-title")).toHaveText("모의 도남주유소");
+  });
+
+  test("LPG 충전소(TASK-018 범위 변경): 주유소와 따로 켜고, LPG 가격 표시·목록·카드", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /LPG 충전소/ }).click();
+    await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 5km 안 LPG 충전소 1곳 · LPG 최저 1,178원");
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+    await expect(map.locator(".gas-pin")).toHaveCount(1);
+    await expect(map.locator(".gas-pin-low")).toContainText("SKLPG 1,178최저");
+    const rows = page.getByRole("list", { name: "LPG 충전소 목록" }).getByRole("button");
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("최저가");
+    await rows.first().click();
+    const card = page.locator(".leaflet-popup .popup-card");
+    await expect(card.locator(".popup-card-kicker")).toHaveText("LPG 충전소 · SK가스");
+    await expect(card).toContainText("반경 안 LPG 최저가");
+    await expect(card.locator("dd").first()).toHaveText("1,178원/L");
+    await page.locator(".leaflet-popup").scrollIntoViewIfNeeded();
+    await shot(page, "TASK-018-04-lpg");
   });
 });

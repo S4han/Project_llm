@@ -65,6 +65,7 @@ const GAS: TrafficGasResponse = {
     ["G1", "SKE", "도남주유소", 1867, 1845, 33.4918, 126.5273, null, "제주시 도남동", ""],
     ["G2", "RTO", "알뜰주유소", 1849, 1829, 33.505, 126.55, null, "제주시", ""],
     ["G3", "GSC", "중문주유소", 1899, 1879, 33.25, 126.41, null, "서귀포시", ""],
+    ["L1", "SKG", "제주LPG충전소", null, null, 33.498, 126.52, 1178, "제주시 이호동", "064-000-0000"],
   ],
   builtAt: AT,
   source: "jejuIts",
@@ -334,7 +335,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     render(<TrafficDashboard />);
     const list = await screen.findByRole("list", { name: "교통시설물 유형" });
     const buttons = within(list).getAllByRole("button");
-    expect(buttons.map((b) => b.textContent)).toEqual(["VMS1", "CCTV2", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속2", "주차장2", "주유소3"]);
+    expect(buttons.map((b) => b.textContent)).toEqual(["VMS1", "CCTV2", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속2", "주차장2", "주유소3", "LPG 충전소1"]);
     expect(buttons.every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
     expect((within(list).getByRole("button", { name: /웹카메라/ }) as HTMLButtonElement).disabled).toBe(true);
     const map = screen.getByRole("region", { name: "교통 현황 지도" });
@@ -384,7 +385,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     const list2 = await screen.findByRole("list", { name: "교통시설물 유형" });
     const enf = await within(list2).findByRole("button", { name: /주정차 단속2/ });
     fireEvent.click(enf);
-    expect(await screen.findByText(/내 위치 주변\(주정차 단속·주차장·주유소\)을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
+    expect(await screen.findByText(/내 위치 주변\(주정차 단속·주차장·주유소·LPG 충전소\)을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
     expect(enf.getAttribute("aria-pressed")).toBe("false");
   });
 
@@ -415,6 +416,19 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     fireEvent.click(within(list).getByRole("button", { name: /주차장2/ }));
     expect(screen.getByText("내 위치 반경 1km 안 주차장 1곳 · 반경 3km 안 주유소 2곳 · 휘발유 최저 1,849원")).toBeTruthy();
     expect(screen.getByText(/제주 ITS 주유소 정보/)).toBeTruthy();
+  });
+
+  it("LPG 충전소(범위 변경): 주유소와 따로, 반경 5km·LPG 최저가·목록, 주유소 목록에는 LPG만 파는 곳이 없다", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    render(<TrafficDashboard />);
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    fireEvent.click(await within(list).findByRole("button", { name: /LPG 충전소1/ }));
+    expect(await screen.findByText("내 위치 반경 5km 안 LPG 충전소 1곳 · LPG 최저 1,178원")).toBeTruthy();
+    const rows = within(screen.getByRole("list", { name: "LPG 충전소 목록" })).getAllByRole("button");
+    expect(rows.map((r) => r.textContent)).toEqual(["SK최저가제주LPG충전소1.5km1,178원LPG"]);
+    fireEvent.click(within(list).getByRole("button", { name: /주유소3/ }));
+    expect(within(screen.getByRole("list", { name: "주유소 목록" })).queryByText(/LPG충전소/)).toBeNull();
+    expect(screen.getByText("내 위치 반경 3km 안 주유소 2곳 · 반경 5km 안 LPG 충전소 1곳 · 휘발유 최저 1,849원 · LPG 최저 1,178원")).toBeTruthy();
   });
 
   it("반경 안에 주유소가 없으면 '주유소가 없습니다'(조사)", async () => {
