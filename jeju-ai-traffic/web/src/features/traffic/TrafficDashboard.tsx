@@ -66,7 +66,7 @@ function gasCard(s: { id: string; brand: string; name: string; gasoline: number 
       { label: "휘발유", lines: [s.gasoline !== null ? `${won(s.gasoline)}/L` : "판매 정보 없음"] },
       { label: "경유", lines: [s.diesel !== null ? `${won(s.diesel)}/L` : "판매 정보 없음"] },
     ],
-    footer: `오피넷 판매가격${builtAt ? ` · ${formatKstTime(builtAt)} 기준` : ""}(6시간마다 갱신)`,
+    footer: `오피넷 판매가격${builtAt ? ` · ${formatKstTime(builtAt)} 기준` : ""}(하루 1번 갱신)`,
     action: { href: parkingRouteHref({ id: s.id, name: s.name, address: b.name, lat: s.lat, lng: s.lng }), label: "현재 위치에서 경로 안내" },
   };
 }
@@ -712,7 +712,7 @@ export function TrafficDashboard() {
             <p className="text-xs text-grey-600">
               제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV·웹카메라 점을 누르면 제주 ITS 교통정보센터(새 창)로 연결되며, 사이트의 CCTV 메뉴에서 같은 위치를 고르면 영상을 볼 수 있습니다. 주정차 단속은
               제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다{enforcement?.source === "mock" && "(모의 데이터)"}. 주차장은 전국주차장정보표준데이터(제주시·서귀포시)로 위치·면수·요금·운영 시간만 있고 실시간 남은 칸은 없습니다
-              {parking?.source === "mock" && "(모의 데이터)"}. 주유소는 오피넷 판매가격(휘발유·경유, 6시간마다 갱신){gas?.source === "mock" && "(모의 데이터)"}입니다. 주정차 단속·주차장(반경 1km)·주유소(반경 3km)는 켜면 현재 위치를 한 번 확인해 반경 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나 저장하지 않습니다).
+              {parking?.source === "mock" && "(모의 데이터)"}. 주유소는 오피넷 판매가격(휘발유·경유, 하루 1번 갱신){gas?.source === "mock" && "(모의 데이터)"}입니다. 주정차 단속·주차장(반경 1km)·주유소(반경 3km)는 켜면 현재 위치를 한 번 확인해 반경 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나 저장하지 않습니다).
             </p>
           </div>
           {(facilitiesLoading || enforcementLoading || parkingLoading || gasLoading) && (

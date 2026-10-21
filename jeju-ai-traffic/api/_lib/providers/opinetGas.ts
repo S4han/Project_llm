@@ -60,15 +60,21 @@ function kmToOutline(lat: number, lng: number): number {
   return best;
 }
 
+/** 육각 배치의 한 칸 반지름(km). 오피넷 반경 5km보다 조금 작게 해 칸 사이 빈틈이 없게 한다. */
+const HEX_KM = 4.9;
+
 /**
- * 반경 5km 원으로 제주를 덮는 중심점들. 약 7km 간격 격자(칸의 대각선 절반 4.95km < 5km) 중
- * 섬 안이거나 해안선에서 6km 안인 점만(약 60곳). 해안선이 대강이라 여유를 둔다.
+ * 반경 5km 원으로 제주를 덮는 중심점들. 육각 배치(줄 간격 1.5R, 칸 간격 √3R, 홀수 줄은 반 칸 밀기)라
+ * 어느 지점이든 가장 가까운 중심이 R(4.9km) 안이다. 섬 안이거나 해안선에서 5km 안인 점만(약 45곳).
+ * 오피넷 무료 키 하루 한도 300건(사용자 확인)에 맞춰 사각 격자(62곳)에서 줄였다.
  */
 export function jejuGrid(): Coordinate[] {
   const out: Coordinate[] = [];
-  for (let lat = 33.18; lat <= 33.6; lat += 0.063) {
-    for (let lng = 126.12; lng <= 127.0; lng += 0.075) {
-      if (insideOutline(lat, lng) || kmToOutline(lat, lng) <= 6) out.push({ lat: Number(lat.toFixed(4)), lng: Number(lng.toFixed(4)) });
+  const dLat = (1.5 * HEX_KM) / KM_LAT;
+  const dLng = (Math.sqrt(3) * HEX_KM) / KM_LNG;
+  for (let row = 0, lat = 33.17; lat <= 33.62; row++, lat += dLat) {
+    for (let lng = 126.1 + (row % 2 ? dLng / 2 : 0); lng <= 127.02; lng += dLng) {
+      if (insideOutline(lat, lng) || kmToOutline(lat, lng) <= 5) out.push({ lat: Number(lat.toFixed(4)), lng: Number(lng.toFixed(4)) });
     }
   }
   return out;

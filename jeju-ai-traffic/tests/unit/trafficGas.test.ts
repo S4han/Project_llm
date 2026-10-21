@@ -3,7 +3,7 @@ import { DEFAULT_BUDGETS, MemoryQuotaStore, QuotaGuard } from "../../api/_lib/po
 import { RateLimiter } from "../../api/_lib/policies/rateLimit";
 import { TtlCache } from "../../api/_lib/policies/ttlCache";
 import { createMockGasProvider, createOpinetGasProvider, jejuGrid, parseAround, type GasSnapshot } from "../../api/_lib/providers/opinetGas";
-import { handleTrafficGas, selectGasProvider, type TrafficGasDeps } from "../../api/_lib/trafficGas";
+import { handleTrafficGas, resetGasLastGood, selectGasProvider, type TrafficGasDeps } from "../../api/_lib/trafficGas";
 import { distanceMeters, isInJeju } from "../../shared/rules/geo";
 import { katecToWgs84, wgs84ToKatec } from "../../shared/rules/katec";
 
@@ -33,12 +33,12 @@ describe("오피넷 주유소 (TASK-018)", () => {
     expect(() => parseAround({ RESULT: {} })).toThrow();
   });
 
-  it("격자: 약 60곳, 모두 제주 범위, 주요 마을이 5km 원 안", () => {
+  it("격자: 육각 배치 약 45곳(1회 약 90건 < 하루 한도 300), 모두 제주 범위, 주요 마을이 5km 원 안", () => {
     const grid = jejuGrid();
-    expect(grid.length).toBeGreaterThan(50);
-    expect(grid.length).toBeLessThan(70);
+    expect(grid.length).toBeGreaterThan(38);
+    expect(grid.length).toBeLessThanOrEqual(48);
     expect(grid.every((c) => isInJeju(c))).toBe(true);
-    for (const town of [{ lat: 33.215, lng: 126.25 }, { lat: 33.46, lng: 126.93 }, { lat: 33.505, lng: 126.955 }, { lat: 33.33, lng: 126.83 }, { lat: 33.465, lng: 126.32 }, { lat: 33.33, lng: 126.17 }]) {
+    for (const town of [{ lat: 33.215, lng: 126.25 }, { lat: 33.46, lng: 126.93 }, { lat: 33.505, lng: 126.955 }, { lat: 33.33, lng: 126.83 }, { lat: 33.465, lng: 126.32 }, { lat: 33.33, lng: 126.17 }, { lat: 33.3, lng: 126.165 }, { lat: 33.5, lng: 126.9 }, { lat: 33.54, lng: 126.67 }, { lat: 33.4918, lng: 126.5273 }]) {
       expect(Math.min(...grid.map((c) => distanceMeters(c, town)))).toBeLessThan(5000);
     }
   });
@@ -64,24 +64,31 @@ describe("오피넷 주유소 (TASK-018)", () => {
     expect(snap.meta).toEqual({ calls: p.calls, nonEmpty: p.calls, distinctResults: 2 });
   });
 
-  it("GET /api/traffic/gas: CDN 6시간, 메모리 캐시(사용량 = 호출 수), 실패는 503", async () => {
+  it("GET /api/traffic/gas: CDN 하루, 메모리 캐시(사용량 = 호출 수), 처음부터 실패면 503", async () => {
+    resetGasLastGood();
     const guard = new QuotaGuard(new MemoryQuotaStore(), DEFAULT_BUDGETS, () => NOW);
     const deps: TrafficGasDeps = {
       gas: createMockGasProvider(),
-      cache: new TtlCache<GasSnapshot>(21_600_000, () => NOW.getTime()),
+      cache: new TtlCache<GasSnapshot>(86_400_000, () => NOW.getTime()),
       guard,
       limiter: new RateLimiter(10, 60_000, () => NOW.getTime()),
       now: () => NOW,
     };
     const req = (ip: string) => new Request("http://localhost/api/traffic/gas", { headers: { "x-real-ip": ip } });
     const res = await handleTrafficGas(req("1.1.1.1"), deps);
-    expect(res.headers.get("cache-control")).toBe("public, max-age=1800, s-maxage=21600, stale-while-revalidate=3600");
+    expect(res.headers.get("cache-control")).toBe("public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400");
     expect((await res.json()).stations).toHaveLength(4);
     await handleTrafficGas(req("2.2.2.2"), deps);
     expect((deps.gas as ReturnType<typeof createMockGasProvider>).fetches).toBe(1);
     expect((await guard.status("opinet")).used).toBe(1);
-    const failing: TrafficGasDeps = { ...deps, gas: { id: "opinet", calls: 2, fetchStations: async () => Promise.reject(new Error("down")) }, cache: new TtlCache<GasSnapshot>(21_600_000, () => NOW.getTime()) };
-    expect((await handleTrafficGas(req("3.3.3.3"), failing)).status).toBe(503);
+    const failing: TrafficGasDeps = { ...deps, gas: { id: "opinet", calls: 2, fetchStations: async () => Promise.reject(new Error("down")) }, cache: new TtlCache<GasSnapshot>(86_400_000, () => NOW.getTime()) };
+    // 다시 받다가 실패하면 마지막 목록을 10분만 보관하며 준다
+    const stale = await handleTrafficGas(req("3.3.3.3"), failing);
+    expect(stale.status).toBe(200);
+    expect(stale.headers.get("cache-control")).toBe("public, max-age=600, s-maxage=600");
+    expect((await stale.json()).stations).toHaveLength(4);
+    resetGasLastGood();
+    expect((await handleTrafficGas(req("4.4.4.4"), { ...failing, cache: new TtlCache<GasSnapshot>(86_400_000, () => NOW.getTime()) })).status).toBe(503);
   });
 
   it("공급자 선택: OPINET_API_KEY가 있을 때만 실제", () => {
