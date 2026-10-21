@@ -20,7 +20,8 @@ export async function GET(): Promise<Response> {
   const headers = { "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8" };
   if (opened) return Response.json({ stopped: "이 서버에서는 이미 한 번 열었습니다" }, { headers });
   opened = true;
-  const keyName = process.env.JEJU_CITS_API_KEY ? "JEJU_CITS_API_KEY" : "JEJU_ITS_TRAFFIC_API_KEY";
+  // 1차(4건): 실시간 교통정보 키는 4개 모두 "code not registered". 2차: 사용자 "JEJU_ITS_API_KEY 사용해봐" → 돌발 키로 4건.
+  const keyName = "JEJU_ITS_API_KEY";
   const key = process.env[keyName] ?? "";
   if (!key) return Response.json({ keyPresent: false }, { headers });
   const redact = (s: string) => s.split(key).join("[KEY]").split(encodeURIComponent(key)).join("[KEY]");
