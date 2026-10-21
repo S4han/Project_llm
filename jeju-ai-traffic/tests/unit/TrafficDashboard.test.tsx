@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
+import type { TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficParkingResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
 import { encodePolyline } from "../../shared/rules/polyline";
 import { REFRESH_MS, TrafficDashboard } from "../../web/src/features/traffic/TrafficDashboard";
 
@@ -51,7 +51,17 @@ const ENFORCEMENT: TrafficEnforcementResponse = {
   source: "dataGoKr",
 };
 
+const PARKING: TrafficParkingResponse = {
+  lots: [
+    ["P1", "시청 공영주차장", "공영", "노외", "제주시 이도2동 1", 91, "매일 24시간", "유료 · 기본 30분 1,000원", 33.5005, 126.5325],
+    ["P2", "서귀포 공영주차장", "공영", "노상", "서귀포시 1", null, "매일 24시간", "무료", 33.25, 126.56],
+  ],
+  builtAt: AT,
+  source: "dataGoKr",
+};
+
 let respond: () => Response;
+let parkingRespond: () => Response;
 let enforcementRespond: () => Response;
 let facilitiesRespond: () => Response;
 let speedsRespond: () => Response;
@@ -72,6 +82,7 @@ beforeEach(() => {
   linksCalls = 0;
   facilitiesRespond = () => Response.json(FACILITIES);
   enforcementRespond = () => Response.json(ENFORCEMENT);
+  parkingRespond = () => Response.json(PARKING);
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.stubGlobal(
@@ -83,6 +94,7 @@ beforeEach(() => {
       }
       if (url.startsWith("/api/traffic/facilities")) return facilitiesRespond();
       if (url.startsWith("/api/traffic/enforcement")) return enforcementRespond();
+      if (url.startsWith("/api/traffic/parking")) return parkingRespond();
       if (url.startsWith("/api/traffic/links")) {
         linksCalls += 1;
         return linksRespond();
@@ -309,7 +321,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     render(<TrafficDashboard />);
     const list = await screen.findByRole("list", { name: "교통시설물 유형" });
     const buttons = within(list).getAllByRole("button");
-    expect(buttons.map((b) => b.textContent)).toEqual(["VMS1", "CCTV2", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속2"]);
+    expect(buttons.map((b) => b.textContent)).toEqual(["VMS1", "CCTV2", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속2", "주차장2"]);
     expect(buttons.every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
     expect((within(list).getByRole("button", { name: /웹카메라/ }) as HTMLButtonElement).disabled).toBe(true);
     const map = screen.getByRole("region", { name: "교통 현황 지도" });
@@ -350,7 +362,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     render(<TrafficDashboard />);
     const list = await screen.findByRole("list", { name: "교통시설물 유형" });
     fireEvent.click(await within(list).findByRole("button", { name: /주정차 단속2/ }));
-    expect(await screen.findByText("내 위치 반경 1km 안에 주정차 단속 CCTV가 없습니다(제주시 자료만 있음).")).toBeTruthy();
+    expect(await screen.findByText("내 위치 반경 1km 안에 주정차 단속 CCTV가 없습니다.(주정차 단속은 제주시 자료만 있음)")).toBeTruthy();
     expect(screen.getByRole("region", { name: "교통 현황 지도" }).getAttribute("data-facilities")).toBe("0");
     cleanup();
 
@@ -359,8 +371,34 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     const list2 = await screen.findByRole("list", { name: "교통시설물 유형" });
     const enf = await within(list2).findByRole("button", { name: /주정차 단속2/ });
     fireEvent.click(enf);
-    expect(await screen.findByText(/주정차 단속을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
+    expect(await screen.findByText(/내 위치 주변\(주정차 단속·주차장\)을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
     expect(enf.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("주차장(TASK-017): 켜면 위치 확인 후 반경 1km 안만, 주정차 단속과 함께 켜면 한 줄로 안내, 위치는 한 번만 묻는다", async () => {
+    const ask = stubLocation({ lat: 33.502, lng: 126.536 });
+    render(<TrafficDashboard />);
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    const park = await within(list).findByRole("button", { name: /주차장2/ });
+    expect(screen.getByText(/실시간 남은 칸은 없습니다/)).toBeTruthy();
+    fireEvent.click(park);
+    expect(await screen.findByText("내 위치 반경 1km 안 주차장 1곳")).toBeTruthy();
+    const map = screen.getByRole("region", { name: "교통 현황 지도" });
+    expect(map.getAttribute("data-facilities")).toBe("1");
+    fireEvent.click(within(list).getByRole("button", { name: /주정차 단속2/ }));
+    expect(screen.getByText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳 · 주차장 1곳")).toBeTruthy();
+    expect(map.getAttribute("data-facilities")).toBe("3");
+    expect(ask).toHaveBeenCalledTimes(1);
+  });
+
+  it("주차장 자료를 못 받으면 안내와 다시 시도", async () => {
+    parkingRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
+    render(<TrafficDashboard />);
+    const msg = await screen.findByText("주차장 정보를 불러오지 못했습니다.");
+    parkingRespond = () => Response.json(PARKING);
+    fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    expect(await within(list).findByRole("button", { name: /주차장2/ })).toBeTruthy();
   });
 
   it("주정차 단속 자료를 못 받으면 안내와 다시 시도(제주 ITS 시설물은 그대로)", async () => {

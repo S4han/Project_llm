@@ -1,5 +1,5 @@
 import type { ApiError, ApiErrorBody } from "../../../shared/contracts/common";
-import type { TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../shared/contracts/traffic";
+import type { TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficParkingResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../shared/contracts/traffic";
 
 export type TrafficIncidentsResult = { ok: true; data: TrafficIncidentsResponse } | { ok: false; error: ApiError };
 
@@ -55,4 +55,9 @@ export function fetchTrafficFacilities(signal?: AbortSignal): Promise<Result<Tra
 /** GET /api/traffic/enforcement(TASK-016): 제주시 주정차 단속 CCTV 위치(서버 하루·CDN 7일 보관). 화면을 열 때 한 번만 부른다. */
 export function fetchTrafficEnforcement(signal?: AbortSignal): Promise<Result<TrafficEnforcementResponse>> {
   return getJson<TrafficEnforcementResponse>("/api/traffic/enforcement", (b) => "cameras" in b, signal);
+}
+
+/** GET /api/traffic/parking(TASK-017): 제주시·서귀포시 주차장 위치·요금·면수(서버 하루·CDN 7일 보관). 화면을 열 때 한 번만 부른다. */
+export function fetchTrafficParking(signal?: AbortSignal): Promise<Result<TrafficParkingResponse>> {
+  return getJson<TrafficParkingResponse>("/api/traffic/parking", (b) => "lots" in b, signal);
 }

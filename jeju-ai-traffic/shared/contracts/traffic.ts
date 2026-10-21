@@ -91,3 +91,13 @@ export interface TrafficEnforcementResponse {
   builtAt: IsoDateTime;
   source: "dataGoKr" | "mock";
 }
+
+/**
+ * GET /api/traffic/parking 응답(TASK-017). 전국주차장정보표준데이터(공공데이터포털 15012896) 중 제주시·서귀포시. 실시간 남은 칸은 없다.
+ * lots[i] = [주차장 관리번호, 이름, 구분(공영·민영 등), 유형(노외·노상·부설 등), 주소, 주차구획수(모르면 null), 운영 시간 설명, 요금 설명, 위도, 경도].
+ */
+export interface TrafficParkingResponse {
+  lots: [string, string, string, string, string, number | null, string, string, number, number][];
+  builtAt: IsoDateTime;
+  source: "dataGoKr" | "mock";
+}

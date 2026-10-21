@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { IncidentKind, SpeedStatus, TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficIncident, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../../shared/contracts/traffic";
+import type { IncidentKind, SpeedStatus, TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficParkingResponse, TrafficIncident, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../../shared/contracts/traffic";
 import { isStale } from "../../../../shared/rules/traffic";
 import { distanceMeters } from "../../../../shared/rules/geo";
 import type { Coordinate } from "../../../../shared/contracts/route";
 import { getCurrentLocation } from "../../services/geolocation";
-import { fetchTrafficEnforcement, fetchTrafficFacilities, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds } from "../../services/trafficApi";
+import { fetchTrafficEnforcement, fetchTrafficFacilities, fetchTrafficParking, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds } from "../../services/trafficApi";
 import type { FacilityPoint, SpeedLine } from "../map/leafletMap";
-import { FACILITY_ORDER, FACILITY_STYLE, type FacilityKey } from "./facilityStyle";
+import { FACILITY_ORDER, FACILITY_STYLE, NEARBY_KEYS, type FacilityKey } from "./facilityStyle";
 import { IncidentFocusBar, IncidentGroupList } from "../routes/IncidentFocus";
 import { groupIncidents, useIncidentFocus } from "../routes/incidents";
 import { INCIDENT_LABEL, STATUS_STYLE } from "../routes/trafficStyle";
@@ -26,7 +26,7 @@ const SPEED_ORDER: SpeedStatus[] = ["smooth", "slow", "congested"];
 /** 도로 목록을 한 번에 보여 줄 개수. */
 const ROAD_PAGE = 20;
 
-/** 주정차 단속은 내 위치 반경 안만 보인다(TASK-016, 사용자 "반경을 1키로로 수정"). */
+/** 주정차 단속·주차장은 내 위치 반경 안만 보인다(TASK-016 사용자 "반경을 1키로로 수정", TASK-017 2.(a)). */
 export const ENFORCEMENT_RADIUS_METERS = 1000;
 const RADIUS_TEXT = `${ENFORCEMENT_RADIUS_METERS / 1000}km`;
 /** 반경 1km라 경로 추천과 같은 정확도 기준(200m)으로 받는다. */
@@ -82,6 +82,10 @@ export function TrafficDashboard() {
   const [enforcement, setEnforcement] = useState<TrafficEnforcementResponse | null>(null);
   const [enforcementLoading, setEnforcementLoading] = useState(true);
   const [enforcementProblem, setEnforcementProblem] = useState(false);
+  // 주차장(TASK-017, 전국주차장정보표준데이터): 위치·요금·면수만, 실시간 남은 칸 없음.
+  const [parking, setParking] = useState<TrafficParkingResponse | null>(null);
+  const [parkingLoading, setParkingLoading] = useState(true);
+  const [parkingProblem, setParkingProblem] = useState(false);
   // 내 위치(주정차 단속 반경 조회용). 이 화면 메모리에만 두고 서버로 보내거나 저장하지 않는다.
   const [myLocation, setMyLocation] = useState<Coordinate | null>(null);
   const [locating, setLocating] = useState(false);
@@ -173,6 +177,18 @@ export function TrafficDashboard() {
     setEnforcementProblem(!r.ok);
     if (r.ok) setEnforcement(r.data);
   }, []);
+  const fetchParking = useCallback(async () => {
+    const r = await fetchTrafficParking();
+    if (!alive.current) return;
+    setParkingLoading(false);
+    setParkingProblem(!r.ok);
+    if (r.ok) setParking(r.data);
+  }, []);
+  const retryParking = () => {
+    setParkingLoading(true);
+    setParkingProblem(false);
+    void fetchParking();
+  };
   const retryFacilities = () => {
     setFacilitiesLoading(true);
     setFacilitiesProblem(false);
@@ -187,9 +203,10 @@ export function TrafficDashboard() {
     const first = setTimeout(() => {
       void fetchFacilities();
       void fetchEnforcement();
+      void fetchParking();
     }, 0);
     return () => clearTimeout(first);
-  }, [fetchFacilities, fetchEnforcement]);
+  }, [fetchFacilities, fetchEnforcement, fetchParking]);
 
   // 도로 모양을 받는 동안 경과 시간(초)을 1초마다 갱신한다.
   useEffect(() => {
@@ -240,13 +257,25 @@ export function TrafficDashboard() {
     const counts = Object.fromEntries(FACILITY_ORDER.map((t) => [t, 0])) as Record<FacilityKey, number>;
     for (const f of facilities?.facilities ?? []) counts[f[1]] += 1;
     counts.ENF = enforcement?.cameras.length ?? 0;
+    counts.PARK = parking?.lots.length ?? 0;
     return counts;
-  }, [facilities, enforcement]);
+  }, [facilities, enforcement, parking]);
   const facilityPoints = useMemo<FacilityPoint[]>(
     () => [
       ...(facilities?.facilities ?? [])
         .filter((f) => facilityTypes.has(f[1]))
         .map(([id, type, name, model, lat, lng]): FacilityPoint => ({ id, type, name, model, lat, lng })),
+      ...(facilityTypes.has("PARK") && myLocation ? (parking?.lots ?? []).filter((l) => distanceMeters(myLocation, { lat: l[8], lng: l[9] }) <= ENFORCEMENT_RADIUS_METERS) : []).map(
+        ([id, name, se, type, address, spaces, hours, fee, lat, lng]): FacilityPoint => ({
+          id: `PARK-${id}`,
+          type: "PARK",
+          name,
+          model: "",
+          lat,
+          lng,
+          detail: [[se, type].filter(Boolean).join("·") + (spaces !== null ? ` · ${spaces.toLocaleString("ko-KR")}면` : ""), hours && `운영 ${hours}`, fee && `요금 ${fee}`, address].filter(Boolean).join("\n"),
+        }),
+      ),
       ...(facilityTypes.has("ENF") && myLocation ? (enforcement?.cameras ?? []).filter((c) => distanceMeters(myLocation, { lat: c[6], lng: c[7] }) <= ENFORCEMENT_RADIUS_METERS) : []).map(
         ([id, place, address, rotate, audit, oper, lat, lng]): FacilityPoint => ({
           id: `ENF-${id}`,
@@ -259,10 +288,20 @@ export function TrafficDashboard() {
         }),
       ),
     ],
-    [facilities, facilityTypes, enforcement, myLocation],
+    [facilities, facilityTypes, enforcement, parking, myLocation],
   );
-  const nearbyCount = facilityPoints.filter((p) => p.type === "ENF").length;
-  /** 현재 위치를 한 번 확인한다. 실패하면 주정차 단속을 끄고 이유를 보인다. */
+  const nearbyOn = NEARBY_KEYS.filter((k) => facilityTypes.has(k));
+  const nearbyCount = (k: FacilityKey) => facilityPoints.filter((p) => p.type === k).length;
+  const nearbyLabel: Partial<Record<FacilityKey, string>> = { ENF: "주정차 단속 CCTV", PARK: "주차장" };
+  const nearbyText = (() => {
+    const total = nearbyOn.reduce((s, k) => s + nearbyCount(k), 0);
+    if (total > 0) return `내 위치 반경 ${RADIUS_TEXT} 안 ${nearbyOn.map((k) => `${nearbyLabel[k]} ${nearbyCount(k).toLocaleString("ko-KR")}곳`).join(" · ")}`;
+    const none = `내 위치 반경 ${RADIUS_TEXT} 안에 ${nearbyOn.map((k) => nearbyLabel[k]).join("·")}`;
+    // 조사: "…CCTV가", "…주차장이"(마지막 이름 기준)
+    const particle = nearbyOn.at(-1) === "PARK" ? "이" : "가";
+    return `${none}${particle} 없습니다.${nearbyOn.includes("ENF") ? "(주정차 단속은 제주시 자료만 있음)" : ""}`;
+  })();
+  /** 현재 위치를 한 번 확인한다. 실패하면 위치 기반 유형(주정차 단속·주차장)을 끄고 이유를 보인다. */
   const locate = async () => {
     setLocating(true);
     setLocationProblem(null);
@@ -278,18 +317,15 @@ export function TrafficDashboard() {
       unavailable: "현재 위치를 확인할 수 없습니다. 잠시 뒤 다시 시도하세요.",
       unsupported: "이 브라우저는 위치 확인을 지원하지 않습니다.",
       inaccurate: `위치가 부정확합니다(오차 약 ${"accuracyMeters" in r ? r.accuracyMeters : "?"}m). 실외나 와이파이가 켜진 곳에서 다시 시도하세요.`,
-      outsideJeju: "현재 위치가 제주 밖이라 주정차 단속을 표시할 수 없습니다.",
+      outsideJeju: "현재 위치가 제주 밖이라 내 위치 주변을 표시할 수 없습니다.",
     };
-    setLocationProblem(`주정차 단속을 표시하지 못했습니다: ${reason[r.kind]}`);
-    setFacilityTypes((prev) => {
-      const next = new Set(prev);
-      next.delete("ENF");
-      return next;
-    });
+    setLocationProblem(`내 위치 주변(주정차 단속·주차장)을 표시하지 못했습니다: ${reason[r.kind]}`);
+    setFacilityTypes((prev) => new Set([...prev].filter((k) => !NEARBY_KEYS.includes(k))));
   };
   const toggleFacility = (t: FacilityKey) => {
-    if (t === "ENF" && !facilityTypes.has("ENF") && !myLocation) void locate();
-    if (t === "ENF") setLocationProblem(null);
+    const nearby = NEARBY_KEYS.includes(t);
+    if (nearby && !facilityTypes.has(t) && !myLocation && !locating) void locate();
+    if (nearby) setLocationProblem(null);
     setFacilityTypes((prev) => {
       const next = new Set(prev);
       if (next.has(t)) next.delete(t);
@@ -568,11 +604,11 @@ export function TrafficDashboard() {
             </h2>
             <p className="text-xs text-grey-600">
               제주 ITS 시설물 위치{facilities?.source === "mock" && " · 모의 데이터"}. 유형을 눌러 지도에 켜고 끕니다. CCTV·웹카메라 점을 누르면 제주 ITS 교통정보센터(새 창)로 연결되며, 사이트의 CCTV 메뉴에서 같은 위치를 고르면 영상을 볼 수 있습니다. 주정차 단속은
-              제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다{enforcement?.source === "mock" && "(모의 데이터)"}. 켜면 현재 위치를 한 번 확인해 반경 {RADIUS_TEXT} 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나
-              저장하지 않습니다).
+              제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다{enforcement?.source === "mock" && "(모의 데이터)"}. 주차장은 전국주차장정보표준데이터(제주시·서귀포시)로 위치·면수·요금·운영 시간만 있고 실시간 남은 칸은 없습니다
+              {parking?.source === "mock" && "(모의 데이터)"}. 주정차 단속·주차장은 켜면 현재 위치를 한 번 확인해 반경 {RADIUS_TEXT} 안만 보여 줍니다(위치는 이 기기에서 거리 계산에만 쓰고 보내거나 저장하지 않습니다).
             </p>
           </div>
-          {(facilitiesLoading || enforcementLoading) && (
+          {(facilitiesLoading || enforcementLoading || parkingLoading) && (
             <p role="status" aria-label="교통시설물 처리 현황" className="rounded-2xl bg-brand-50 p-2 text-sm text-brand-900">
               <span className="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-700 border-t-transparent align-middle" aria-hidden="true" />
               교통시설물 불러오는 중…
@@ -586,7 +622,7 @@ export function TrafficDashboard() {
               </button>
             </div>
           )}
-          {(facilities || enforcement) && (
+          {(facilities || enforcement || parking) && (
             <ul aria-label="교통시설물 유형" className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
               {FACILITY_ORDER.map((t) => {
                 const on = facilityTypes.has(t);
@@ -618,14 +654,10 @@ export function TrafficDashboard() {
           {facilities && facilities.failedTypes.length > 0 && (
             <p className="text-xs text-amber-800">일부 유형({facilities.failedTypes.map((t) => FACILITY_STYLE[t].short).join(", ")})은 받지 못했습니다. 잠시 뒤 다시 확인됩니다.</p>
           )}
-          {facilityTypes.has("ENF") && (
-            <div role="status" aria-label="주정차 단속 조회 범위" className="flex items-center justify-between gap-2 rounded-2xl bg-grey-100 p-2 text-sm text-grey-800">
+          {nearbyOn.length > 0 && (
+            <div role="status" aria-label="내 위치 주변 조회 범위" className="flex items-center justify-between gap-2 rounded-2xl bg-grey-100 p-2 text-sm text-grey-800">
               <span>
-                {locating || !myLocation
-                  ? "현재 위치 확인 중…"
-                  : nearbyCount > 0
-                    ? `내 위치 반경 ${RADIUS_TEXT} 안 주정차 단속 CCTV ${nearbyCount.toLocaleString("ko-KR")}곳`
-                    : `내 위치 반경 ${RADIUS_TEXT} 안에 주정차 단속 CCTV가 없습니다(제주시 자료만 있음).`}
+                {locating || !myLocation ? "현재 위치 확인 중…" : nearbyText}
               </span>
               {myLocation && !locating && (
                 <button type="button" onClick={() => void locate()} className="min-h-12 shrink-0 rounded-2xl bg-white px-3 font-semibold text-grey-700">
@@ -638,6 +670,14 @@ export function TrafficDashboard() {
             <p role="alert" className="rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
               {locationProblem}
             </p>
+          )}
+          {parkingProblem && (
+            <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
+              <span>주차장 정보를 불러오지 못했습니다.</span>
+              <button type="button" onClick={retryParking} className="min-h-12 shrink-0 rounded-2xl bg-amber-700 px-3 font-semibold text-white">
+                다시 시도
+              </button>
+            </div>
           )}
           {enforcementProblem && (
             <div role="alert" className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
@@ -679,7 +719,7 @@ export function TrafficDashboard() {
             heightClass="h-80 md:h-[60vh] xl:h-[calc(100dvh-7rem)]"
             overlay={mapOverlay}
             facilities={facilityPoints}
-            nearby={facilityTypes.has("ENF") && myLocation ? { ...myLocation, radiusMeters: ENFORCEMENT_RADIUS_METERS } : null}
+            nearby={nearbyOn.length > 0 && myLocation ? { ...myLocation, radiusMeters: ENFORCEMENT_RADIUS_METERS } : null}
             highlightIds={showSpeeds ? highlightIds : EMPTY_IDS}
           />
           <IncidentFocusBar state={incidentFocus} />
@@ -722,8 +762,8 @@ export function TrafficDashboard() {
       </main>
       <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
         <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
-        <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 주정차 단속을 켤 때만 한 번 확인하며, 이 기기에서 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
-        <p>지도 © OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시(공공데이터포털)</p>
+        <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 주정차 단속·주차장을 켤 때만 한 번 확인하며, 이 기기에서 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
+        <p>지도 © OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털)</p>
       </footer>
     </div>
   );

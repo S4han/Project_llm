@@ -119,7 +119,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await page.goto("/");
     const list = page.getByRole("list", { name: "교통시설물 유형" });
     const buttons = list.getByRole("button");
-    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속3"]);
+    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속3", "주차장3"]);
     const map = page.getByRole("region", { name: "교통 현황 지도" });
     await expect(map).toHaveAttribute("data-facilities", "0");
     await list.getByRole("button", { name: /^CCTV/ }).click();
@@ -157,7 +157,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
 
 });
 
-test.describe("주정차 단속 CCTV 반경 1km (TASK-016, 개발 서버 모의)", () => {
+test.describe("내 위치 반경 1km: 주정차 단속·주차장 (TASK-016·017, 개발 서버 모의)", () => {
   // 모의 단속 3곳 중 2곳(시청·신설오름 부근, 약 0.6km)만 1km 안, 노형 부근은 밖인 위치
   test.use({ permissions: ["geolocation"], geolocation: { latitude: 33.502, longitude: 126.536, accuracy: 30 } });
 
@@ -169,7 +169,7 @@ test.describe("주정차 단속 CCTV 반경 1km (TASK-016, 개발 서버 모의)
     await expect(enf).toHaveText("주정차 단속3");
     const map = page.getByRole("region", { name: "교통 현황 지도" });
     await enf.click();
-    await expect(page.getByRole("status", { name: "주정차 단속 조회 범위" })).toContainText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳");
+    await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳");
     await expect(map).toHaveAttribute("data-facilities", "2");
     await expect(map).toHaveAttribute("data-nearby", "1");
     await expect(page.getByText(/켜면 현재 위치를 한 번 확인해 반경 1km 안만/)).toBeVisible();
@@ -177,5 +177,22 @@ test.describe("주정차 단속 CCTV 반경 1km (TASK-016, 개발 서버 모의)
     await enf.click();
     await expect(map).toHaveAttribute("data-facilities", "0");
     await expect(map).toHaveAttribute("data-nearby", "0");
+  });
+
+  test("주차장(TASK-017): 켜면 반경 1km 안 주차장만, 주정차 단속과 함께 켜기", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    const list = page.getByRole("list", { name: "교통시설물 유형" });
+    const park = list.getByRole("button", { name: /주차장/ });
+    await expect(park).toHaveText("주차장3");
+    await park.click();
+    const status = page.getByRole("status", { name: "내 위치 주변 조회 범위" });
+    await expect(status).toContainText("내 위치 반경 1km 안 주차장 2곳");
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+    await expect(map).toHaveAttribute("data-facilities", "2");
+    await list.getByRole("button", { name: /주정차 단속/ }).click();
+    await expect(status).toContainText("주정차 단속 CCTV 2곳 · 주차장 2곳");
+    await expect(map).toHaveAttribute("data-facilities", "4");
+    await shot(page, "TASK-017-01-parking");
   });
 });
