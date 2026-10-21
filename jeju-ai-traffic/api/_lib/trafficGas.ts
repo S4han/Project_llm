@@ -38,7 +38,7 @@ export async function handleTrafficGas(request: Request, deps: TrafficGasDeps): 
     const retryAt = deps.limiter.tryAcquire(clientKey(request));
     if (retryAt !== null) throw new AppError("QUOTA_BLOCKED", "교통 현황 요청이 너무 잦습니다. 잠시 후 다시 시도하세요.", new Date(retryAt).toISOString());
     const snap = await deps.cache.getOrLoad("gas", () => guardedCall(deps.guard, "opinet", () => deps.gas.fetchStations(), { cost: deps.gas.calls }));
-    const body: TrafficGasResponse = { stations: snap.stations, builtAt: now().toISOString(), source: snap.source };
+    const body: TrafficGasResponse = { ...(snap.meta ? { meta: snap.meta } : {}), stations: snap.stations, builtAt: now().toISOString(), source: snap.source };
     return Response.json(body, { headers: { "Cache-Control": `public, max-age=1800, s-maxage=${GAS_CDN_SECONDS}, stale-while-revalidate=3600` } });
   } catch (err) {
     return toErrorResponse(err, now());

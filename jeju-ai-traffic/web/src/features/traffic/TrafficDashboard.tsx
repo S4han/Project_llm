@@ -404,7 +404,8 @@ export function TrafficDashboard() {
     if (total > 0) return `반경 ${km} 안 ${keys.map((k) => `${nearbyLabel[k]} ${nearbyCount(k).toLocaleString("ko-KR")}곳`).join(" · ")}`;
     const none = `반경 ${km} 안에 ${keys.map((k) => nearbyLabel[k]).join("·")}`;
     // 조사: "…CCTV가", "…주차장이"(마지막 이름 기준)
-    const particle = keys.at(-1) === "ENF" ? "가" : "이";
+    // 조사: 받침이 있는 "주차장"만 "이", "…CCTV"·"주유소"는 "가"
+    const particle = keys.at(-1) === "PARK" ? "이" : "가";
     return `${none}${particle} 없습니다.${keys.includes("ENF") ? "(주정차 단속은 제주시 자료만 있음)" : ""}`;
   }
   /** 현재 위치를 한 번 확인한다. 실패하면 위치 기반 유형(주정차 단속·주차장)을 끄고 이유를 보인다. */

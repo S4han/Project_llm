@@ -9,6 +9,8 @@ export type GasRow = TrafficGasResponse["stations"][number];
 export interface GasSnapshot {
   stations: GasRow[];
   source: "opinet" | "mock";
+  /** 진단용: 부른 칸 수, 주유소가 1곳 이상 온 칸 수, 칸별 결과가 서로 다른 가짓수(모두 같으면 1). */
+  meta?: { calls: number; nonEmpty: number; distinctResults: number };
 }
 
 export interface GasProvider {
@@ -22,7 +24,8 @@ export interface GasProvider {
 const URL_BASE = "https://www.opinet.co.kr/api/aroundAll.do";
 const RADIUS_METERS = 5000;
 const PRODUCTS = { gasoline: "B027", diesel: "D047" } as const;
-const CONCURRENCY = 6;
+/** 동시 호출 수. 오피넷이 몰린 요청을 어떻게 다루는지 확인되지 않아 낮게 둔다. */
+const CONCURRENCY = 3;
 const TIMEOUT_MS = 15_000;
 
 /** 제주 본섬 해안선을 대강 따라간 다각형(격자 중심을 고르는 데만 쓴다). */
@@ -94,7 +97,8 @@ export function createOpinetGasProvider(apiKey: string, fetchImpl: typeof fetch 
   const grid = jejuGrid().map((c) => wgs84ToKatec(c));
   const jobs = grid.flatMap((k) => (Object.keys(PRODUCTS) as (keyof typeof PRODUCTS)[]).map((fuel) => ({ k, fuel })));
   const one = async ({ k, fuel }: (typeof jobs)[number]) => {
-    const q = `code=${encodeURIComponent(apiKey)}&x=${k.x.toFixed(1)}&y=${k.y.toFixed(1)}&radius=${RADIUS_METERS}&sort=1&prodcd=${PRODUCTS[fuel]}&out=json`;
+    // 좌표는 정수로(TASK-018 시험에서 확인된 형식. 소수점 좌표로 부르면 모든 칸이 같은 결과(제주 전체 60곳)로 와 의심, 2026-10-21).
+    const q = `code=${encodeURIComponent(apiKey)}&x=${Math.round(k.x)}&y=${Math.round(k.y)}&radius=${RADIUS_METERS}&sort=1&prodcd=${PRODUCTS[fuel]}&out=json`;
     const res = await fetchImpl(`${URL_BASE}?${q}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
     if (res.status === 429) throw new ProviderError("rate_limited", "opinet 429");
     if (!res.ok) throw new ProviderError("unavailable", `opinet ${res.status}`);
@@ -113,8 +117,12 @@ export function createOpinetGasProvider(apiKey: string, fetchImpl: typeof fetch 
     calls: jobs.length,
     async fetchStations() {
       const merged = new Map<string, GasRow>();
+      let nonEmpty = 0;
+      const results = new Set<string>();
       for (let i = 0; i < jobs.length; i += CONCURRENCY) {
         for (const { fuel, rows } of await Promise.all(jobs.slice(i, i + CONCURRENCY).map(one))) {
+          if (rows.length) nonEmpty += 1;
+          results.add(`${fuel}:${rows.map((r) => r.id).sort().join(",")}`);
           for (const r of rows) {
             const row = merged.get(r.id) ?? [r.id, r.brand, r.name, null, null, r.lat, r.lng];
             if (fuel === "gasoline") row[3] = r.price;
@@ -123,7 +131,10 @@ export function createOpinetGasProvider(apiKey: string, fetchImpl: typeof fetch 
           }
         }
       }
-      return { stations: [...merged.values()], source: "opinet" };
+      const meta = { calls: jobs.length, nonEmpty, distinctResults: results.size };
+      // Vercel 로그에서 확인할 수 있게 건수만 남긴다(키·위치 없음).
+      console.info("opinet gas", { ...meta, stations: merged.size });
+      return { stations: [...merged.values()], source: "opinet", meta };
     },
   };
 }

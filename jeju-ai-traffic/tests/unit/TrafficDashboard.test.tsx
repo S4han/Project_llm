@@ -417,6 +417,14 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(screen.getByText(/오피넷 판매가격/)).toBeTruthy();
   });
 
+  it("반경 안에 주유소가 없으면 '주유소가 없습니다'(조사)", async () => {
+    stubLocation({ lat: 33.36, lng: 126.75 });
+    render(<TrafficDashboard />);
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    fireEvent.click(await within(list).findByRole("button", { name: /주유소3/ }));
+    expect(await screen.findByText("내 위치 반경 3km 안에 주유소가 없습니다.")).toBeTruthy();
+  });
+
   it("주유소 목록: 휘발유 싼 순, 맨 위 최저가는 '최저가' 표시·금색 칸, 나머지는 최저가와의 차이", async () => {
     stubLocation({ lat: 33.502, lng: 126.536 });
     render(<TrafficDashboard />);

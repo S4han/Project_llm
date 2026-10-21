@@ -64,5 +64,5 @@ export function fetchTrafficParking(signal?: AbortSignal): Promise<Result<Traffi
 
 /** GET /api/traffic/gas(TASK-018): 제주 주유소·휘발유·경유 가격(서버·CDN 6시간 보관). 화면을 열 때 한 번만 부른다. */
 export function fetchTrafficGas(signal?: AbortSignal): Promise<Result<TrafficGasResponse>> {
-  return getJson<TrafficGasResponse>("/api/traffic/gas", (b) => "stations" in b, signal);
+  return getJson<TrafficGasResponse>("/api/traffic/gas?v=2", (b) => "stations" in b, signal);
 }

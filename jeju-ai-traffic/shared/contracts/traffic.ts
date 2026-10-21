@@ -110,6 +110,8 @@ export type GasBrand = string;
  * stations[i] = [주유소 ID, 상표 코드, 이름, 휘발유 가격(원/L, 없으면 null), 경유 가격(원/L, 없으면 null), 위도, 경도].
  */
 export interface TrafficGasResponse {
+  /** 진단용(맨 앞에 둔다): 부른 칸 수, 주유소가 온 칸 수, 칸별 결과 가짓수. 모의면 없음. */
+  meta?: { calls: number; nonEmpty: number; distinctResults: number };
   stations: [string, GasBrand, string, number | null, number | null, number, number][];
   builtAt: IsoDateTime;
   source: "opinet" | "mock";

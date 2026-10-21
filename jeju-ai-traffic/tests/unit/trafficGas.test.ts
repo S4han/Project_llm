@@ -57,7 +57,11 @@ describe("오피넷 주유소 (TASK-018)", () => {
     expect(urls).toHaveLength(p.calls);
     expect(urls[0]!.searchParams.get("radius")).toBe("5000");
     expect(urls[0]!.searchParams.get("out")).toBe("json");
+    // 좌표는 정수(시험에서 확인된 형식)
+    expect(urls.every((u) => /^\d+$/.test(u.searchParams.get("x")!) && /^\d+$/.test(u.searchParams.get("y")!))).toBe(true);
+    expect(new Set(urls.map((u) => u.searchParams.get("x") + "," + u.searchParams.get("y"))).size).toBe(jejuGrid().length);
     expect(snap.stations).toEqual([["A0030897", "SKE", "도남주유소", 1867, 1845, expect.any(Number), expect.any(Number)]]);
+    expect(snap.meta).toEqual({ calls: p.calls, nonEmpty: p.calls, distinctResults: 2 });
   });
 
   it("GET /api/traffic/gas: CDN 6시간, 메모리 캐시(사용량 = 호출 수), 실패는 503", async () => {
