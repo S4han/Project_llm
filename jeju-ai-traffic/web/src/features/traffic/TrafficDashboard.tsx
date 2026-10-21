@@ -99,15 +99,18 @@ interface FuelRow {
   meters: number;
 }
 
-/** 주유소·LPG 충전소 목록(TASK-018): 싼 순, 최저가는 맨 위 금색 칸·"최저가" 표시·가격 크게, 나머지는 최저가와의 차이. */
-function FuelList({ title, label, fuel, rows, low, limit, onMore, onPick }: { title: string; label: string; fuel: string; rows: FuelRow[]; low: number | null; limit: number; onMore: () => void; onPick: (id: string) => void }) {
+/**
+ * 주유소·LPG 충전소 목록(TASK-018): 싼 순, 최저가는 맨 위 금색 칸·"최저가" 표시·가격 크게, 나머지는 최저가와의 차이.
+ * 금색 칸은 lowId 한 곳(같은 최저가 중 가장 가까운 곳)뿐이고, 같은 가격인 나머지는 "최저가와 같음"(TASK-021 3.(a)).
+ */
+function FuelList({ title, label, fuel, rows, low, lowId, limit, onMore, onPick }: { title: string; label: string; fuel: string; rows: FuelRow[]; low: number | null; lowId: string | null; limit: number; onMore: () => void; onPick: (id: string) => void }) {
   return (
     <div className="flex flex-col gap-1">
       <h3 className="text-sm font-semibold text-grey-700">{title}</h3>
       <ul aria-label={label} className="flex flex-col gap-1.5">
         {rows.slice(0, limit).map((r) => {
           const b = gasBrand(r.brand);
-          const isLow = low !== null && r.price === low;
+          const isLow = r.id === lowId;
           return (
             <li key={r.id}>
               <button
@@ -129,7 +132,7 @@ function FuelList({ title, label, fuel, rows, low, limit, onMore, onPick }: { ti
                 </span>
                 <span className="shrink-0 text-right">
                   <span className={`block font-bold tabular-nums ${isLow ? "text-lg text-amber-700" : "text-grey-900"}`}>{r.price !== null ? won(r.price) : "–"}</span>
-                  <span className="block text-xs text-grey-500">{r.price === null ? `${fuel} 정보 없음` : isLow ? fuel : `최저가보다 +${(r.price - (low ?? r.price)).toLocaleString("ko-KR")}원`}</span>
+                  <span className="block text-xs text-grey-500">{r.price === null ? `${fuel} 정보 없음` : isLow ? fuel : r.price === low ? "최저가와 같음" : `최저가보다 +${(r.price - (low ?? r.price)).toLocaleString("ko-KR")}원`}</span>
                 </span>
               </button>
             </li>
@@ -559,6 +562,9 @@ export function TrafficDashboard() {
       .sort((a, b) => Number(a.price === null) - Number(b.price === null) || (a.price ?? 0) - (b.price ?? 0) || a.meters - b.meters);
   const gasList = myLocation ? toFuelRows(nearGas, "GAS", myLocation) : [];
   const lpgList = myLocation ? toFuelRows(nearLpg, "LPG", myLocation) : [];
+  // 강조할 최저가는 한 곳: 같은 최저가가 여럿이면 가장 가까운 곳(목록이 싼 순·가까운 순이라 맨 앞, TASK-021 2.(a)).
+  const lowGasId = gasList[0]?.price != null ? gasList[0].id : null;
+  const lowLpgId = lpgList[0]?.price != null ? lpgList[0].id : null;
   const focusFuel = (kind: "GAS" | "LPG" | "EV", id: string) => {
     setGasFocus((prev) => ({ id: `${kind}-${id}`, seq: (prev?.seq ?? 0) + 1 }));
     revealMap(mapBox.current);
@@ -592,7 +598,7 @@ export function TrafficDashboard() {
       ),
       ...nearGas.map(([id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel]): FacilityPoint => {
         const b = gasBrand(brand);
-        const low = lowGasoline !== null && gasoline === lowGasoline;
+        const low = id === lowGasId;
         return {
           id: `GAS-${id}`,
           type: "GAS",
@@ -600,13 +606,13 @@ export function TrafficDashboard() {
           model: "",
           lat,
           lng,
-          pin: { mark: b.mark, price: gasoline !== null ? gasoline.toLocaleString("ko-KR") : null, color: b.color, textColor: b.textColor, low },
+          pin: { mark: b.mark, price: gasoline !== null ? gasoline.toLocaleString("ko-KR") : null, color: b.color, textColor: b.textColor, low, fold: true },
           card: gasCard({ id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel }, low, gas?.builtAt, "GAS"),
         };
       }),
       ...nearLpg.map(([id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel]): FacilityPoint => {
         const b = gasBrand(brand);
-        const low = lowLpg !== null && lpg === lowLpg;
+        const low = id === lowLpgId;
         return {
           id: `LPG-${id}`,
           type: "LPG",
@@ -614,7 +620,7 @@ export function TrafficDashboard() {
           model: "",
           lat,
           lng,
-          pin: { mark: b.mark, price: lpg !== null ? `LPG ${lpg.toLocaleString("ko-KR")}` : null, color: b.color, textColor: b.textColor, low },
+          pin: { mark: b.mark, price: lpg !== null ? `LPG ${lpg.toLocaleString("ko-KR")}` : null, color: b.color, textColor: b.textColor, low, fold: true },
           card: gasCard({ id, brand, name, gasoline, diesel, lat, lng, lpg, address, tel }, low, gas?.builtAt, "LPG"),
         };
       }),
@@ -632,7 +638,7 @@ export function TrafficDashboard() {
         };
       }),
     ],
-    [facilities, facilityTypes, enforcement, parking, myLocation, nearGas, lowGasoline, nearLpg, lowLpg, gas, evList, ev],
+    [facilities, facilityTypes, enforcement, parking, myLocation, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev],
   );
   const nearbyOn = NEARBY_KEYS.filter((k) => facilityTypes.has(k));
   const nearbyCount = (k: FacilityKey) => facilityPoints.filter((p) => p.type === k).length;
@@ -1022,13 +1028,13 @@ export function TrafficDashboard() {
             </div>
           )}
           {facilityTypes.has("GAS") && myLocation && !locating && gasList.length > 0 && (
-            <FuelList title="반경 3km 주유소 · 휘발유 싼 순" label="주유소 목록" fuel="휘발유" rows={gasList} low={lowGasoline} limit={gasLimit} onMore={() => setGasLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("GAS", id)} />
+            <FuelList title="반경 3km 주유소 · 휘발유 싼 순" label="주유소 목록" fuel="휘발유" rows={gasList} low={lowGasoline} lowId={lowGasId} limit={gasLimit} onMore={() => setGasLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("GAS", id)} />
           )}
           {facilityTypes.has("EV") && myLocation && !locating && ev && (
             <EvList rows={evList} fastOnly={evFastOnly} onFastOnly={() => setEvFastOnly((v) => !v)} limit={evLimit} onMore={() => setEvLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("EV", id)} />
           )}
           {facilityTypes.has("LPG") && myLocation && !locating && lpgList.length > 0 && (
-            <FuelList title="반경 5km LPG 충전소 · LPG 싼 순" label="LPG 충전소 목록" fuel="LPG" rows={lpgList} low={lowLpg} limit={lpgLimit} onMore={() => setLpgLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("LPG", id)} />
+            <FuelList title="반경 5km LPG 충전소 · LPG 싼 순" label="LPG 충전소 목록" fuel="LPG" rows={lpgList} low={lowLpg} lowId={lowLpgId} limit={lpgLimit} onMore={() => setLpgLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("LPG", id)} />
           )}
           {locationProblem && (
             <p role="alert" className="rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">

@@ -127,3 +127,12 @@ body {
 .gas-pin-tag {
   @apply rounded bg-amber-400 px-1 text-[10px] font-bold text-grey-900;
 }
+/* 멀리 볼 때(TASK-021): 최저가 한 곳만 가격 표시, 나머지 주유소·LPG는 상표 색 점. 누르면 카드는 그대로 열린다. */
+.map-far .gas-pin-fold {
+  @apply h-3.5 w-3.5 gap-0 rounded-full p-0;
+  transform: translate(-50%, -50%);
+}
+.map-far .gas-pin-fold > *,
+.map-far .gas-pin-fold::after {
+  display: none;
+}

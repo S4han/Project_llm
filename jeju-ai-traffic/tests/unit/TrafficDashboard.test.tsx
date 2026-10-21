@@ -492,6 +492,18 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(rows[1]!.className).not.toContain("ring-amber-400");
   });
 
+  it("같은 최저가가 여럿이면 가장 가까운 한 곳만 금색 칸, 나머지는 '최저가와 같음'(TASK-021)", async () => {
+    gasRespond = () => Response.json({ ...GAS, stations: GAS.stations.map((r) => (r[0] === "G1" ? ["G1", "SKE", "도남주유소", 1849, 1845, 33.4918, 126.5273, null, "제주시 도남동", ""] : r)) });
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    render(<TrafficDashboard />);
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    fireEvent.click(await within(list).findByRole("button", { name: /주유소3/ }));
+    const rows = within(await screen.findByRole("list", { name: "주유소 목록" })).getAllByRole("button");
+    expect(rows.map((r) => r.textContent)).toEqual(["알뜰최저가알뜰주유소1.3km · 경유 1,829원1,849원휘발유", "SK도남주유소1.4km · 경유 1,845원1,849원최저가와 같음"]);
+    expect(rows[0]!.className).toContain("ring-amber-400");
+    expect(rows[1]!.className).not.toContain("ring-amber-400");
+  });
+
   it("주유소: 한도면 '오늘 한도에 도달' 안내", async () => {
     gasRespond = () => Response.json({ error: { code: "QUOTA_BLOCKED", message: "x", retryAfter: "2026-10-21T15:00:00.000Z" } }, { status: 429 });
     render(<TrafficDashboard />);

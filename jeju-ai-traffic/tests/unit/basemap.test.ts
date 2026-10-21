@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import L from "leaflet";
-import { addBaseTiles, vworldTileUrl } from "../../web/src/features/map/leafletMap";
+import { addBaseTiles, addFacilityMarkers, PIN_DETAIL_ZOOM, syncFarClass, vworldTileUrl } from "../../web/src/features/map/leafletMap";
 
 function tileLayers(map: L.Map): L.TileLayer[] {
   const out: L.TileLayer[] = [];
@@ -81,6 +81,28 @@ describe("바탕지도(TASK-020)", () => {
     vworld.fire("tileload");
     fail(vworld, 10);
     expect(tileLayers(map)).toEqual([vworld]);
+    map.remove();
+  });
+});
+
+describe("주유소 가격 표시 접기(TASK-021)", () => {
+  it("멀리 보면 map-far, 최저가가 아닌 주유소 표시만 접는 표시(fold)를 단다", () => {
+    const map = newMap();
+    const layer = L.layerGroup().addTo(map);
+    const pin = { mark: "SK", price: "1,867", color: "#e30", fold: true };
+    addFacilityMarkers(map, layer, [
+      { id: "a", type: "GAS", name: "가", model: "", lat: 33.5, lng: 126.5, pin: { ...pin, low: true } },
+      { id: "b", type: "GAS", name: "나", model: "", lat: 33.501, lng: 126.5, pin: { ...pin, low: false } },
+      { id: "c", type: "EV", name: "다", model: "", lat: 33.502, lng: 126.5, pin: { mark: "⚡", price: "1/2", color: "#0a0", low: false } },
+    ]);
+    const el = map.getContainer();
+    expect([...el.querySelectorAll(".gas-pin")].map((p) => p.className)).toEqual(["gas-pin gas-pin-low", "gas-pin gas-pin-fold", "gas-pin"]);
+    map.setZoom(PIN_DETAIL_ZOOM - 1, { animate: false });
+    syncFarClass(map);
+    expect(el.classList.contains("map-far")).toBe(true);
+    map.setZoom(PIN_DETAIL_ZOOM, { animate: false });
+    syncFarClass(map);
+    expect(el.classList.contains("map-far")).toBe(false);
     map.remove();
   });
 });

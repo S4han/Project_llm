@@ -273,6 +273,29 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await shot(page, "TASK-018-01-gas");
   });
 
+  test("주유소 가격 표시 접기(TASK-021): 멀리 보면 최저가 한 곳만 가격, 나머지는 점, 확대하면 모두 가격", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /주유소/ }).click();
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+    await expect(map.locator(".gas-pin")).toHaveCount(3);
+    await map.scrollIntoViewIfNeeded();
+    const leaflet = map; // 지도 상자 자체가 Leaflet 컨테이너
+    await expect(leaflet).toHaveClass(/map-far/); // 반경 3km 원이 보이게 맞추면 멀리 보는 수준
+    const fold = map.locator(".gas-pin-fold");
+    await expect(fold).toHaveCount(2);
+    expect((await fold.first().boundingBox())!.width).toBeLessThan(20);
+    expect((await map.locator(".gas-pin-low").boundingBox())!.width).toBeGreaterThan(60);
+    if (process.env.SCREENSHOTS === "TASK-021") await map.screenshot({ path: "reports/screenshots/TASK-021-01-far.png" }); // 지도만
+    for (let i = 0; i < 4 && /map-far/.test((await leaflet.getAttribute("class")) ?? ""); i += 1) {
+      await map.getByRole("button", { name: "Zoom in" }).click();
+      await page.waitForTimeout(400);
+    }
+    await expect(leaflet).not.toHaveClass(/map-far/);
+    expect((await fold.first().boundingBox())!.width).toBeGreaterThan(40);
+    if (process.env.SCREENSHOTS === "TASK-021") await map.screenshot({ path: "reports/screenshots/TASK-021-02-near.png" }); // 지도만
+  });
+
   test("주유소 목록(TASK-018): 최저가가 맨 위에 강조, 줄을 누르면 지도에서 그 주유소 카드", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
