@@ -578,8 +578,10 @@ export function TrafficDashboard() {
         .map(([id, type, name, model, lat, lng]): FacilityPoint => ({ id, type, name, model, lat, lng })),
       ...(facilityTypes.has("PARK") && myLocation ? (parking?.lots ?? []).filter((l) => distanceMeters(myLocation, { lat: l[8], lng: l[9] }) <= (NEARBY_RADIUS.PARK ?? 1000) && (!parkFreeOnly || parkingFeeKind(l[7]) === "FREE")) : []).map(
         ([id, name, se, type, address, spaces, hours, fee, lat, lng]): FacilityPoint => {
-          // 요금 구분 글자 표시(TASK-022 1.(a)): "P 무료"(초록)·"P 유료"(파랑)·"P 일부유료"(주황)·정보 없음 "P"(회색). 멀리 보면 점으로 접는다.
-          const kind = PARKING_FEE_STYLE[parkingFeeKind(fee)];
+          // 요금 구분 색(TASK-022 1.(a)): 무료 초록·유료 파랑·일부유료 주황·정보 없음 회색. 시내에서 겹쳐 평소에는 색 동그라미 "P",
+          // 확대 17 이상에서만 "P 무료" 글자, 멀리 보면 점(TASK-024 1.(a)). 무료는 위에 그린다(2.(a)).
+          const feeKind = parkingFeeKind(fee);
+          const kind = PARKING_FEE_STYLE[feeKind];
           return {
             id: `PARK-${id}`,
             type: "PARK",
@@ -587,7 +589,7 @@ export function TrafficDashboard() {
             model: "",
             lat,
             lng,
-            pin: { mark: "P", price: kind.label || null, color: kind.color, low: false, fold: true },
+            pin: { mark: "P", price: kind.label || null, color: kind.color, low: false, fold: true, dot: true, top: feeKind === "FREE" },
             card: parkingCard({ id, name, se, type, address, spaces, hours, fee, lat, lng }),
           };
         },

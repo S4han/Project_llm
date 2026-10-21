@@ -230,6 +230,22 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await expect(map.locator(".gas-pin", { hasText: "P유료" })).toHaveCount(1);
     await expect(map.locator(".gas-pin", { hasText: "P무료" })).toHaveCount(1);
     await map.scrollIntoViewIfNeeded();
+    // 평소에는 "P"만 든 작은 동그라미(TASK-024), 확대 17 이상에서 "P 무료" 글자
+    const free = map.locator(".gas-pin", { hasText: "P무료" });
+    expect((await free.boundingBox())!.width).toBeLessThan(24);
+    await expect(free.locator("strong")).toBeHidden();
+    if (process.env.SCREENSHOTS === "TASK-024") await map.screenshot({ path: "reports/screenshots/TASK-024-01-dots.png" });
+    for (let i = 0; i < 4 && !/map-near/.test((await map.getAttribute("class")) ?? ""); i += 1) {
+      await map.getByRole("button", { name: "Zoom in" }).click();
+      await page.waitForTimeout(400);
+    }
+    await expect(map).toHaveClass(/map-near/);
+    await expect(free.locator("strong")).toBeVisible();
+    expect((await free.boundingBox())!.width).toBeGreaterThan(40);
+    // 크게 확대해 원 밖 표시가 화면 밖으로 나가 있으니, 반경 원 전체 보기로 되돌린다(주변 유형을 껐다 켬)
+    await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /주차장/ }).click();
+    await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /주차장/ }).click();
+    await expect(map).not.toHaveClass(/map-near/);
     if (process.env.SCREENSHOTS === "TASK-022") await map.screenshot({ path: "reports/screenshots/TASK-022-01-parking-fee.png" });
     await page.getByRole("button", { name: "P 무료만" }).click();
     await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 1km 안 무료 주차장 1곳");

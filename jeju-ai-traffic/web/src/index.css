@@ -136,3 +136,20 @@ body {
 .map-far .gas-pin-fold::after {
   display: none;
 }
+/* 주차장(TASK-024): 평소에는 "P"만 든 20px 색 동그라미, 확대 17 이상(map-near)에서만 "P 무료" 글자와 꼭짓점. */
+.gas-pin-dot {
+  @apply h-5 w-5 justify-center gap-0 rounded-full p-0;
+  transform: translate(-50%, -50%);
+}
+.gas-pin-dot > strong,
+.gas-pin-dot::after {
+  display: none;
+}
+.map-near .gas-pin-dot {
+  @apply h-auto w-auto gap-1 rounded-lg px-1.5 py-0.5;
+  transform: translate(-50%, calc(-100% - 7px));
+}
+.map-near .gas-pin-dot > strong,
+.map-near .gas-pin-dot::after {
+  display: initial;
+}

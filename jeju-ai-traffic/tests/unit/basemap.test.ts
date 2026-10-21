@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import L from "leaflet";
-import { addBaseTiles, addFacilityMarkers, PIN_DETAIL_ZOOM, syncFarClass, vworldTileUrl } from "../../web/src/features/map/leafletMap";
+import { addBaseTiles, addFacilityMarkers, PIN_DETAIL_ZOOM, PIN_LABEL_ZOOM, syncFarClass, vworldTileUrl } from "../../web/src/features/map/leafletMap";
 
 function tileLayers(map: L.Map): L.TileLayer[] {
   const out: L.TileLayer[] = [];
@@ -103,6 +103,28 @@ describe("주유소 가격 표시 접기(TASK-021)", () => {
     map.setZoom(PIN_DETAIL_ZOOM, { animate: false });
     syncFarClass(map);
     expect(el.classList.contains("map-far")).toBe(false);
+    map.remove();
+  });
+});
+
+describe("주차장 동그라미 표시(TASK-024)", () => {
+  it("dot이면 gas-pin-dot, top(무료)이면 위에, 확대 17 이상이면 map-near", () => {
+    const map = newMap();
+    const layer = L.layerGroup().addTo(map);
+    const pin = { mark: "P", color: "#1d4ed8", low: false, fold: true, dot: true };
+    const markers = addFacilityMarkers(map, layer, [
+      { id: "free", type: "PARK", name: "무료", model: "", lat: 33.5, lng: 126.5, pin: { ...pin, price: "무료", top: true } },
+      { id: "paid", type: "PARK", name: "유료", model: "", lat: 33.5, lng: 126.5, pin: { ...pin, price: "유료", top: false } },
+    ]);
+    expect([...map.getContainer().querySelectorAll(".gas-pin")].map((p) => p.className)).toEqual(["gas-pin gas-pin-fold gas-pin-dot", "gas-pin gas-pin-fold gas-pin-dot"]);
+    expect((markers.get("free") as L.Marker).options.zIndexOffset).toBe(500);
+    expect((markers.get("paid") as L.Marker).options.zIndexOffset).toBe(0);
+    const el = map.getContainer();
+    for (const [zoom, far, near] of [[PIN_DETAIL_ZOOM - 1, true, false], [PIN_DETAIL_ZOOM, false, false], [PIN_LABEL_ZOOM, false, true]] as const) {
+      map.setZoom(zoom, { animate: false });
+      syncFarClass(map);
+      expect([el.classList.contains("map-far"), el.classList.contains("map-near")]).toEqual([far, near]);
+    }
     map.remove();
   });
 });

@@ -20,9 +20,14 @@ export interface IncidentFocus {
 /** 이보다 멀리 보면(확대 수준이 작으면) 주유소·LPG 가격 표시를 상표 색 점으로 접는다(최저가 한 곳은 그대로, TASK-021 1.(a)). */
 export const PIN_DETAIL_ZOOM = 14;
 
-/** 확대 수준에 따라 지도 상자에 map-far 표시를 붙인다. 가격 표시 접기는 CSS가 맡는다(표시를 다시 만들지 않음). */
+/** 이 이상 확대하면 동그라미로 그린 표시(주차장)에도 글자를 함께 보인다(TASK-024 1.(a)). */
+export const PIN_LABEL_ZOOM = 17;
+
+/** 확대 수준에 따라 지도 상자에 map-far·map-near 표시를 붙인다. 접기·글자 보이기는 CSS가 맡는다(표시를 다시 만들지 않음). */
 export function syncFarClass(map: L.Map): void {
-  map.getContainer().classList.toggle("map-far", map.getZoom() < PIN_DETAIL_ZOOM);
+  const zoom = map.getZoom();
+  map.getContainer().classList.toggle("map-far", zoom < PIN_DETAIL_ZOOM);
+  map.getContainer().classList.toggle("map-near", zoom >= PIN_LABEL_ZOOM);
 }
 
 /** 사건 한 곳을 확대해 보여 줄 때의 확대 수준. 제주 ITS는 좌표 한 점만 준다. */
@@ -319,8 +324,11 @@ export interface FacilityPoint {
   model: string;
   /** 있으면 이 카드로(주정차 단속·주차장·주유소). 없으면 제주 ITS 시설물 카드. */
   card?: PopupCard;
-  /** 있으면 점 대신 상표 색 가격 표시(주유소, TASK-018). low면 최저가 강조. fold면 멀리 볼 때 작은 점으로 접는다(TASK-021). */
-  pin?: { mark: string; price: string | null; color: string; textColor?: string; low: boolean; fold?: boolean };
+  /**
+   * 있으면 점 대신 상표 색 가격 표시(주유소, TASK-018). low면 최저가 강조. fold면 멀리 볼 때 작은 점으로 접는다(TASK-021).
+   * dot이면 평소에는 표시 글자(mark)만 든 색 동그라미, 아주 크게 확대했을 때만 글자를 함께(주차장, TASK-024). top이면 다른 표시보다 위에.
+   */
+  pin?: { mark: string; price: string | null; color: string; textColor?: string; low: boolean; fold?: boolean; dot?: boolean; top?: boolean };
   lat: number;
   lng: number;
 }
@@ -344,7 +352,7 @@ export function facilityCard(p: FacilityPoint): PopupCard {
 /** 주유소 가격 표시: 상표 색 바탕에 "SK 1,867", 최저가는 금색 테두리와 "최저". 아래 꼭짓점이 위치. */
 function gasPinIcon(pin: NonNullable<FacilityPoint["pin"]>): L.DivIcon {
   const root = document.createElement("div");
-  root.className = `gas-pin${pin.low ? " gas-pin-low" : pin.fold ? " gas-pin-fold" : ""}`;
+  root.className = `gas-pin${pin.low ? " gas-pin-low" : pin.fold ? " gas-pin-fold" : ""}${pin.dot ? " gas-pin-dot" : ""}`;
   root.style.backgroundColor = pin.color;
   root.style.color = pin.textColor ?? "#fff";
   root.style.setProperty("--pin-color", pin.color);
@@ -376,7 +384,7 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
     const style = FACILITY_STYLE[p.type];
     if (p.pin) {
       // 주유소: 반경 안 수십 곳이라 DOM 표시로 그린다. 글자는 고정 상표 표시와 숫자뿐(원천 이름은 카드에서만 textContent로).
-      const m = L.marker([p.lat, p.lng], { icon: gasPinIcon(p.pin), keyboard: false, title: p.name, zIndexOffset: p.pin.low ? 1000 : 0 })
+      const m = L.marker([p.lat, p.lng], { icon: gasPinIcon(p.pin), keyboard: false, title: p.name, zIndexOffset: p.pin.low ? 1000 : p.pin.top ? 500 : 0 })
         .bindPopup(() => popupCard(p.card ?? facilityCard(p)), { offset: [0, -30] })
         .addTo(layer);
       byId.set(p.id, m);
