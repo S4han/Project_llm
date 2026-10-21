@@ -47,7 +47,8 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await page.getByRole("button", { name: /정지차량 감지 1건/ }).click();
     await expect(page.getByRole("status").filter({ hasText: "지점 표시 중" })).toContainText("정지차량 감지 지점 표시 중");
     await expect(map.locator("path.incident-current")).toHaveCount(1);
-    await expect(map.locator(".leaflet-popup-content")).toContainText("정지차량(모의 데이터)");
+    await expect(map.locator(".popup-card-kicker")).toHaveText("돌발 · 모의 데이터");
+    await expect(map.locator(".popup-card-title")).toHaveText("정지차량");
     await shot(page, "TASK-012-02-focus");
 
     await counts.filter({ hasText: "공사" }).click();

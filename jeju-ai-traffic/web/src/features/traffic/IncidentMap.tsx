@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import type { TrafficIncident } from "../../../../shared/contracts/traffic";
-import { addFacilityMarkers, addIncidentMarkers, addSpeedLines, FOCUS_ZOOM, popupContent, toLatLng, updateSpeedLineWeights, useLeafletMap, type FacilityPoint, type IncidentFocus, type SpeedLine } from "../map/leafletMap";
+import { addFacilityMarkers, addIncidentMarkers, addSpeedLines, FOCUS_ZOOM, popupCard, toLatLng, updateSpeedLineWeights, useLeafletMap, type FacilityPoint, type IncidentFocus, type SpeedLine } from "../map/leafletMap";
 
 /** 제주도 전체가 보이는 범위. */
 const JEJU_BOUNDS: [[number, number], [number, number]] = [
@@ -62,7 +62,16 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
     const center = toLatLng({ lat: nearbyLat, lng: nearbyLng });
     L.circle(center, { radius: nearbyRadius, color: "#111827", weight: 1.5, dashArray: "6 6", fillColor: "#facc15", fillOpacity: 0.08, interactive: false }).addTo(nearbyLayer.current);
     L.circleMarker(center, { radius: 7, color: "#fff", weight: 2, fillColor: "#2272eb", fillOpacity: 1 })
-      .bindPopup(popupContent(`현재 위치 · 반경 ${nearbyRadius / 1000}km`))
+      .bindPopup(
+        popupCard({
+          badge: { text: "나", color: "#2272eb" },
+          kicker: "현재 위치",
+          title: `반경 ${nearbyRadius / 1000}km 안을 보는 중`,
+          chips: [],
+          rows: [],
+          footer: "위치는 이 기기에서 거리 계산에만 쓰고 보내거나 저장하지 않습니다.",
+        }),
+      )
       .addTo(nearbyLayer.current);
   }, [mapReady, mapRef, nearbyLat, nearbyLng, nearbyRadius]);
 

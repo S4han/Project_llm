@@ -42,18 +42,11 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* 지도 팝업 안 링크(제주 ITS 영상 보기, TASK-014): 손가락으로 누르기 쉽게 */
-.leaflet-popup-content .popup-link {
-  @apply mt-2 inline-flex min-h-11 items-center font-semibold text-brand-700 underline underline-offset-2;
-}
 .leaflet-popup-content p {
   margin: 0;
 }
-.leaflet-popup-content .popup-note {
-  @apply mt-1 text-xs text-grey-600;
-}
 
-/* 카드형 지도 팝업(주차장, TASK-017) */
+/* 카드형 지도 팝업(TASK-017, 지도의 모든 팝업). 버튼은 손가락으로 누르기 쉽게 44px 이상 */
 .leaflet-popup-content .popup-card {
   @apply flex w-60 flex-col gap-2.5 text-grey-800;
 }

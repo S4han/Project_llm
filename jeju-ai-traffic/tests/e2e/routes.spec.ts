@@ -149,7 +149,9 @@ test.describe("지도 (OSM 타일 차단 상태)", () => {
     await expect(bar).toContainText("정지차량 감지 1/2번째 지점 표시 중");
     await expect(map.locator("path.incident-current")).toHaveCount(1);
     await expect(map.locator("path.incident-focus")).toHaveCount(2);
-    await expect(map.locator(".leaflet-popup-content")).toContainText("정지차량(모의 데이터) · 조회");
+    await expect(map.locator(".popup-card-title")).toHaveText("정지차량");
+    await expect(map.locator(".popup-card-kicker")).toHaveText("돌발 · 모의 데이터");
+    await expect(map.locator(".popup-card-rows")).toContainText("조회");
     await shot(page, "TASK-011-04-incident-focus");
 
     await bar.getByRole("button", { name: "다음 지점 ›" }).click();

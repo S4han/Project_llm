@@ -58,7 +58,7 @@ function parkingCard(l: { id: string; name: string; se: string; type: string; ad
   // 요금 설명 "유료 · 기본 30분 1,000원 · 추가 15분 500원" → 칩 "유료" + 줄 "기본 …", "추가 …"
   const [feeKind = "", ...feeLines] = l.fee.split(" · ");
   return {
-    badge: { text: "P", color: FACILITY_STYLE.PARK.stroke ?? "#1d4ed8" },
+    badge: { text: FACILITY_STYLE.PARK.mark, color: FACILITY_STYLE.PARK.markBg ?? "#1d4ed8" },
     kicker: "주차장",
     title: l.name || "이름 없는 주차장",
     chips: [l.se, l.type, feeKind].filter(Boolean),
@@ -72,9 +72,17 @@ function parkingCard(l: { id: string; name: string; se: string; type: string; ad
   };
 }
 
-/** "회전형 1대 · 검지 4대". 원천이 비어 있으면 그 항목은 뺀다. */
-function enforcementCounts(rotate: number | null, audit: number | null): string {
-  return [rotate !== null && `회전형 ${rotate}대`, audit !== null && `검지 ${audit}대`].filter(Boolean).join(" · ");
+/** 주정차 단속 카드(TASK-016): 단 표시·장소, CCTV 수 칩(원천이 비면 뺌), 운영 시간 줄, 주소. */
+function enforcementCard(place: string, address: string, rotate: number | null, audit: number | null, oper: string): PopupCard {
+  const style = FACILITY_STYLE.ENF;
+  return {
+    badge: { text: style.mark, color: style.markBg ?? style.color, textColor: style.markFg },
+    kicker: "주정차 단속 CCTV · 제주시",
+    title: place || "장소 이름 없음",
+    chips: [rotate !== null ? `회전형 ${rotate}대` : "", audit !== null ? `검지 ${audit}대` : ""].filter(Boolean),
+    rows: oper ? [{ label: "운영", lines: oper.split("\n") }] : [],
+    footer: address || undefined,
+  };
 }
 
 /** 넓은 화면에서 정보 패널 칸(위쪽 전체 폭 → PC는 오른쪽 칸). */
@@ -304,7 +312,7 @@ export function TrafficDashboard() {
           model: "",
           lat,
           lng,
-          detail: [address, enforcementCounts(rotate, audit), oper && `운영 ${oper}`].filter(Boolean).join("\n"),
+          card: enforcementCard(place, address, rotate, audit, oper),
         }),
       ),
     ],

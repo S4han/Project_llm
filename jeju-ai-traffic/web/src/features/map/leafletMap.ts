@@ -73,41 +73,11 @@ export function useLeafletMap() {
 export const JEJU_ITS_SITE = "https://www.jejuits.go.kr/main/mainView.do";
 
 /**
- * 팝업 내용을 DOM으로 만든다. 원천 데이터(도로명·설치 위치 등)를 HTML로 해석하지 않도록 글자로만 넣는다.
- * link가 있으면 새 창으로 여는 링크를 덧붙인다.
+ * 카드형 팝업 내용(TASK-017, 지도의 모든 팝업). 원천 글자(도로명·설치 위치 등)는 HTML로 해석하지 않도록 모두 textContent로만 넣는다.
  */
-export function popupContent(text: string, link?: { href: string; label: string; note?: string; sameTab?: boolean }): HTMLElement {
-  const el = document.createElement("div");
-  const p = document.createElement("p");
-  // 줄바꿈(주정차 단속 운영 시간 등)을 그대로 보인다.
-  p.style.whiteSpace = "pre-line";
-  p.textContent = text;
-  el.append(p);
-  if (link?.note) {
-    const note = document.createElement("p");
-    note.className = "popup-note";
-    note.textContent = link.note;
-    el.append(note);
-  }
-  if (link) {
-    const a = document.createElement("a");
-    a.href = link.href;
-    // 바깥 사이트는 새 창(opener 차단), 이 서비스 안 화면(경로 안내)은 같은 창.
-    if (!link.sameTab) {
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-    }
-    a.textContent = link.label;
-    a.className = "popup-link";
-    el.append(a);
-  }
-  return el;
-}
-
-/** 카드형 팝업 내용(TASK-017 주차장). 원천 글자는 모두 textContent로만 넣는다. */
 export interface PopupCard {
-  /** 머리 표시(예: "P"). color는 배경색. */
-  badge: { text: string; color: string };
+  /** 머리 표시(예: "P"). color는 배경색, textColor는 글자색(기본 흰색). */
+  badge: { text: string; color: string; textColor?: string };
   /** 작은 분류 이름(예: "주차장"). */
   kicker: string;
   title: string;
@@ -117,8 +87,8 @@ export interface PopupCard {
   rows: { label: string; lines: string[] }[];
   /** 맨 아래 흐린 글(주소 등). */
   footer?: string;
-  /** 아래 꽉 찬 버튼(이 서비스 안 화면, 같은 창). */
-  action?: { href: string; label: string };
+  /** 아래 꽉 찬 버튼. 이 서비스 안 화면은 같은 창, external이면 새 창(opener 차단). */
+  action?: { href: string; label: string; external?: boolean };
 }
 
 export function popupCard(card: PopupCard): HTMLElement {
@@ -132,6 +102,7 @@ export function popupCard(card: PopupCard): HTMLElement {
   const head = el("div", "popup-card-head");
   const badge = el("span", "popup-card-badge", card.badge.text);
   badge.style.backgroundColor = card.badge.color;
+  if (card.badge.textColor) badge.style.color = card.badge.textColor;
   badge.setAttribute("aria-hidden", "true");
   const titles = el("div", "popup-card-titles");
   titles.append(el("p", "popup-card-kicker", card.kicker), el("p", "popup-card-title", card.title));
@@ -160,14 +131,42 @@ export function popupCard(card: PopupCard): HTMLElement {
   if (card.action) {
     const a = el("a", "popup-card-action", card.action.label) as HTMLAnchorElement;
     a.href = card.action.href;
+    if (card.action.external) {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
     root.append(a);
   }
   return root;
 }
 
-/** 사건 묶음 이름과 같은 규칙(돌발은 내용만, 나머지는 종류 + 내용). */
-function incidentLabel(i: TrafficIncident): string {
-  return i.kind === "event" ? i.description : `${INCIDENT_LABEL[i.kind]} ${i.description}`;
+const INCIDENT_MARK: Record<TrafficIncident["kind"], string> = { event: "!", closure: "✕", roadwork: "공", weather: "기" };
+
+/** 사건 카드: 종류 표시·내용, 원천(또는 조회) 시각. 원천 시각이 없으면 상세가 없다고 안내. */
+export function incidentCard(i: TrafficIncident): PopupCard {
+  return {
+    badge: { text: INCIDENT_MARK[i.kind], color: "#b91c1c" },
+    kicker: `${INCIDENT_LABEL[i.kind]} · ${i.source === "mock" ? "모의 데이터" : "제주 ITS 감지"}`,
+    title: i.description || INCIDENT_LABEL[i.kind],
+    chips: [],
+    rows: [{ label: i.sourceTime ? "원천" : "조회", lines: [formatKstTime(i.sourceTime ?? i.observedAt)] }],
+    footer: i.sourceTime ? undefined : "발생 시각과 상세는 제공되지 않습니다.",
+  };
+}
+
+/** 도로 소통 선 카드: 상태 색 표시·도로명, 평균속도 강조, 구간(A → B)·통행 시간. */
+export function speedLineCard(line: SpeedLine, observedAt: string | null): PopupCard {
+  const st = STATUS_STYLE[line.status];
+  const section = line.from && line.to && line.from !== line.to ? `${line.from} → ${line.to}` : line.from || line.to || "";
+  return {
+    badge: { text: st.label.slice(0, 1), color: st.color },
+    kicker: `도로 소통 · ${st.label}`,
+    title: line.name || "도로명 없음",
+    chips: [st.label],
+    stat: { value: String(line.kmh), unit: "km/h" },
+    rows: [...(section ? [{ label: "구간", lines: [section] }] : []), { label: "통행", lines: [formatDuration(line.travelSeconds)] }],
+    footer: observedAt ? `${formatKstTime(observedAt)} 기준 · 제주 ITS 평균속도` : undefined,
+  };
 }
 
 /**
@@ -189,8 +188,7 @@ export function addIncidentMarkers(layer: L.LayerGroup, incidents: TrafficIncide
       opacity: faded ? 0.5 : 1,
       className: `incident-marker${inFocus ? " incident-focus" : ""}${current ? " incident-current" : ""}`,
     });
-    const at = formatKstTime(incident.sourceTime ?? incident.observedAt);
-    marker.bindPopup(popupContent(`${incidentLabel(incident)}(${incident.source === "mock" ? "모의 데이터" : "제주 ITS 감지"}) · ${incident.sourceTime ? "원천" : "조회"} ${at}`));
+    marker.bindPopup(popupCard(incidentCard(incident)));
     marker.addTo(layer);
     if (current) marker.openPopup();
   }
@@ -237,7 +235,6 @@ export function speedLineWeight(zoom: number, highlighted: boolean): number {
 export function addSpeedLines(map: L.Map, layer: L.LayerGroup, lines: SpeedLine[], observedAt: string | null, highlightIds: Set<string> = new Set()): L.Polyline[] {
   if (!map.getPane("speeds")) map.createPane("speeds").style.zIndex = "350";
   const renderer = canvasSupported() ? L.canvas({ pane: "speeds", padding: 0.5, tolerance: 6 }) : L.svg({ pane: "speeds" });
-  const at = observedAt ? ` · ${formatKstTime(observedAt)} 기준` : "";
   const zoom = map.getZoom() || 10;
   const ordered = [...lines].sort((a, b) => Number(highlightIds.has(a.id)) - Number(highlightIds.has(b.id)));
   return ordered.map((line) => {
@@ -250,7 +247,7 @@ export function addSpeedLines(map: L.Map, layer: L.LayerGroup, lines: SpeedLine[
       opacity: highlightIds.size > 0 && !highlighted ? 0.35 : 0.9,
     });
     (pl as L.Polyline & { highlighted?: boolean }).highlighted = highlighted;
-    pl.bindPopup(popupContent(`${line.name || "도로명 없음"} · 평균 ${line.kmh}km/h · 통행 ${formatDuration(line.travelSeconds)}${at}`)).addTo(layer);
+    pl.bindPopup(() => popupCard(speedLineCard(line, observedAt))).addTo(layer);
     return pl;
   });
 }
@@ -266,40 +263,37 @@ export interface FacilityPoint {
   type: FacilityKey;
   name: string;
   model: string;
-  /** 팝업 둘째 줄부터(주정차 단속: 주소·CCTV 수·운영 시간, TASK-016). */
-  detail?: string;
-  /** 팝업 아래 링크(이 서비스 안 화면, 같은 창). */
-  link?: { href: string; label: string };
-  /** 있으면 글자 팝업 대신 카드형 팝업(주차장, TASK-017). */
+  /** 있으면 이 카드로(주정차 단속·주차장). 없으면 제주 ITS 시설물 카드. */
   card?: PopupCard;
   lat: number;
   lng: number;
 }
 
-/** 교통시설물 점(유형별 색). 수백~수천 개라 캔버스로, 구간 선 위·사건 점 아래 칸에 그린다. 누르면 "유형 · 설치 위치 · 모델". */
+/** 제주 ITS 시설물 카드: 유형 표시·설치 위치·모델. CCTV·웹카메라는 영상 API가 없고 사이트에 카메라별 주소도 없어
+ * (영상은 사이트 안 팝업) 공식 사이트 지도 화면으로 연결하고 찾는 방법을 안내한다(TASK-014). */
+export function facilityCard(p: FacilityPoint): PopupCard {
+  const style = FACILITY_STYLE[p.type];
+  const video = p.type === "FTY02" || p.type === "FTY03";
+  return {
+    badge: { text: style.mark, color: style.markBg ?? style.color, textColor: style.markFg },
+    kicker: style.label,
+    title: p.name || "위치 이름 없음",
+    chips: [],
+    rows: p.model ? [{ label: "모델", lines: [p.model] }] : [],
+    footer: video ? `영상 보기: 사이트 왼쪽 'CCTV' 메뉴 → 지도에서 '${p.name || "같은 위치"}' 카메라 선택` : "제주 ITS 교통시설물",
+    action: video ? { href: JEJU_ITS_SITE, label: "제주 ITS 교통정보센터 열기 ↗", external: true } : undefined,
+  };
+}
+
+/** 교통시설물 점(유형별 색). 수백~수천 개라 캔버스로, 구간 선 위·사건 점 아래 칸에 그린다. 누르면 카드 팝업. */
 export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: FacilityPoint[]) {
   if (!map.getPane("facilities")) map.createPane("facilities").style.zIndex = "380";
   const renderer = canvasSupported() ? L.canvas({ pane: "facilities", padding: 0.5, tolerance: 6 }) : L.svg({ pane: "facilities" });
   for (const p of points) {
     const style = FACILITY_STYLE[p.type];
     L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: style.stroke ? 6 : 5, color: style.stroke ?? "#fff", weight: style.stroke ? 2 : 1.5, fillColor: style.color, fillOpacity: 1 })
-      .bindPopup(
-        p.card
-          ? popupCard(p.card)
-          : popupContent(
-          `${style.label} · ${p.name || "위치 이름 없음"}${p.model ? ` · 모델 ${p.model}` : ""}${p.detail ? `\n${p.detail}` : ""}`,
-          // CCTV·웹카메라는 영상 API가 없고 사이트에 카메라별 주소도 없어(영상은 사이트 안 팝업), 공식 사이트 첫 화면으로 연결하고 찾는 방법을 안내한다(TASK-014).
-          p.link
-            ? { ...p.link, sameTab: true }
-            : p.type === "FTY02" || p.type === "FTY03"
-            ? {
-                href: JEJU_ITS_SITE,
-                label: "제주 ITS 교통정보센터 열기 ↗",
-                note: `영상 보기: 사이트 왼쪽 'CCTV' 메뉴 → 지도에서 '${p.name || "같은 위치"}' 카메라 선택`,
-              }
-            : undefined,
-        ),
-      )
+      // 카드는 누를 때 만든다(점이 수천 개).
+      .bindPopup(() => popupCard(p.card ?? facilityCard(p)))
       .addTo(layer);
   }
 }
