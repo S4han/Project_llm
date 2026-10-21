@@ -234,6 +234,11 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     const free = map.locator(".gas-pin", { hasText: "P무료" });
     expect((await free.boundingBox())!.width).toBeLessThan(24);
     await expect(free.locator("strong")).toBeHidden();
+    // 손가락이 동그라미에서 조금(9px) 빗나가도 주차장 카드가 열린다(TASK-024 점검: 아래 도로 선 카드가 열림)
+    const fb = (await free.boundingBox())!;
+    await page.mouse.click(fb.x + fb.width / 2 + 9, fb.y + fb.height / 2 + 9);
+    await expect(page.locator(".leaflet-popup .popup-card .popup-card-kicker")).toHaveText("주차장");
+    await page.locator(".leaflet-popup-close-button").click();
     if (process.env.SCREENSHOTS === "TASK-024") await map.screenshot({ path: "reports/screenshots/TASK-024-01-dots.png" });
     for (let i = 0; i < 4 && !/map-near/.test((await map.getAttribute("class")) ?? ""); i += 1) {
       await map.getByRole("button", { name: "Zoom in" }).click();

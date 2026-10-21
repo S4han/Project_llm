@@ -12,7 +12,7 @@
 | 파일 | 변경 |
 |---|---|
 | `web/src/features/map/leafletMap.ts` | 표시 옵션 `dot`(색 동그라미)·`top`(위에 그림, zIndexOffset 500), `PIN_LABEL_ZOOM`(17): 확대 17 이상이면 지도 상자에 `map-near` |
-| `web/src/index.css` | `gas-pin-dot`: 평소 "P"만 든 20px 동그라미(꼭짓점·글자 숨김), `map-near`에서 "P 무료" 글자 표시로. 멀리 보면(`map-far`) 기존처럼 14px 점 |
+| `web/src/index.css` | (점검 뒤) 동그라미·점의 누르는 범위를 사방 10px 넓힘(투명). `gas-pin-dot`: 평소 "P"만 든 20px 동그라미(꼭짓점·글자 숨김), `map-near`에서 "P 무료" 글자 표시로. 멀리 보면(`map-far`) 기존처럼 14px 점 |
 | `web/src/features/traffic/TrafficDashboard.tsx` | 주차장 표시에 `dot: true`, 무료면 `top: true` |
 | `tests/unit/basemap.test.ts`, `tests/e2e/traffic.spec.ts` | 신규 테스트 |
 | `reports/screenshots/TASK-024-01-dots.png` | 390px 폭, 반경 1km 화면의 동그라미 "P"(모의, 바탕 그림 차단) |
@@ -24,6 +24,7 @@
   - 누르면 같은 주차장 카드. CSS만 바꾸므로 표시를 다시 만들지 않는다.
 - **무료 위에(2.(a))**: 겹치면 무료 주차장이 위에 보인다(최저가 주유소 표시보다는 아래).
 - 주유소·LPG·전기차 표시, "P 무료만", 요약 문구, 카드는 그대로.
+- **점검 뒤 수정**: 사용자 "경로 조회 버튼이 없어졌어"(아이패드 캡처). 동그라미 옆을 누르면 아래 도로 선 카드(경로 안내 버튼 없음)가 열렸다. 동그라미(20px)와 멀리 볼 때 점(14px)의 누르는 범위를 투명하게 사방 10px 넓혔다(보이는 크기는 같음). 동그라미에서 9px 빗나가 눌러도 주차장 카드가 열리는 것을 e2e로 확인했고, 넓히기 전에는 이 시험이 실패했다.
 
 ## 4. 테스트·빌드
 | 명령 | 결과 |
@@ -31,7 +32,7 @@
 | `npm run check:release` | 통과 — 단위 **317건**, lint·typecheck·build, 비밀정보 의심 없음, 취약점 0건 |
 | `npx playwright test` | **50건** 통과(모의 공급자) |
 
-신규 테스트: 동그라미 표시 이름·무료 위 순서·확대 13/14/17에서 map-far·map-near(단위), 반경 화면에서 폭 24px 미만·글자 숨김 → 확대 17에서 글자 보임(e2e).
+신규 테스트: 9px 빗나가 눌러도 주차장 카드(e2e), 동그라미 표시 이름·무료 위 순서·확대 13/14/17에서 map-far·map-near(단위), 반경 화면에서 폭 24px 미만·글자 숨김 → 확대 17에서 글자 보임(e2e).
 
 ## 5. 비용·보안
 - 외부 호출 없음, 비용 0원.

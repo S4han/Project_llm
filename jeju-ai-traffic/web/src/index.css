@@ -153,3 +153,11 @@ body {
 .map-near .gas-pin-dot::after {
   display: initial;
 }
+/* 누르는 범위(TASK-024 점검): 작은 동그라미·점은 손가락이 조금 빗나가도 아래 도로 선 대신 이 표시가 눌리게 투명한 테두리를 넓힌다. */
+.gas-pin-dot::before,
+.map-far .gas-pin-fold::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 9999px;
+}
