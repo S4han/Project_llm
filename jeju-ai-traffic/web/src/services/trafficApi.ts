@@ -1,5 +1,5 @@
 import type { ApiError, ApiErrorBody } from "../../../shared/contracts/common";
-import type { TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficParkingResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../shared/contracts/traffic";
+import type { TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../shared/contracts/traffic";
 
 export type TrafficIncidentsResult = { ok: true; data: TrafficIncidentsResponse } | { ok: false; error: ApiError };
 
@@ -60,4 +60,9 @@ export function fetchTrafficEnforcement(signal?: AbortSignal): Promise<Result<Tr
 /** GET /api/traffic/parking(TASK-017): 제주시·서귀포시 주차장 위치·요금·면수(서버 하루·CDN 7일 보관). 화면을 열 때 한 번만 부른다. */
 export function fetchTrafficParking(signal?: AbortSignal): Promise<Result<TrafficParkingResponse>> {
   return getJson<TrafficParkingResponse>("/api/traffic/parking", (b) => "lots" in b, signal);
+}
+
+/** GET /api/traffic/gas(TASK-018): 제주 주유소·휘발유·경유 가격(서버·CDN 6시간 보관). 화면을 열 때 한 번만 부른다. */
+export function fetchTrafficGas(signal?: AbortSignal): Promise<Result<TrafficGasResponse>> {
+  return getJson<TrafficGasResponse>("/api/traffic/gas", (b) => "stations" in b, signal);
 }

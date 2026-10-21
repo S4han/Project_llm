@@ -101,3 +101,16 @@ export interface TrafficParkingResponse {
   builtAt: IsoDateTime;
   source: "dataGoKr" | "mock";
 }
+
+/** 오피넷 상표 코드(TASK-018 시험: SKE·GSC·HDO·SOL·RTO). 그 밖의 코드도 올 수 있다. */
+export type GasBrand = string;
+
+/**
+ * GET /api/traffic/gas 응답(TASK-018). 오피넷 유가정보 반경 내 주유소(제주 전체를 반경 5km 원으로 나눠 받음).
+ * stations[i] = [주유소 ID, 상표 코드, 이름, 휘발유 가격(원/L, 없으면 null), 경유 가격(원/L, 없으면 null), 위도, 경도].
+ */
+export interface TrafficGasResponse {
+  stations: [string, GasBrand, string, number | null, number | null, number, number][];
+  builtAt: IsoDateTime;
+  source: "opinet" | "mock";
+}

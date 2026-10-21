@@ -95,3 +95,35 @@ body {
 .leaflet-popup-content a.popup-card-action {
   color: #fff;
 }
+
+/* 주유소 가격 표시(TASK-018): 크기 0 표시 안에서 위로 띄우고, 아래 꼭짓점이 주유소 위치 */
+.gas-pin-wrap {
+  background: none;
+  border: 0;
+}
+.gas-pin {
+  @apply absolute flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-[11px] leading-tight whitespace-nowrap shadow-md ring-2 ring-white;
+  transform: translate(-50%, calc(-100% - 7px));
+}
+.gas-pin::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-bottom: 0;
+  border-top-color: var(--pin-color);
+}
+.gas-pin-mark {
+  @apply font-extrabold;
+}
+.gas-pin strong {
+  @apply font-bold tabular-nums;
+}
+.gas-pin-low {
+  @apply ring-[3px] ring-amber-400;
+}
+.gas-pin-tag {
+  @apply rounded bg-amber-400 px-1 text-[10px] font-bold text-grey-900;
+}

@@ -263,8 +263,10 @@ export interface FacilityPoint {
   type: FacilityKey;
   name: string;
   model: string;
-  /** 있으면 이 카드로(주정차 단속·주차장). 없으면 제주 ITS 시설물 카드. */
+  /** 있으면 이 카드로(주정차 단속·주차장·주유소). 없으면 제주 ITS 시설물 카드. */
   card?: PopupCard;
+  /** 있으면 점 대신 상표 색 가격 표시(주유소, TASK-018). low면 최저가 강조. */
+  pin?: { mark: string; price: string | null; color: string; textColor?: string; low: boolean };
   lat: number;
   lng: number;
 }
@@ -285,12 +287,44 @@ export function facilityCard(p: FacilityPoint): PopupCard {
   };
 }
 
+/** 주유소 가격 표시: 상표 색 바탕에 "SK 1,867", 최저가는 금색 테두리와 "최저". 아래 꼭짓점이 위치. */
+function gasPinIcon(pin: NonNullable<FacilityPoint["pin"]>): L.DivIcon {
+  const root = document.createElement("div");
+  root.className = `gas-pin${pin.low ? " gas-pin-low" : ""}`;
+  root.style.backgroundColor = pin.color;
+  root.style.color = pin.textColor ?? "#fff";
+  root.style.setProperty("--pin-color", pin.color);
+  const mark = document.createElement("span");
+  mark.className = "gas-pin-mark";
+  mark.textContent = pin.mark;
+  root.append(mark);
+  if (pin.price) {
+    const price = document.createElement("strong");
+    price.textContent = pin.price;
+    root.append(price);
+  }
+  if (pin.low) {
+    const low = document.createElement("span");
+    low.className = "gas-pin-tag";
+    low.textContent = "최저";
+    root.append(low);
+  }
+  return L.divIcon({ html: root, className: "gas-pin-wrap", iconSize: [0, 0] });
+}
+
 /** 교통시설물 점(유형별 색). 수백~수천 개라 캔버스로, 구간 선 위·사건 점 아래 칸에 그린다. 누르면 카드 팝업. */
 export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: FacilityPoint[]) {
   if (!map.getPane("facilities")) map.createPane("facilities").style.zIndex = "380";
   const renderer = canvasSupported() ? L.canvas({ pane: "facilities", padding: 0.5, tolerance: 6 }) : L.svg({ pane: "facilities" });
   for (const p of points) {
     const style = FACILITY_STYLE[p.type];
+    if (p.pin) {
+      // 주유소: 반경 안 수십 곳이라 DOM 표시로 그린다. 글자는 고정 상표 표시와 숫자뿐(원천 이름은 카드에서만 textContent로).
+      L.marker([p.lat, p.lng], { icon: gasPinIcon(p.pin), keyboard: false, title: p.name, zIndexOffset: p.pin.low ? 1000 : 0 })
+        .bindPopup(() => popupCard(p.card ?? facilityCard(p)), { offset: [0, -30] })
+        .addTo(layer);
+      continue;
+    }
     L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: style.stroke ? 6 : 5, color: style.stroke ?? "#fff", weight: style.stroke ? 2 : 1.5, fillColor: style.color, fillOpacity: 1 })
       // 카드는 누를 때 만든다(점이 수천 개).
       .bindPopup(() => popupCard(p.card ?? facilityCard(p)))

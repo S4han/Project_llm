@@ -120,7 +120,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await page.goto("/");
     const list = page.getByRole("list", { name: "교통시설물 유형" });
     const buttons = list.getByRole("button");
-    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속3", "주차장3"]);
+    await expect(buttons).toHaveText(["VMS2", "CCTV3", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속3", "주차장3", "주유소4"]);
     const map = page.getByRole("region", { name: "교통 현황 지도" });
     await expect(map).toHaveAttribute("data-facilities", "0");
     await list.getByRole("button", { name: /^CCTV/ }).click();
@@ -158,7 +158,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
 
 });
 
-test.describe("내 위치 반경 1km: 주정차 단속·주차장 (TASK-016·017, 개발 서버 모의)", () => {
+test.describe("내 위치 반경: 주정차 단속·주차장·주유소 (TASK-016·017·018, 개발 서버 모의)", () => {
   // 모의 단속 3곳 중 2곳(시청·신설오름 부근, 약 0.6km)만 1km 안, 노형 부근은 밖인 위치
   test.use({ permissions: ["geolocation"], geolocation: { latitude: 33.502, longitude: 126.536, accuracy: 30 } });
 
@@ -173,7 +173,7 @@ test.describe("내 위치 반경 1km: 주정차 단속·주차장 (TASK-016·017
     await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳");
     await expect(map).toHaveAttribute("data-facilities", "2");
     await expect(map).toHaveAttribute("data-nearby", "1");
-    await expect(page.getByText(/켜면 현재 위치를 한 번 확인해 반경 1km 안만/)).toBeVisible();
+    await expect(page.getByText(/켜면 현재 위치를 한 번 확인해 반경 안만/)).toBeVisible();
     await shot(page, "TASK-016-02-nearby");
     await enf.click();
     await expect(map).toHaveAttribute("data-facilities", "0");
@@ -251,5 +251,25 @@ test.describe("내 위치 반경 1km: 주정차 단속·주차장 (TASK-016·017
     await expect(action).not.toHaveAttribute("target", "_blank");
     await page.locator(".leaflet-popup").scrollIntoViewIfNeeded();
     await shot(page, "TASK-017-03-popup");
+  });
+
+  test("주유소(TASK-018): 반경 3km 안 상표 색 가격 표시, 최저가 강조, 누르면 가격 카드", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /주유소/ }).click();
+    await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 3km 안 주유소 3곳 · 휘발유 최저 1,849원");
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+    await expect(map.locator(".gas-pin")).toHaveCount(3);
+    await expect(map.locator(".gas-pin-low")).toHaveCount(1);
+    await expect(map.locator(".gas-pin-low")).toContainText("알뜰1,849최저");
+    await map.scrollIntoViewIfNeeded();
+    await map.locator(".gas-pin-low").click();
+    const card = page.locator(".leaflet-popup .popup-card");
+    await expect(card.locator(".popup-card-kicker")).toHaveText("주유소 · 알뜰주유소");
+    await expect(card).toContainText("반경 안 휘발유 최저가");
+    await expect(card.locator("dd").first()).toHaveText("1,849원/L");
+    await expect(card.getByRole("link", { name: "현재 위치에서 경로 안내" })).toHaveAttribute("href", /^\/route\?to=/);
+    await page.locator(".leaflet-popup").scrollIntoViewIfNeeded();
+    await shot(page, "TASK-018-01-gas");
   });
 });

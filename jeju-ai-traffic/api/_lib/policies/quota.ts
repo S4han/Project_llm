@@ -21,6 +21,8 @@ export const DEFAULT_BUDGETS: Record<ProviderId, ProviderBudget> = {
   vworld: { dailyLimit: 400 },
   // 공공데이터포털(제주시 주정차 단속 CCTV, 1회 1건). 개발계정 공급자 한도 10,000. 하루 보관·CDN 7일이라 평소에는 거의 부르지 않는다(TASK-016).
   dataGoKr: { dailyLimit: 500 },
+  // 오피넷 유가정보(제주 전체를 반경 5km 원 약 40여 곳 × 휘발유·경유로 받음, 1회 약 90건). 6시간 보관(TASK-018).
+  opinet: { dailyLimit: 1000 },
 };
 
 /**

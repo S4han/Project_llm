@@ -19,6 +19,9 @@
   "functions": {
     "api/traffic/links.ts": {
       "maxDuration": 60
+    },
+    "api/traffic/gas.ts": {
+      "maxDuration": 60
     }
   }
 }

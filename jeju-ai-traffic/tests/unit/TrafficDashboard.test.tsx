@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficParkingResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
+import type { TrafficEnforcementResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
 import { encodePolyline } from "../../shared/rules/polyline";
 import { REFRESH_MS, TrafficDashboard } from "../../web/src/features/traffic/TrafficDashboard";
 
@@ -60,7 +60,18 @@ const PARKING: TrafficParkingResponse = {
   source: "dataGoKr",
 };
 
+const GAS: TrafficGasResponse = {
+  stations: [
+    ["G1", "SKE", "도남주유소", 1867, 1845, 33.4918, 126.5273],
+    ["G2", "RTO", "알뜰주유소", 1849, 1829, 33.505, 126.55],
+    ["G3", "GSC", "중문주유소", 1899, 1879, 33.25, 126.41],
+  ],
+  builtAt: AT,
+  source: "opinet",
+};
+
 let respond: () => Response;
+let gasRespond: () => Response;
 let parkingRespond: () => Response;
 let enforcementRespond: () => Response;
 let facilitiesRespond: () => Response;
@@ -83,6 +94,7 @@ beforeEach(() => {
   facilitiesRespond = () => Response.json(FACILITIES);
   enforcementRespond = () => Response.json(ENFORCEMENT);
   parkingRespond = () => Response.json(PARKING);
+  gasRespond = () => Response.json(GAS);
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.stubGlobal(
@@ -95,6 +107,7 @@ beforeEach(() => {
       if (url.startsWith("/api/traffic/facilities")) return facilitiesRespond();
       if (url.startsWith("/api/traffic/enforcement")) return enforcementRespond();
       if (url.startsWith("/api/traffic/parking")) return parkingRespond();
+      if (url.startsWith("/api/traffic/gas")) return gasRespond();
       if (url.startsWith("/api/traffic/links")) {
         linksCalls += 1;
         return linksRespond();
@@ -321,7 +334,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     render(<TrafficDashboard />);
     const list = await screen.findByRole("list", { name: "교통시설물 유형" });
     const buttons = within(list).getAllByRole("button");
-    expect(buttons.map((b) => b.textContent)).toEqual(["VMS1", "CCTV2", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속2", "주차장2"]);
+    expect(buttons.map((b) => b.textContent)).toEqual(["VMS1", "CCTV2", "웹카메라0", "영상VDS0", "AVI0", "신호제어기0", "RWIS1", "주정차 단속2", "주차장2", "주유소3"]);
     expect(buttons.every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
     expect((within(list).getByRole("button", { name: /웹카메라/ }) as HTMLButtonElement).disabled).toBe(true);
     const map = screen.getByRole("region", { name: "교통 현황 지도" });
@@ -347,7 +360,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(map.getAttribute("data-facilities")).toBe("2");
     expect(map.getAttribute("data-nearby")).toBe("1");
     expect(ask).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/켜면 현재 위치를 한 번 확인해 반경 1km 안만/)).toBeTruthy();
+    expect(screen.getByText(/켜면 현재 위치를 한 번 확인해 반경 안만/)).toBeTruthy();
     // 끄고 다시 켜면 위치를 다시 묻지 않는다(위치 다시 확인 버튼으로만)
     fireEvent.click(enf);
     expect(map.getAttribute("data-nearby")).toBe("0");
@@ -371,7 +384,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     const list2 = await screen.findByRole("list", { name: "교통시설물 유형" });
     const enf = await within(list2).findByRole("button", { name: /주정차 단속2/ });
     fireEvent.click(enf);
-    expect(await screen.findByText(/내 위치 주변\(주정차 단속·주차장\)을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
+    expect(await screen.findByText(/내 위치 주변\(주정차 단속·주차장·주유소\)을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
     expect(enf.getAttribute("aria-pressed")).toBe("false");
   });
 
@@ -389,6 +402,29 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(screen.getByText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳 · 주차장 1곳")).toBeTruthy();
     expect(map.getAttribute("data-facilities")).toBe("3");
     expect(ask).toHaveBeenCalledTimes(1);
+  });
+
+  it("주유소(TASK-018): 반경 3km 안만, 휘발유 최저가 안내, 주차장(1km)과 함께 켜면 반경별로 한 줄", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    render(<TrafficDashboard />);
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    fireEvent.click(await within(list).findByRole("button", { name: /주유소3/ }));
+    expect(await screen.findByText("내 위치 반경 3km 안 주유소 2곳 · 휘발유 최저 1,849원")).toBeTruthy();
+    const map = screen.getByRole("region", { name: "교통 현황 지도" });
+    expect(map.getAttribute("data-facilities")).toBe("2");
+    fireEvent.click(within(list).getByRole("button", { name: /주차장2/ }));
+    expect(screen.getByText("내 위치 반경 1km 안 주차장 1곳 · 반경 3km 안 주유소 2곳 · 휘발유 최저 1,849원")).toBeTruthy();
+    expect(screen.getByText(/오피넷 판매가격/)).toBeTruthy();
+  });
+
+  it("주유소 자료를 못 받으면 안내와 다시 시도", async () => {
+    gasRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
+    render(<TrafficDashboard />);
+    const msg = await screen.findByText("주유소 정보를 불러오지 못했습니다.");
+    gasRespond = () => Response.json(GAS);
+    fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    expect(await within(list).findByRole("button", { name: /주유소3/ })).toBeTruthy();
   });
 
   it("주차장 자료를 못 받으면 안내와 다시 시도", async () => {

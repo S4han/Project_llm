@@ -2,7 +2,7 @@
 export type IsoDateTime = string;
 
 /** 외부 호출 공급자. 사용량 한도는 이 단위로 관리한다. kakao는 경로(모빌리티), kakaoLocal은 장소 검색. */
-export type ProviderId = "kakao" | "kakaoLocal" | "jejuIts" | "ai" | "vworld" | "dataGoKr";
+export type ProviderId = "kakao" | "kakaoLocal" | "jejuIts" | "ai" | "vworld" | "dataGoKr" | "opinet";
 
 /** 공통 오류 코드. HTTP 상태 대응은 api/_lib/errors.ts. */
 export const ERROR_CODES = [

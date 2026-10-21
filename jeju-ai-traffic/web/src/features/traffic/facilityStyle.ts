@@ -1,10 +1,26 @@
 import type { FacilityType } from "../../../../shared/contracts/traffic";
 
 /** 교통시설물 카드의 유형. 제주 ITS 7개 + 제주시 주정차 단속 CCTV(ENF, TASK-016) + 주차장(PARK, 표준데이터, TASK-017). */
-export type FacilityKey = FacilityType | "ENF" | "PARK";
+export type FacilityKey = FacilityType | "ENF" | "PARK" | "GAS";
 
-/** 내 위치 반경 안만 보이는 유형(TASK-016·017). */
-export const NEARBY_KEYS: FacilityKey[] = ["ENF", "PARK"];
+/** 내 위치 반경 안만 보이는 유형(TASK-016·017·018). */
+export const NEARBY_KEYS: FacilityKey[] = ["ENF", "PARK", "GAS"];
+
+/** 유형별 조회 반경(m). 주유소는 드문드문해서 3km(TASK-018 2.(a)), 나머지는 1km. */
+export const NEARBY_RADIUS: Partial<Record<FacilityKey, number>> = { ENF: 1000, PARK: 1000, GAS: 3000 };
+
+/** 오피넷 상표 코드 → 이름·짧은 표시·색(TASK-018). 목록에 없는 코드는 "기타". */
+export const GAS_BRANDS: Record<string, { name: string; mark: string; color: string; textColor?: string }> = {
+  SKE: { name: "SK에너지", mark: "SK", color: "#e2231a" },
+  GSC: { name: "GS칼텍스", mark: "GS", color: "#00857c" },
+  HDO: { name: "HD현대오일뱅크", mark: "HD", color: "#0b4ea2" },
+  SOL: { name: "S-OIL", mark: "S", color: "#ffc20e", textColor: "#111827" },
+  RTO: { name: "알뜰주유소", mark: "알뜰", color: "#4b8b3b" },
+  RTX: { name: "고속도로 알뜰", mark: "알뜰", color: "#4b8b3b" },
+  NHO: { name: "농협 알뜰", mark: "NH", color: "#2f7d32" },
+  ETC: { name: "자가상표", mark: "기타", color: "#6b7280" },
+};
+export const gasBrand = (code: string) => GAS_BRANDS[code] ?? { name: code || "상표 정보 없음", mark: "기타", color: "#6b7280" };
 
 /** 교통시설물 유형별 이름·색(TASK-013). 소통 상태 색(초록·주황·빨강)과 겹치지 않게 고른다. */
 /** stroke는 점 테두리(없으면 흰색). mark는 팝업 머리 표시 글자(markBg·markFg는 표시 배경·글자색, 없으면 color·흰색). */
@@ -20,6 +36,8 @@ export const FACILITY_STYLE: Record<FacilityKey, { label: string; short: string;
   ENF: { label: "주정차 단속 CCTV", short: "주정차 단속", color: "#facc15", stroke: "#111827", mark: "단", markFg: "#111827" },
   // 다른 유형은 모두 색을 채운 점이라, 주차장은 흰 점 + 파란 테두리로 구분한다(TASK-017).
   PARK: { label: "주차장", short: "주차장", color: "#ffffff", stroke: "#1d4ed8", mark: "P", markBg: "#1d4ed8" },
+  // 지도에서는 상표 색 가격 표시(핀)로 그린다. 여기 색은 카드 버튼의 범례 점용.
+  GAS: { label: "주유소", short: "주유소", color: "#f97316", stroke: "#7c2d12", mark: "⛽" },
 };
 
-export const FACILITY_ORDER: FacilityKey[] = ["FTY01", "FTY02", "FTY03", "FTY07", "FTY09", "FTY17", "FTY23", "ENF", "PARK"];
+export const FACILITY_ORDER: FacilityKey[] = ["FTY01", "FTY02", "FTY03", "FTY07", "FTY09", "FTY17", "FTY23", "ENF", "PARK", "GAS"];
