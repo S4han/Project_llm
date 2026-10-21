@@ -24,14 +24,22 @@ const OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 기여자';
 const VWORLD_ATTRIBUTION = '&copy; <a href="https://www.vworld.kr">브이월드</a>(국토교통부)';
 
-/** 브이월드 WMTS 기본(Base) 바탕지도 주소. 흰색(white)은 건물·장소 이름이 거의 없어 기본으로 바꿨다(TASK-020 점검). 지도용 키는 서비스 URL(도메인)에 묶인 공개 키라 화면 코드에 들어가도 된다. */
-export function vworldTileUrl(key: string): string {
-  return `https://api.vworld.kr/req/wmts/1.0.0/${encodeURIComponent(key)}/Base/{z}/{y}/{x}.png`;
+export type VworldLayer = "Base" | "Satellite" | "Hybrid";
+
+/**
+ * 브이월드 WMTS 바탕지도 주소. 기본(Base)·위성(Satellite, jpeg)·이름 겹침(Hybrid, 투명 png).
+ * 흰색(white)은 건물·장소 이름이 거의 없어 기본으로 바꿨다(TASK-020 점검).
+ * 지도용 키는 서비스 URL(도메인)에 묶인 공개 키라 화면 코드에 들어가도 된다.
+ */
+export function vworldTileUrl(key: string, layer: VworldLayer = "Base"): string {
+  const ext = layer === "Satellite" ? "jpeg" : "png";
+  return `https://api.vworld.kr/req/wmts/1.0.0/${encodeURIComponent(key)}/${layer}/{z}/{y}/{x}.${ext}`;
 }
 
 /**
- * 바탕지도(TASK-020). 지도용 키(VITE_VWORLD_MAP_KEY)가 있으면 브이월드 기본(Base), 없으면 OpenStreetMap.
- * 브이월드 타일을 한 장도 못 받고 4장 실패하면(키·도메인 불일치 등) OpenStreetMap으로 바꾼다.
+ * 바탕지도(TASK-020). 지도용 키(VITE_VWORLD_MAP_KEY)가 있으면 브이월드 기본(Base)과 오른쪽 위 "일반 / 위성" 선택,
+ * 없으면 OpenStreetMap. 위성은 위성 사진 위에 이름(Hybrid)을 겹친다.
+ * 브이월드 기본 타일을 한 장도 못 받고 4장 실패하면(키·도메인 불일치 등) 선택 버튼을 없애고 OpenStreetMap으로 바꾼다.
  * OpenStreetMap까지 못 받으면 onFailed.
  */
 export function addBaseTiles(map: L.Map, vworldKey: string | undefined, onFailed: () => void): void {
@@ -47,16 +55,25 @@ export function addBaseTiles(map: L.Map, vworldKey: string | undefined, onFailed
         onDead();
       }
     });
-    tiles.addTo(map);
+    return tiles;
   };
-  const addOsm = () => watch(L.tileLayer(OSM_URL, { maxZoom: 18, attribution: OSM_ATTRIBUTION }), onFailed);
+  const addOsm = () => watch(L.tileLayer(OSM_URL, { maxZoom: 18, attribution: OSM_ATTRIBUTION }), onFailed).addTo(map);
   const key = vworldKey?.trim();
-  if (!key) return addOsm();
-  const vworld = L.tileLayer(vworldTileUrl(key), { maxZoom: 18, attribution: VWORLD_ATTRIBUTION });
-  watch(vworld, () => {
-    map.removeLayer(vworld);
+  if (!key) {
     addOsm();
-  });
+    return;
+  }
+  const vworld = (layer: VworldLayer) => L.tileLayer(vworldTileUrl(key, layer), { maxZoom: 18, attribution: VWORLD_ATTRIBUTION });
+  const satellite = L.layerGroup([vworld("Satellite"), vworld("Hybrid")]);
+  const base = vworld("Base");
+  const picker = L.control.layers({ 일반: base, 위성: satellite }, undefined, { collapsed: false, position: "topright" });
+  watch(base, () => {
+    if (!map.hasLayer(base)) return; // 위성을 보는 중이면 그대로 둔다.
+    map.removeLayer(base);
+    picker.remove();
+    addOsm();
+  }).addTo(map);
+  picker.addTo(map);
 }
 
 /**
