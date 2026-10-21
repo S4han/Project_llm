@@ -10,7 +10,8 @@ export interface Place {
   /** 도로명 주소. 공급자가 주지 않으면 null. */
   roadAddress: string | null;
   location: Coordinate;
-  provider: "kakaoLocal" | "mock";
+  /** parking: 교통 현황의 주차장(표준데이터)에서 넘어온 목적지(TASK-017). */
+  provider: "kakaoLocal" | "mock" | "parking";
 }
 
 export interface PlaceSearchResponse {

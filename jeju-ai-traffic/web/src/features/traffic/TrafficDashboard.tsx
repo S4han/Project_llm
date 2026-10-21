@@ -4,6 +4,7 @@ import { isStale } from "../../../../shared/rules/traffic";
 import { distanceMeters } from "../../../../shared/rules/geo";
 import type { Coordinate } from "../../../../shared/contracts/route";
 import { getCurrentLocation } from "../../services/geolocation";
+import { parkingRouteHref } from "../trip/routeLink";
 import { fetchTrafficEnforcement, fetchTrafficFacilities, fetchTrafficParking, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds } from "../../services/trafficApi";
 import type { FacilityPoint, SpeedLine } from "../map/leafletMap";
 import { FACILITY_ORDER, FACILITY_STYLE, NEARBY_KEYS, type FacilityKey } from "./facilityStyle";
@@ -274,6 +275,7 @@ export function TrafficDashboard() {
           lat,
           lng,
           detail: [[se, type].filter(Boolean).join("·") + (spaces !== null ? ` · ${spaces.toLocaleString("ko-KR")}면` : ""), hours && `운영 ${hours}`, fee && `요금 ${fee}`, address].filter(Boolean).join("\n"),
+          link: { href: parkingRouteHref({ id, name, address, lat, lng }), label: "현재 위치에서 경로 안내 ›" },
         }),
       ),
       ...(facilityTypes.has("ENF") && myLocation ? (enforcement?.cameras ?? []).filter((c) => distanceMeters(myLocation, { lat: c[6], lng: c[7] }) <= ENFORCEMENT_RADIUS_METERS) : []).map(

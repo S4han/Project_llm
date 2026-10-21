@@ -5,6 +5,7 @@ import { MOCK_PLACES } from "../../api/_lib/providers/mockPlaces";
 import type { ApiErrorBody } from "../../shared/contracts/common";
 import { TripForm } from "../../web/src/features/trip/TripForm";
 import type { LocationResult } from "../../web/src/services/geolocation";
+import { parkingRouteHref, readRouteTarget } from "../../web/src/features/trip/routeLink";
 
 const AIRPORT = MOCK_PLACES[0]!;
 
@@ -144,3 +145,43 @@ describe("TripForm", () => {
   });
 });
 
+describe("주차장 경로 안내로 넘어오기 (TASK-017)", () => {
+  it("주소: 주차장 이름·주소·좌표만 담고(내 위치 없음), 읽으면 목적지. 제주 밖·이름 없음은 무시", () => {
+    const href = parkingRouteHref({ id: "406-2-000102", name: "대정상모 공영노외1주차장", address: "서귀포시 대정읍 상모리 3964-1", lat: 33.2205, lng: 126.2505 });
+    expect(href).toBe("/route?to=%EB%8C%80%EC%A0%95%EC%83%81%EB%AA%A8+%EA%B3%B5%EC%98%81%EB%85%B8%EC%99%B81%EC%A3%BC%EC%B0%A8%EC%9E%A5&addr=%EC%84%9C%EA%B7%80%ED%8F%AC%EC%8B%9C+%EB%8C%80%EC%A0%95%EC%9D%8D+%EC%83%81%EB%AA%A8%EB%A6%AC+3964-1&lat=33.220500&lng=126.250500&id=406-2-000102");
+    expect(readRouteTarget(href.slice("/route".length))).toEqual({
+      id: "parking-406-2-000102",
+      name: "대정상모 공영노외1주차장",
+      address: "서귀포시 대정읍 상모리 3964-1",
+      roadAddress: null,
+      location: { lat: 33.2205, lng: 126.2505 },
+      provider: "parking",
+    });
+    expect(readRouteTarget("?to=x&lat=37.5&lng=127")).toBeNull();
+    expect(readRouteTarget("?lat=33.5&lng=126.5")).toBeNull();
+    expect(readRouteTarget("")).toBeNull();
+  });
+
+  it("목적지가 정해진 채로 열리면 현재 위치를 바로 확인하고, 정해지면 한 번 자동 조회", async () => {
+    const onRequestRoute = vi.fn();
+    const target = readRouteTarget("?to=시청 공영주차장&addr=제주시 이도2동&lat=33.5005&lng=126.5325&id=P1")!;
+    const locate = vi.fn(async (): Promise<LocationResult> => ({ kind: "ok", location: AIRPORT.location, accuracyMeters: 20 }));
+    render(<TripForm onRequestRoute={onRequestRoute} locate={locate} initialDestination={target} autoStart />);
+    expect(screen.getByText("시청 공영주차장")).toBeTruthy();
+    expect(screen.getByText(/교통 현황에서 고른 주차장/)).toBeTruthy();
+    await waitFor(() => expect(onRequestRoute).toHaveBeenCalledTimes(1));
+    expect(locate).toHaveBeenCalledTimes(1);
+    expect(onRequestRoute.mock.calls[0]![1]).toBe(target);
+    // 이후에는 버튼으로만 조회
+    fireEvent.click(routeButton());
+    expect(onRequestRoute).toHaveBeenCalledTimes(2);
+  });
+
+  it("위치를 못 받으면 자동 조회하지 않고 직접 검색 안내", async () => {
+    const onRequestRoute = vi.fn();
+    const target = readRouteTarget("?to=시청 공영주차장&lat=33.5005&lng=126.5325")!;
+    render(<TripForm onRequestRoute={onRequestRoute} locate={async () => ({ kind: "denied" })} initialDestination={target} autoStart />);
+    expect(await screen.findByText(/위치 권한이 거부되었습니다/)).toBeTruthy();
+    expect(onRequestRoute).not.toHaveBeenCalled();
+  });
+});

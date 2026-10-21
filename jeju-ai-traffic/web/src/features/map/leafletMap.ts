@@ -76,7 +76,7 @@ export const JEJU_ITS_SITE = "https://www.jejuits.go.kr/main/mainView.do";
  * 팝업 내용을 DOM으로 만든다. 원천 데이터(도로명·설치 위치 등)를 HTML로 해석하지 않도록 글자로만 넣는다.
  * link가 있으면 새 창으로 여는 링크를 덧붙인다.
  */
-export function popupContent(text: string, link?: { href: string; label: string; note?: string }): HTMLElement {
+export function popupContent(text: string, link?: { href: string; label: string; note?: string; sameTab?: boolean }): HTMLElement {
   const el = document.createElement("div");
   const p = document.createElement("p");
   // 줄바꿈(주정차 단속 운영 시간 등)을 그대로 보인다.
@@ -92,8 +92,11 @@ export function popupContent(text: string, link?: { href: string; label: string;
   if (link) {
     const a = document.createElement("a");
     a.href = link.href;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
+    // 바깥 사이트는 새 창(opener 차단), 이 서비스 안 화면(경로 안내)은 같은 창.
+    if (!link.sameTab) {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
     a.textContent = link.label;
     a.className = "popup-link";
     el.append(a);
@@ -204,6 +207,8 @@ export interface FacilityPoint {
   model: string;
   /** 팝업 둘째 줄부터(주정차 단속: 주소·CCTV 수·운영 시간, TASK-016). */
   detail?: string;
+  /** 팝업 아래 링크(주차장: 이 서비스의 경로 안내, TASK-017). */
+  link?: { href: string; label: string };
   lat: number;
   lng: number;
 }
@@ -219,7 +224,9 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
         popupContent(
           `${style.label} · ${p.name || "위치 이름 없음"}${p.model ? ` · 모델 ${p.model}` : ""}${p.detail ? `\n${p.detail}` : ""}`,
           // CCTV·웹카메라는 영상 API가 없고 사이트에 카메라별 주소도 없어(영상은 사이트 안 팝업), 공식 사이트 첫 화면으로 연결하고 찾는 방법을 안내한다(TASK-014).
-          p.type === "FTY02" || p.type === "FTY03"
+          p.link
+            ? { ...p.link, sameTab: true }
+            : p.type === "FTY02" || p.type === "FTY03"
             ? {
                 href: JEJU_ITS_SITE,
                 label: "제주 ITS 교통정보센터 열기 ↗",

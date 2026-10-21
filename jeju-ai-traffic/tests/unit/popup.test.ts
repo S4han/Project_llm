@@ -25,4 +25,11 @@ describe("지도 팝업 (TASK-014)", () => {
     expect(p.style.whiteSpace).toBe("pre-line");
     expect(p.textContent?.split("\n")).toHaveLength(4);
   });
+
+  it("주차장 경로 안내 링크는 이 서비스 안이라 같은 창으로(TASK-017)", () => {
+    const el = popupContent("주차장 · 시청 공영주차장", { href: "/route?to=x&lat=33.5&lng=126.5", label: "현재 위치에서 경로 안내 ›", sameTab: true });
+    const a = el.querySelector("a")!;
+    expect(a.getAttribute("href")).toBe("/route?to=x&lat=33.5&lng=126.5");
+    expect(a.target).toBe("");
+  });
 });

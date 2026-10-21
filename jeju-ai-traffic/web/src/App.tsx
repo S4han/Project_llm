@@ -1,8 +1,9 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Place } from "../../shared/contracts/place";
 import type { RouteCompareRequest } from "../../shared/contracts/route";
 import { RouteResults, type CompareState } from "./features/routes/RouteResults";
 import { TripForm } from "./features/trip/TripForm";
+import { readRouteTarget } from "./features/trip/routeLink";
 import { originLocation } from "./features/trip/types";
 import { compareRoutes } from "./services/routesApi";
 
@@ -11,6 +12,8 @@ export function App() {
   const lastRequest = useRef<{ request: RouteCompareRequest; destination: Place } | null>(null);
   // 늦게 도착한 이전 응답이 새 상태를 덮어쓰지 않도록 요청 번호를 센다.
   const seq = useRef(0);
+  // 교통 현황의 주차장에서 넘어오면(/route?to=…) 목적지를 정하고 현재 위치로 바로 조회한다(TASK-017).
+  const target = useMemo(() => readRouteTarget(window.location.search), []);
 
   async function run(request: RouteCompareRequest, destination: Place) {
     const id = ++seq.current;
@@ -34,6 +37,8 @@ export function App() {
         <div className="md:col-start-1">
           <TripForm
             busy={state.kind === "loading"}
+            initialDestination={target}
+            autoStart={target !== null}
             onRequestRoute={(origin, destination) =>
               run({ origin: originLocation(origin), destination: destination.location }, destination)
             }

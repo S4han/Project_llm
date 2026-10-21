@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Place } from "../../../../shared/contracts/place";
 import { checkTrip, type TripProblem } from "../../../../shared/rules/geo";
 import type { LocationResult } from "../../services/geolocation";
@@ -20,6 +20,10 @@ interface Props {
   onSelectionChange?: () => void;
   busy?: boolean;
   locate?: () => Promise<LocationResult>;
+  /** 처음부터 정해 둔 목적지(교통 현황의 주차장, TASK-017). */
+  initialDestination?: Place | null;
+  /** true면 현재 위치를 바로 확인하고, 출발지가 정해지면 한 번 자동으로 조회한다. */
+  autoStart?: boolean;
 }
 
 function Selected({ title, detail, onClear }: { title: string; detail: string; onClear: () => void }) {
@@ -37,12 +41,18 @@ function Selected({ title, detail, onClear }: { title: string; detail: string; o
 }
 
 /** 출발지·목적지 선택과 경로 조회 버튼(AC-001-04, AC-002-04). */
-export function TripForm({ onRequestRoute, onSelectionChange, busy = false, locate }: Props) {
+export function TripForm({ onRequestRoute, onSelectionChange, busy = false, locate, initialDestination = null, autoStart = false }: Props) {
   const [origin, setOriginState] = useState<Origin | null>(null);
-  const [destination, setDestinationState] = useState<Place | null>(null);
+  const [destination, setDestinationState] = useState<Place | null>(initialDestination);
+  const autoPending = useRef(autoStart);
   const setOrigin = (o: Origin | null) => {
     setOriginState(o);
     onSelectionChange?.();
+    // 자동 조회는 처음 한 번만(출발지·목적지가 정상일 때).
+    if (o && autoPending.current && destination && checkTrip(originLocation(o), destination.location) === null) {
+      autoPending.current = false;
+      onRequestRoute(o, destination);
+    }
   };
   const setDestination = (d: Place | null) => {
     setDestinationState(d);
@@ -67,7 +77,7 @@ export function TripForm({ onRequestRoute, onSelectionChange, busy = false, loca
             onClear={() => setOrigin(null)}
           />
         ) : (
-          <OriginPicker onChange={setOrigin} locate={locate} />
+          <OriginPicker onChange={setOrigin} locate={locate} autoLocate={autoStart} />
         )}
       </section>
 
@@ -78,7 +88,7 @@ export function TripForm({ onRequestRoute, onSelectionChange, busy = false, loca
         {destination ? (
           <Selected
             title={destination.name}
-            detail={destination.roadAddress ?? destination.address}
+            detail={`${destination.roadAddress ?? destination.address}${destination.provider === "parking" ? " · 교통 현황에서 고른 주차장" : ""}`}
             onClear={() => setDestination(null)}
           />
         ) : (

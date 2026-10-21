@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getCurrentLocation, type LocationResult } from "../../services/geolocation";
 import { MAX_GPS_ACCURACY_METERS } from "../../../../shared/rules/geo";
 import { PlaceSearch } from "./PlaceSearch";
@@ -18,14 +18,16 @@ const MESSAGES: Record<Exclude<Status["kind"], "idle" | "locating">, string> = {
 interface Props {
   onChange: (origin: Origin) => void;
   locate?: () => Promise<LocationResult>;
+  /** true면 화면을 열 때 현재 위치를 한 번 확인한다(주차장 경로 안내, TASK-017). */
+  autoLocate?: boolean;
 }
 
 /** 출발지 선택: 현재 위치(GPS) 또는 직접 검색(AC-001-01·02, AC-011-04·05). */
-export function OriginPicker({ onChange, locate = getCurrentLocation }: Props) {
+export function OriginPicker({ onChange, locate = getCurrentLocation, autoLocate = false }: Props) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [manual, setManual] = useState(false);
 
-  async function useCurrent() {
+  async function locateCurrent() {
     setStatus({ kind: "locating" });
     const result = await locate();
     if (result.kind === "ok") {
@@ -36,6 +38,18 @@ export function OriginPicker({ onChange, locate = getCurrentLocation }: Props) {
     setStatus(result);
     if (result.kind !== "inaccurate" && result.kind !== "timeout" && result.kind !== "unavailable") setManual(true);
   }
+
+  const autoDone = useRef(false);
+  useEffect(() => {
+    if (!autoLocate || autoDone.current) return;
+    // 콜백으로 시작한다(효과 본문에서 상태를 바로 바꾸지 않도록). 개발 모드의 효과 두 번 실행에도 한 번만 묻도록 표시는 콜백 안에서.
+    const t = setTimeout(() => {
+      autoDone.current = true;
+      void locateCurrent();
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 처음 한 번만
+  }, [autoLocate]);
 
   const retryable = status.kind === "inaccurate" || status.kind === "timeout" || status.kind === "unavailable";
   const message =
@@ -50,7 +64,7 @@ export function OriginPicker({ onChange, locate = getCurrentLocation }: Props) {
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={useCurrent}
+          onClick={locateCurrent}
           disabled={status.kind === "locating"}
           className="min-h-12 flex-1 rounded-2xl bg-brand-600 px-3 font-semibold text-white disabled:bg-brand-300"
         >

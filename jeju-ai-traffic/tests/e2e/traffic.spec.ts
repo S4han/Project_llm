@@ -195,4 +195,14 @@ test.describe("내 위치 반경 1km: 주정차 단속·주차장 (TASK-016·017
     await expect(map).toHaveAttribute("data-facilities", "4");
     await shot(page, "TASK-017-01-parking");
   });
+
+  test("주차장 팝업의 경로 안내 주소로 열면 목적지는 주차장, 출발지는 현재 위치로 바로 조회 (TASK-017)", async ({ page }) => {
+    await page.goto("/route?to=%EB%AA%A8%EC%9D%98+%EC%8B%9C%EC%B2%AD+%EA%B3%B5%EC%98%81%EC%A3%BC%EC%B0%A8%EC%9E%A5&addr=%EC%A0%9C%EC%A3%BC%EC%8B%9C+%EB%AA%A8%EC%9D%98%EB%8F%99+10&lat=33.500500&lng=126.532500&id=MOCK-P1");
+    await expect(page.getByText("모의 시청 공영주차장")).toBeVisible();
+    await expect(page.getByText(/교통 현황에서 고른 주차장/)).toBeVisible();
+    await expect(page.getByText("현재 위치", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "경로 비교" })).toBeVisible();
+    await expect(page.getByText("카카오 추천 경로(실시간 교통 반영)를 보여 줍니다. 다른 경로와는 비교하지 않습니다.")).toBeVisible();
+    await shot(page, "TASK-017-02-route");
+  });
 });
