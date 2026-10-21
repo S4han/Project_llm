@@ -313,21 +313,26 @@ function gasPinIcon(pin: NonNullable<FacilityPoint["pin"]>): L.DivIcon {
 }
 
 /** 교통시설물 점(유형별 색). 수백~수천 개라 캔버스로, 구간 선 위·사건 점 아래 칸에 그린다. 누르면 카드 팝업. */
-export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: FacilityPoint[]) {
+/** 점을 그리고 ID → 표시를 돌려준다(목록에서 고른 주유소의 카드를 여는 데 쓴다, TASK-018). */
+export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: FacilityPoint[]): Map<string, L.Marker | L.CircleMarker> {
+  const byId = new Map<string, L.Marker | L.CircleMarker>();
   if (!map.getPane("facilities")) map.createPane("facilities").style.zIndex = "380";
   const renderer = canvasSupported() ? L.canvas({ pane: "facilities", padding: 0.5, tolerance: 6 }) : L.svg({ pane: "facilities" });
   for (const p of points) {
     const style = FACILITY_STYLE[p.type];
     if (p.pin) {
       // 주유소: 반경 안 수십 곳이라 DOM 표시로 그린다. 글자는 고정 상표 표시와 숫자뿐(원천 이름은 카드에서만 textContent로).
-      L.marker([p.lat, p.lng], { icon: gasPinIcon(p.pin), keyboard: false, title: p.name, zIndexOffset: p.pin.low ? 1000 : 0 })
+      const m = L.marker([p.lat, p.lng], { icon: gasPinIcon(p.pin), keyboard: false, title: p.name, zIndexOffset: p.pin.low ? 1000 : 0 })
         .bindPopup(() => popupCard(p.card ?? facilityCard(p)), { offset: [0, -30] })
         .addTo(layer);
+      byId.set(p.id, m);
       continue;
     }
-    L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: style.stroke ? 6 : 5, color: style.stroke ?? "#fff", weight: style.stroke ? 2 : 1.5, fillColor: style.color, fillOpacity: 1 })
+    const m = L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: style.stroke ? 6 : 5, color: style.stroke ?? "#fff", weight: style.stroke ? 2 : 1.5, fillColor: style.color, fillOpacity: 1 })
       // 카드는 누를 때 만든다(점이 수천 개).
       .bindPopup(() => popupCard(p.card ?? facilityCard(p)))
       .addTo(layer);
+    byId.set(p.id, m);
   }
+  return byId;
 }

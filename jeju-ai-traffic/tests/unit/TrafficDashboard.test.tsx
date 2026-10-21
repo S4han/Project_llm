@@ -417,6 +417,18 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     expect(screen.getByText(/오피넷 판매가격/)).toBeTruthy();
   });
 
+  it("주유소 목록: 휘발유 싼 순, 맨 위 최저가는 '최저가' 표시·금색 칸, 나머지는 최저가와의 차이", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    render(<TrafficDashboard />);
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    fireEvent.click(await within(list).findByRole("button", { name: /주유소3/ }));
+    const rows = within(await screen.findByRole("list", { name: "주유소 목록" })).getAllByRole("button");
+    expect(screen.getByText("반경 3km 주유소 · 휘발유 싼 순")).toBeTruthy();
+    expect(rows.map((r) => r.textContent)).toEqual(["알뜰최저가알뜰주유소1.3km · 경유 1,829원1,849원휘발유", "SK도남주유소1.4km · 경유 1,845원1,867원최저가보다 +18원"]);
+    expect(rows[0]!.className).toContain("ring-amber-400");
+    expect(rows[1]!.className).not.toContain("ring-amber-400");
+  });
+
   it("주유소 자료를 못 받으면 안내와 다시 시도", async () => {
     gasRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
     render(<TrafficDashboard />);

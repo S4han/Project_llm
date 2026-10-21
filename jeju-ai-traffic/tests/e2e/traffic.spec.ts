@@ -272,4 +272,21 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소 (TASK-0
     await page.locator(".leaflet-popup").scrollIntoViewIfNeeded();
     await shot(page, "TASK-018-01-gas");
   });
+
+  test("주유소 목록(TASK-018): 최저가가 맨 위에 강조, 줄을 누르면 지도에서 그 주유소 카드", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /주유소/ }).click();
+    const rows = page.getByRole("list", { name: "주유소 목록" }).getByRole("button");
+    await expect(rows).toHaveCount(3);
+    await expect(rows.first()).toContainText("최저가");
+    await expect(rows.first()).toContainText("모의 알뜰주유소");
+    await expect(rows.nth(1)).toContainText("최저가보다 +");
+    await page.getByRole("list", { name: "주유소 목록" }).scrollIntoViewIfNeeded();
+    await shot(page, "TASK-018-03-list");
+    await rows.nth(1).click();
+    const card = page.locator(".leaflet-popup .popup-card");
+    await expect(card).toBeVisible();
+    await expect(card.locator(".popup-card-title")).toHaveText("모의 도남주유소");
+  });
 });

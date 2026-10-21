@@ -27,26 +27,40 @@ interface Props {
   facilities?: FacilityPoint[];
   /** 내 위치와 조회 반경(TASK-016 주정차 단속). 있으면 원과 내 위치 점을 그리고 원이 보이게 맞춘다. */
   nearby?: { lat: number; lng: number; radiusMeters: number } | null;
+  /** 바뀌면 그 시설물로 옮기고 카드를 연다(주유소 목록, TASK-018). seq는 같은 곳을 다시 고를 때 구분용. */
+  openFacility?: { id: string; seq: number } | null;
 }
 
 const NO_IDS: string[] = [];
 const NO_FACILITIES: FacilityPoint[] = [];
 
 /** 제주 전체 교통 사건 지도(TASK-012). */
-export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null, facilities = NO_FACILITIES, nearby = null }: Props) {
+export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null, facilities = NO_FACILITIES, nearby = null, openFacility = null }: Props) {
   const { attach, mapRef, layerRef, mapReady, failed, tilesFailed } = useLeafletMap();
   const speedLayer = useRef<L.LayerGroup | null>(null);
   const polylines = useRef<L.Polyline[]>([]);
   const highlightKey = highlightIds.join(",");
 
   const facilityLayer = useRef<L.LayerGroup | null>(null);
+  const facilityMarkers = useRef(new Map<string, L.Marker | L.CircleMarker>());
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
     if (!facilityLayer.current || !map.hasLayer(facilityLayer.current)) facilityLayer.current = L.layerGroup().addTo(map);
     facilityLayer.current.clearLayers();
-    addFacilityMarkers(map, facilityLayer.current, facilities);
+    facilityMarkers.current = addFacilityMarkers(map, facilityLayer.current, facilities);
   }, [mapReady, mapRef, facilities]);
+
+  // 목록에서 고른 시설물: 그 자리로 옮기고(확대 15 이상) 카드를 연다.
+  const openId = openFacility?.id;
+  const openSeq = openFacility?.seq;
+  useEffect(() => {
+    const map = mapRef.current;
+    const marker = openId ? facilityMarkers.current.get(openId) : undefined;
+    if (!mapReady || !map || !marker) return;
+    map.setView(marker.getLatLng(), Math.max(map.getZoom(), 15));
+    marker.openPopup();
+  }, [mapReady, mapRef, openId, openSeq]);
 
   // 내 위치 반경 원(TASK-016). 좌표는 화면에만 쓰고 보내지 않는다.
   const nearbyLayer = useRef<L.LayerGroup | null>(null);

@@ -51,6 +51,8 @@ interface DashboardState {
 const EMPTY_LINES: SpeedLine[] = [];
 
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
+/** 주유소 목록을 한 번에 보여 줄 줄 수(TASK-018). */
+const GAS_PAGE = 5;
 
 /** 주유소 카드(TASK-018): 상표 표시·이름, 최저가·셀프 칩, 휘발유·경유 가격 줄, 기준, 경로 안내 버튼. */
 function gasCard(s: { id: string; brand: string; name: string; gasoline: number | null; diesel: number | null; lat: number; lng: number }, low: boolean, builtAt: string | undefined): PopupCard {
@@ -134,6 +136,9 @@ export function TrafficDashboard() {
   const [gas, setGas] = useState<TrafficGasResponse | null>(null);
   const [gasLoading, setGasLoading] = useState(true);
   const [gasProblem, setGasProblem] = useState(false);
+  // 주유소 목록(휘발유 싼 순)에서 고른 곳과 보여 줄 줄 수
+  const [gasFocus, setGasFocus] = useState<{ id: string; seq: number } | null>(null);
+  const [gasLimit, setGasLimit] = useState(GAS_PAGE);
   // 내 위치(주정차 단속 반경 조회용). 이 화면 메모리에만 두고 서버로 보내거나 저장하지 않는다.
   const [myLocation, setMyLocation] = useState<Coordinate | null>(null);
   const [locating, setLocating] = useState(false);
@@ -328,6 +333,17 @@ export function TrafficDashboard() {
     [facilityTypes, myLocation, gas],
   );
   const lowGasoline = nearGas.reduce<number | null>((m, s) => (s[3] !== null && (m === null || s[3] < m) ? s[3] : m), null);
+  // 목록: 휘발유 싼 순(가격 없음은 아래), 같으면 가까운 순.
+  const gasList = useMemo(() => {
+    if (!myLocation) return [];
+    return nearGas
+      .map((s) => ({ s, meters: distanceMeters(myLocation, { lat: s[5], lng: s[6] }) }))
+      .sort((a, b) => Number(a.s[3] === null) - Number(b.s[3] === null) || (a.s[3] ?? 0) - (b.s[3] ?? 0) || a.meters - b.meters);
+  }, [nearGas, myLocation]);
+  const focusGas = (id: string) => {
+    setGasFocus((prev) => ({ id: `GAS-${id}`, seq: (prev?.seq ?? 0) + 1 }));
+    revealMap(mapBox.current);
+  };
   const facilityPoints = useMemo<FacilityPoint[]>(
     () => [
       ...(facilities?.facilities ?? [])
@@ -756,6 +772,50 @@ export function TrafficDashboard() {
               )}
             </div>
           )}
+          {facilityTypes.has("GAS") && myLocation && !locating && gasList.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-semibold text-grey-700">반경 3km 주유소 · 휘발유 싼 순</h3>
+              <ul aria-label="주유소 목록" className="flex flex-col gap-1.5">
+                {gasList.slice(0, gasLimit).map(({ s: [id, brand, name, gasoline, diesel], meters }) => {
+                  const b = gasBrand(brand);
+                  const low = lowGasoline !== null && gasoline === lowGasoline;
+                  return (
+                    <li key={id}>
+                      <button
+                        type="button"
+                        onClick={() => focusGas(id)}
+                        className={`flex min-h-14 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm ${low ? "bg-amber-50 ring-2 ring-amber-400" : "bg-grey-100"}`}
+                      >
+                        <span className="flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg px-1 text-xs font-extrabold" style={{ backgroundColor: b.color, color: b.textColor ?? "#fff" }} aria-hidden="true">
+                          {b.mark}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5">
+                            {low && <span className="shrink-0 rounded-md bg-amber-400 px-1.5 py-0.5 text-xs font-bold text-grey-900">최저가</span>}
+                            <span className="truncate font-semibold text-grey-900">{name || "이름 없는 주유소"}</span>
+                          </span>
+                          <span className="block text-xs text-grey-600">
+                            {(meters / 1000).toFixed(1)}km · 경유 {diesel !== null ? won(diesel) : "정보 없음"}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className={`block font-bold tabular-nums ${low ? "text-lg text-amber-700" : "text-grey-900"}`}>{gasoline !== null ? won(gasoline) : "–"}</span>
+                          <span className="block text-xs text-grey-500">
+                            {gasoline === null ? "휘발유 정보 없음" : low ? "휘발유" : `최저가보다 +${(gasoline - (lowGasoline ?? gasoline)).toLocaleString("ko-KR")}원`}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {gasList.length > gasLimit && (
+                <button type="button" onClick={() => setGasLimit((n) => n + GAS_PAGE)} className="min-h-12 rounded-2xl bg-grey-100 font-semibold text-grey-700">
+                  더 보기 ({(gasList.length - gasLimit).toLocaleString("ko-KR")}곳 남음)
+                </button>
+              )}
+            </div>
+          )}
           {locationProblem && (
             <p role="alert" className="rounded-2xl bg-amber-50 p-2 text-sm text-amber-900">
               {locationProblem}
@@ -818,6 +878,7 @@ export function TrafficDashboard() {
             overlay={mapOverlay}
             facilities={facilityPoints}
             nearby={nearbyOn.length > 0 && myLocation ? { ...myLocation, radiusMeters: nearbyMaxRadius } : null}
+            openFacility={gasFocus}
             highlightIds={showSpeeds ? highlightIds : EMPTY_IDS}
           />
           <IncidentFocusBar state={incidentFocus} />
