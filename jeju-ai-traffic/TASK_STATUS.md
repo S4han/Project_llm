@@ -13,7 +13,7 @@
 | 승인 범위 | 오피넷 유가정보(반경 내 주유소) 시험 호출 5건 이내(Preview 임시 함수), 제주 전체를 서버가 받아 보관(6시간)·화면에서 반경 거름, `GET /api/traffic/gas`, 1.(a) 휘발유·경유 2.(a) 반경 3km 3.(a) 최저가 표시, 키 `OPINET_API_KEY` (`DECISIONS.md` 2026-10-21) |
 | 차단 요인 | 없음 |
 | 결과 보고서 | `reports/TASK-018-RESULT.md` |
-| 다음 행동 | 사용자 Preview 확인 → `완료 승인: TASK-018` (main 반영은 별도 지시) |
+| 다음 행동 | Preview에서 `/api/its-fuel-probe` 1회(제주 ITS 주유소·충전소 4건) → 주유소를 제주 ITS로 변경(범위 변경) → 사용자 확인 → `완료 승인: TASK-018` → TASK-019 시작 |
 | 최종 갱신 | 2026-10-21 |
 
 ## 상태 정의
@@ -47,4 +47,5 @@
 | TASK-015 | 실시간 정체구간 목록 (MVP 이후 추가) | **완료** (2026-10-20) | `reports/TASK-015-RESULT.md` |
 | TASK-016 | 주정차 단속 CCTV 표시 (MVP 이후 추가) | **완료** (2026-10-20) | `reports/TASK-016-RESULT.md` |
 | TASK-017 | 주차장 위치 (MVP 이후 추가, 범위 변경: 표준데이터) | **완료** (2026-10-21) | `reports/TASK-017-RESULT.md` |
-| TASK-018 | 주유소 위치·가격 (MVP 이후 추가) | **결과 검토** | `reports/TASK-018-RESULT.md` |
+| TASK-018 | 주유소 위치·가격 (MVP 이후 추가, 범위 변경: 제주 ITS) | **결과 검토** | `reports/TASK-018-RESULT.md` |
+| TASK-019 | 전기차 충전소 검색 (MVP 이후 추가) | **계획 승인 — TASK-018 완료 후 시작** | — |
