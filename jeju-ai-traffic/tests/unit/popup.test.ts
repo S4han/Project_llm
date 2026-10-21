@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { JEJU_ITS_SITE, popupContent } from "../../web/src/features/map/leafletMap";
+import { JEJU_ITS_SITE, popupCard, popupContent } from "../../web/src/features/map/leafletMap";
 
 describe("지도 팝업 (TASK-014)", () => {
   it("원천 데이터는 HTML로 해석하지 않고 글자로만 넣는다", () => {
@@ -31,5 +31,29 @@ describe("지도 팝업 (TASK-014)", () => {
     const a = el.querySelector("a")!;
     expect(a.getAttribute("href")).toBe("/route?to=x&lat=33.5&lng=126.5");
     expect(a.target).toBe("");
+  });
+
+  it("주차장 카드 팝업: 이름·칩·면수·줄·주소·버튼, 원천 글자는 HTML로 해석하지 않는다(TASK-017)", () => {
+    const el = popupCard({
+      badge: { text: "P", color: "#1d4ed8" },
+      kicker: "주차장",
+      title: '<img src=x onerror="alert(1)">수덕',
+      chips: ["공영", "노외", "유료"],
+      stat: { value: "48", unit: "면" },
+      rows: [
+        { label: "운영", lines: ["매일 24시간"] },
+        { label: "요금", lines: ["기본 30분 1,000원", "추가 15분 500원"] },
+      ],
+      footer: "제주시 노형동 2534-3",
+      action: { href: "/route?to=x&lat=33.5&lng=126.5", label: "현재 위치에서 경로 안내" },
+    });
+    expect(el.querySelector("img")).toBeNull();
+    expect(el.querySelector(".popup-card-title")?.textContent).toBe('<img src=x onerror="alert(1)">수덕');
+    expect([...el.querySelectorAll(".popup-card-chip")].map((c) => c.textContent)).toEqual(["공영", "노외", "유료"]);
+    expect(el.querySelector(".popup-card-stat")?.textContent).toBe("48면");
+    expect([...el.querySelectorAll("dt")].map((d) => d.textContent)).toEqual(["운영", "요금"]);
+    expect([...el.querySelectorAll("dd")[1]!.querySelectorAll("span")].map((d) => d.textContent)).toEqual(["기본 30분 1,000원", "추가 15분 500원"]);
+    const a = el.querySelector("a")!;
+    expect([a.getAttribute("href"), a.target]).toEqual(["/route?to=x&lat=33.5&lng=126.5", ""]);
   });
 });

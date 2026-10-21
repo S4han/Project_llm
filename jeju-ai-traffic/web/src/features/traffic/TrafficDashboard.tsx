@@ -6,7 +6,7 @@ import type { Coordinate } from "../../../../shared/contracts/route";
 import { getCurrentLocation } from "../../services/geolocation";
 import { parkingRouteHref } from "../trip/routeLink";
 import { fetchTrafficEnforcement, fetchTrafficFacilities, fetchTrafficParking, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds } from "../../services/trafficApi";
-import type { FacilityPoint, SpeedLine } from "../map/leafletMap";
+import type { FacilityPoint, PopupCard, SpeedLine } from "../map/leafletMap";
 import { FACILITY_ORDER, FACILITY_STYLE, NEARBY_KEYS, type FacilityKey } from "./facilityStyle";
 import { IncidentFocusBar, IncidentGroupList } from "../routes/IncidentFocus";
 import { groupIncidents, useIncidentFocus } from "../routes/incidents";
@@ -52,6 +52,25 @@ interface DashboardState {
 }
 
 const EMPTY_LINES: SpeedLine[] = [];
+
+/** 주차장 카드 팝업(TASK-017): 머리(P·이름), 구분 칩·면수, 운영·요금 줄, 주소, 경로 안내 버튼. */
+function parkingCard(l: { id: string; name: string; se: string; type: string; address: string; spaces: number | null; hours: string; fee: string; lat: number; lng: number }): PopupCard {
+  // 요금 설명 "유료 · 기본 30분 1,000원 · 추가 15분 500원" → 칩 "유료" + 줄 "기본 …", "추가 …"
+  const [feeKind = "", ...feeLines] = l.fee.split(" · ");
+  return {
+    badge: { text: "P", color: FACILITY_STYLE.PARK.stroke ?? "#1d4ed8" },
+    kicker: "주차장",
+    title: l.name || "이름 없는 주차장",
+    chips: [l.se, l.type, feeKind].filter(Boolean),
+    stat: l.spaces !== null ? { value: l.spaces.toLocaleString("ko-KR"), unit: "면" } : undefined,
+    rows: [
+      ...(l.hours ? [{ label: "운영", lines: l.hours.split(" · ") }] : []),
+      ...(feeLines.length ? [{ label: "요금", lines: feeLines }] : []),
+    ],
+    footer: [l.address, "실시간 남은 칸 정보는 없습니다."].filter(Boolean).join("\n"),
+    action: { href: parkingRouteHref({ id: l.id, name: l.name, address: l.address, lat: l.lat, lng: l.lng }), label: "현재 위치에서 경로 안내" },
+  };
+}
 
 /** "회전형 1대 · 검지 4대". 원천이 비어 있으면 그 항목은 뺀다. */
 function enforcementCounts(rotate: number | null, audit: number | null): string {
@@ -274,8 +293,7 @@ export function TrafficDashboard() {
           model: "",
           lat,
           lng,
-          detail: [[se, type].filter(Boolean).join("·") + (spaces !== null ? ` · ${spaces.toLocaleString("ko-KR")}면` : ""), hours && `운영 ${hours}`, fee && `요금 ${fee}`, address].filter(Boolean).join("\n"),
-          link: { href: parkingRouteHref({ id, name, address, lat, lng }), label: "현재 위치에서 경로 안내 ›" },
+          card: parkingCard({ id, name, se, type, address, spaces, hours, fee, lat, lng }),
         }),
       ),
       ...(facilityTypes.has("ENF") && myLocation ? (enforcement?.cameras ?? []).filter((c) => distanceMeters(myLocation, { lat: c[6], lng: c[7] }) <= ENFORCEMENT_RADIUS_METERS) : []).map(

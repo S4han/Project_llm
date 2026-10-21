@@ -104,6 +104,67 @@ export function popupContent(text: string, link?: { href: string; label: string;
   return el;
 }
 
+/** 카드형 팝업 내용(TASK-017 주차장). 원천 글자는 모두 textContent로만 넣는다. */
+export interface PopupCard {
+  /** 머리 표시(예: "P"). color는 배경색. */
+  badge: { text: string; color: string };
+  /** 작은 분류 이름(예: "주차장"). */
+  kicker: string;
+  title: string;
+  chips: string[];
+  /** 눈에 띄게 보일 숫자 하나(예: 48 · "면"). */
+  stat?: { value: string; unit: string };
+  rows: { label: string; lines: string[] }[];
+  /** 맨 아래 흐린 글(주소 등). */
+  footer?: string;
+  /** 아래 꽉 찬 버튼(이 서비스 안 화면, 같은 창). */
+  action?: { href: string; label: string };
+}
+
+export function popupCard(card: PopupCard): HTMLElement {
+  const el = (tag: string, className: string, text?: string) => {
+    const e = document.createElement(tag);
+    e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  };
+  const root = el("div", "popup-card");
+  const head = el("div", "popup-card-head");
+  const badge = el("span", "popup-card-badge", card.badge.text);
+  badge.style.backgroundColor = card.badge.color;
+  badge.setAttribute("aria-hidden", "true");
+  const titles = el("div", "popup-card-titles");
+  titles.append(el("p", "popup-card-kicker", card.kicker), el("p", "popup-card-title", card.title));
+  head.append(badge, titles);
+  root.append(head);
+  if (card.chips.length || card.stat) {
+    const meta = el("div", "popup-card-meta");
+    for (const c of card.chips) meta.append(el("span", "popup-card-chip", c));
+    if (card.stat) {
+      const stat = el("span", "popup-card-stat");
+      stat.append(el("strong", "", card.stat.value), document.createTextNode(card.stat.unit));
+      meta.append(stat);
+    }
+    root.append(meta);
+  }
+  if (card.rows.length) {
+    const dl = el("dl", "popup-card-rows");
+    for (const r of card.rows) {
+      const dd = el("dd", "");
+      for (const line of r.lines) dd.append(el("span", "popup-card-line", line));
+      dl.append(el("dt", "", r.label), dd);
+    }
+    root.append(dl);
+  }
+  if (card.footer) root.append(el("p", "popup-card-footer", card.footer));
+  if (card.action) {
+    const a = el("a", "popup-card-action", card.action.label) as HTMLAnchorElement;
+    a.href = card.action.href;
+    root.append(a);
+  }
+  return root;
+}
+
 /** 사건 묶음 이름과 같은 규칙(돌발은 내용만, 나머지는 종류 + 내용). */
 function incidentLabel(i: TrafficIncident): string {
   return i.kind === "event" ? i.description : `${INCIDENT_LABEL[i.kind]} ${i.description}`;
@@ -207,8 +268,10 @@ export interface FacilityPoint {
   model: string;
   /** 팝업 둘째 줄부터(주정차 단속: 주소·CCTV 수·운영 시간, TASK-016). */
   detail?: string;
-  /** 팝업 아래 링크(주차장: 이 서비스의 경로 안내, TASK-017). */
+  /** 팝업 아래 링크(이 서비스 안 화면, 같은 창). */
   link?: { href: string; label: string };
+  /** 있으면 글자 팝업 대신 카드형 팝업(주차장, TASK-017). */
+  card?: PopupCard;
   lat: number;
   lng: number;
 }
@@ -221,7 +284,9 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
     const style = FACILITY_STYLE[p.type];
     L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: style.stroke ? 6 : 5, color: style.stroke ?? "#fff", weight: style.stroke ? 2 : 1.5, fillColor: style.color, fillOpacity: 1 })
       .bindPopup(
-        popupContent(
+        p.card
+          ? popupCard(p.card)
+          : popupContent(
           `${style.label} · ${p.name || "위치 이름 없음"}${p.model ? ` · 모델 ${p.model}` : ""}${p.detail ? `\n${p.detail}` : ""}`,
           // CCTV·웹카메라는 영상 API가 없고 사이트에 카메라별 주소도 없어(영상은 사이트 안 팝업), 공식 사이트 첫 화면으로 연결하고 찾는 방법을 안내한다(TASK-014).
           p.link

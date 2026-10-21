@@ -205,4 +205,50 @@ test.describe("내 위치 반경 1km: 주정차 단속·주차장 (TASK-016·017
     await expect(page.getByText("카카오 추천 경로(실시간 교통 반영)를 보여 줍니다. 다른 경로와는 비교하지 않습니다.")).toBeVisible();
     await shot(page, "TASK-017-02-route");
   });
+
+  test("주차장 점을 누르면 카드 팝업(구분·면수·운영·주소·경로 안내 버튼) (TASK-017, 휴대폰 폭)", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /주차장/ }).click();
+    await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("주차장 2곳");
+    await page.getByRole("region", { name: "교통 현황 지도" }).scrollIntoViewIfNeeded();
+    // 주차장 점(파란 테두리)을 캔버스에서 찾아 누른다
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          for (const c of Array.from(document.querySelectorAll(".leaflet-facilities-pane canvas")) as HTMLCanvasElement[]) {
+            const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+            for (let p = 0; p < d.length; p += 4) if (d[p]! < 50 && d[p + 1]! > 60 && d[p + 1]! < 100 && d[p + 2]! > 200) return true;
+          }
+          return false;
+        }),
+      )
+      .toBe(true);
+    const pt = await page.evaluate(() => {
+      for (const c of Array.from(document.querySelectorAll(".leaflet-facilities-pane canvas")) as HTMLCanvasElement[]) {
+        const { width, height } = c;
+        const d = c.getContext("2d")!.getImageData(0, 0, width, height).data;
+        for (let y = 0; y < height; y++)
+          for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            if (d[i]! < 50 && d[i + 1]! > 60 && d[i + 1]! < 100 && d[i + 2]! > 200) {
+              const r = c.getBoundingClientRect();
+              return { x: r.left + (x / width) * r.width, y: r.top + (y / height) * r.height + 4 };
+            }
+          }
+      }
+      return null;
+    });
+    expect(pt).not.toBeNull();
+    await page.mouse.click(pt!.x, pt!.y);
+    const card = page.locator(".leaflet-popup .popup-card");
+    await expect(card).toBeVisible();
+    await expect(card.locator(".popup-card-kicker")).toHaveText("주차장");
+    await expect(card).toContainText("실시간 남은 칸 정보는 없습니다.");
+    const action = card.getByRole("link", { name: "현재 위치에서 경로 안내" });
+    await expect(action).toHaveAttribute("href", /^\/route\?to=/);
+    await expect(action).not.toHaveAttribute("target", "_blank");
+    await page.locator(".leaflet-popup").scrollIntoViewIfNeeded();
+    await shot(page, "TASK-017-03-popup");
+  });
 });
