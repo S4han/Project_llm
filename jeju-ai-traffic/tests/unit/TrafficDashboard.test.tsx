@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
 import { encodePolyline } from "../../shared/rules/polyline";
 import { REFRESH_MS, TrafficDashboard } from "../../web/src/features/traffic/TrafficDashboard";
+import { parkingFeeKind } from "../../web/src/features/traffic/facilityStyle";
 
 const AT = "2026-10-20T00:33:00.000Z"; // KST 09:33
 const inc = (id: string, kind: TrafficIncident["kind"], description: string, lat = 33.45): TrafficIncident => ({
@@ -410,11 +411,11 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     const park = await within(list).findByRole("button", { name: /주차장2/ });
     expect(screen.getByText(/실시간 남은 칸은 없습니다/)).toBeTruthy();
     fireEvent.click(park);
-    expect(await screen.findByText("내 위치 반경 1km 안 주차장 1곳")).toBeTruthy();
+    expect(await screen.findByText("내 위치 반경 1km 안 주차장 1곳(무료 0곳)")).toBeTruthy();
     const map = screen.getByRole("region", { name: "교통 현황 지도" });
     expect(map.getAttribute("data-facilities")).toBe("1");
     fireEvent.click(within(list).getByRole("button", { name: /주정차 단속2/ }));
-    expect(screen.getByText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳 · 주차장 1곳")).toBeTruthy();
+    expect(screen.getByText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳 · 주차장 1곳(무료 0곳)")).toBeTruthy();
     expect(map.getAttribute("data-facilities")).toBe("3");
     expect(ask).toHaveBeenCalledTimes(1);
   });
@@ -428,7 +429,7 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     const map = screen.getByRole("region", { name: "교통 현황 지도" });
     expect(map.getAttribute("data-facilities")).toBe("2");
     fireEvent.click(within(list).getByRole("button", { name: /주차장2/ }));
-    expect(screen.getByText("내 위치 반경 1km 안 주차장 1곳 · 반경 3km 안 주유소 2곳 · 휘발유 최저 1,849원")).toBeTruthy();
+    expect(screen.getByText("내 위치 반경 1km 안 주차장 1곳(무료 0곳) · 반경 3km 안 주유소 2곳 · 휘발유 최저 1,849원")).toBeTruthy();
     expect(screen.getByText(/제주 ITS 주유소 정보/)).toBeTruthy();
   });
 
@@ -518,6 +519,41 @@ describe("교통 현황 대시보드 (TASK-012)", () => {
     fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
     const list = await screen.findByRole("list", { name: "교통시설물 유형" });
     expect(await within(list).findByRole("button", { name: /주유소3/ })).toBeTruthy();
+  });
+
+  it("주차장 요금 구분(TASK-022): 무료·유료·혼합·정보 없음", () => {
+    expect(parkingFeeKind("무료")).toBe("FREE");
+    expect(parkingFeeKind("유료 · 기본 30분 1,000원")).toBe("PAID");
+    expect(parkingFeeKind("혼합 · 기본 60분 500원")).toBe("MIXED");
+    expect(parkingFeeKind("요금 정보 없음")).toBe("UNKNOWN");
+    expect(parkingFeeKind("")).toBe("UNKNOWN");
+  });
+
+  it("주차장 무료 수 안내·범례, '무료만'을 누르면 무료 주차장만(TASK-022)", async () => {
+    parkingRespond = () =>
+      Response.json({
+        ...PARKING,
+        lots: [
+          ...PARKING.lots,
+          ["P3", "도남 무료주차장", "공영", "노외", "제주시 도남동", 20, "매일 24시간", "무료", 33.501, 126.535],
+          ["P4", "혼합 주차장", "민영", "노외", "제주시", 10, "", "혼합 · 기본 60분 500원", 33.503, 126.537],
+        ],
+      });
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    render(<TrafficDashboard />);
+    const list = await screen.findByRole("list", { name: "교통시설물 유형" });
+    fireEvent.click(await within(list).findByRole("button", { name: /주차장4/ }));
+    expect(await screen.findByText("내 위치 반경 1km 안 주차장 3곳(무료 1곳)")).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "주차장 요금 범례" })).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["무료", "유료", "일부유료"]);
+    const map = screen.getByRole("region", { name: "교통 현황 지도" });
+    expect(map.getAttribute("data-facilities")).toBe("3");
+    const free = screen.getByRole("button", { name: "P 무료만" });
+    fireEvent.click(free);
+    expect(free.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("내 위치 반경 1km 안 무료 주차장 1곳")).toBeTruthy();
+    expect(map.getAttribute("data-facilities")).toBe("1");
+    fireEvent.click(free);
+    expect(map.getAttribute("data-facilities")).toBe("3");
   });
 
   it("주차장 자료를 못 받으면 안내와 다시 시도", async () => {

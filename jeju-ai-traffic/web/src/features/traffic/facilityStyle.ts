@@ -47,3 +47,17 @@ export const FACILITY_STYLE: Record<FacilityKey, { label: string; short: string;
 };
 
 export const FACILITY_ORDER: FacilityKey[] = ["FTY01", "FTY02", "FTY03", "FTY07", "FTY09", "FTY17", "FTY23", "ENF", "PARK", "GAS", "LPG", "EV"];
+
+/** 주차장 요금 구분(TASK-022). 원천 parkingchrgeInfo는 무료·유료·혼합이고, 비었거나 다른 글자면 정보 없음. */
+export type ParkingFeeKind = "FREE" | "PAID" | "MIXED" | "UNKNOWN";
+export const PARKING_FEE_STYLE: Record<ParkingFeeKind, { label: string; color: string }> = {
+  FREE: { label: "무료", color: "#16a34a" },
+  PAID: { label: "유료", color: "#1d4ed8" },
+  MIXED: { label: "일부유료", color: "#ea580c" },
+  UNKNOWN: { label: "", color: "#6b7280" },
+};
+/** 요금 설명("무료", "유료 · 기본 30분 1,000원 …")의 첫 구분으로 판단한다. */
+export function parkingFeeKind(fee: string): ParkingFeeKind {
+  const kind = fee.split(" · ")[0]?.trim();
+  return kind === "무료" ? "FREE" : kind === "유료" ? "PAID" : kind === "혼합" ? "MIXED" : "UNKNOWN";
+}

@@ -188,13 +188,32 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await expect(park).toHaveText("주차장3");
     await park.click();
     const status = page.getByRole("status", { name: "내 위치 주변 조회 범위" });
-    await expect(status).toContainText("내 위치 반경 1km 안 주차장 2곳");
+    await expect(status).toContainText("내 위치 반경 1km 안 주차장 2곳(무료 1곳)");
     const map = page.getByRole("region", { name: "교통 현황 지도" });
     await expect(map).toHaveAttribute("data-facilities", "2");
     await list.getByRole("button", { name: /주정차 단속/ }).click();
-    await expect(status).toContainText("주정차 단속 CCTV 2곳 · 주차장 2곳");
+    await expect(status).toContainText("주정차 단속 CCTV 2곳 · 주차장 2곳(무료 1곳)");
     await expect(map).toHaveAttribute("data-facilities", "4");
     await shot(page, "TASK-017-01-parking");
+  });
+
+  test("주차장 요금 구분(TASK-022): 'P 유료'·'P 무료' 표시, 무료만 보기", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /주차장/ }).click();
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+    await expect(map.locator(".gas-pin")).toHaveCount(2);
+    await expect(map.locator(".gas-pin", { hasText: "P유료" })).toHaveCount(1);
+    await expect(map.locator(".gas-pin", { hasText: "P무료" })).toHaveCount(1);
+    await map.scrollIntoViewIfNeeded();
+    if (process.env.SCREENSHOTS === "TASK-022") await map.screenshot({ path: "reports/screenshots/TASK-022-01-parking-fee.png" });
+    await page.getByRole("button", { name: "P 무료만" }).click();
+    await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 1km 안 무료 주차장 1곳");
+    await expect(map.locator(".gas-pin")).toHaveCount(1);
+    await map.locator(".gas-pin").click();
+    const card = page.locator(".leaflet-popup .popup-card");
+    await expect(card.locator(".popup-card-title")).toHaveText("모의 신설오름 주차장");
+    await expect(card).toContainText("무료");
   });
 
   test("주차장 팝업의 경로 안내 주소로 열면 목적지는 주차장, 출발지는 현재 위치로 바로 조회 (TASK-017)", async ({ page }) => {
@@ -213,35 +232,8 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await page.getByRole("list", { name: "교통시설물 유형" }).getByRole("button", { name: /주차장/ }).click();
     await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("주차장 2곳");
     await page.getByRole("region", { name: "교통 현황 지도" }).scrollIntoViewIfNeeded();
-    // 주차장 점(파란 테두리)을 캔버스에서 찾아 누른다
-    await expect
-      .poll(async () =>
-        page.evaluate(() => {
-          for (const c of Array.from(document.querySelectorAll(".leaflet-facilities-pane canvas")) as HTMLCanvasElement[]) {
-            const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
-            for (let p = 0; p < d.length; p += 4) if (d[p]! < 50 && d[p + 1]! > 60 && d[p + 1]! < 100 && d[p + 2]! > 200) return true;
-          }
-          return false;
-        }),
-      )
-      .toBe(true);
-    const pt = await page.evaluate(() => {
-      for (const c of Array.from(document.querySelectorAll(".leaflet-facilities-pane canvas")) as HTMLCanvasElement[]) {
-        const { width, height } = c;
-        const d = c.getContext("2d")!.getImageData(0, 0, width, height).data;
-        for (let y = 0; y < height; y++)
-          for (let x = 0; x < width; x++) {
-            const i = (y * width + x) * 4;
-            if (d[i]! < 50 && d[i + 1]! > 60 && d[i + 1]! < 100 && d[i + 2]! > 200) {
-              const r = c.getBoundingClientRect();
-              return { x: r.left + (x / width) * r.width, y: r.top + (y / height) * r.height + 4 };
-            }
-          }
-      }
-      return null;
-    });
-    expect(pt).not.toBeNull();
-    await page.mouse.click(pt!.x, pt!.y);
+    // 주차장은 요금 구분 표시(TASK-022)로 그린다. "P 유료" 표시를 누른다.
+    await page.getByRole("region", { name: "교통 현황 지도" }).locator(".gas-pin", { hasText: "P유료" }).click();
     const card = page.locator(".leaflet-popup .popup-card");
     await expect(card).toBeVisible();
     await expect(card.locator(".popup-card-kicker")).toHaveText("주차장");

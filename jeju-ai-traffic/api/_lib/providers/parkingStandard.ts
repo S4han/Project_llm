@@ -115,7 +115,7 @@ export function createParkingStandardProvider(apiKey: string, fetchImpl: typeof 
 export function createMockParkingProvider(): ParkingProvider & { calls: number } {
   const rows: ParkingRow[] = [
     ["MOCK-P1", "모의 시청 공영주차장", "공영", "노외", "제주시 모의동 10", 91, "매일 24시간", "유료 · 기본 30분 1,000원 · 추가 15분 500원", 33.5005, 126.5325],
-    ["MOCK-P2", "모의 신설오름 주차장", "민영", "부설", "제주시 모의동 11", 20, "평일 09:00~18:00 · 토 09:00~13:00", "유료", 33.5035, 126.539],
+    ["MOCK-P2", "모의 신설오름 주차장", "민영", "부설", "제주시 모의동 11", 20, "평일 09:00~18:00 · 토 09:00~13:00", "무료", 33.5035, 126.539],
     ["MOCK-P3", "모의 노형 공영주차장", "공영", "노상", "제주시 모의동 12", null, "매일 24시간", "무료", 33.485, 126.481],
   ];
   return {

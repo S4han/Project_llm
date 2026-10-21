@@ -7,7 +7,7 @@ import { getCurrentLocation } from "../../services/geolocation";
 import { parkingRouteHref } from "../trip/routeLink";
 import { fetchTrafficEnforcement, fetchTrafficEv, fetchTrafficFacilities, fetchTrafficGas, fetchTrafficParking, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds } from "../../services/trafficApi";
 import type { FacilityPoint, PopupCard, SpeedLine } from "../map/leafletMap";
-import { FACILITY_ORDER, FACILITY_STYLE, gasBrand, NEARBY_KEYS, NEARBY_RADIUS, type FacilityKey } from "./facilityStyle";
+import { FACILITY_ORDER, FACILITY_STYLE, gasBrand, NEARBY_KEYS, NEARBY_RADIUS, PARKING_FEE_STYLE, parkingFeeKind, type FacilityKey } from "./facilityStyle";
 import { IncidentFocusBar, IncidentGroupList } from "../routes/IncidentFocus";
 import { groupIncidents, useIncidentFocus } from "../routes/incidents";
 import { INCIDENT_LABEL, STATUS_STYLE } from "../routes/trafficStyle";
@@ -238,11 +238,12 @@ function EvList({ rows, fastOnly, onFastOnly, limit, onMore, onPick }: { rows: {
 function parkingCard(l: { id: string; name: string; se: string; type: string; address: string; spaces: number | null; hours: string; fee: string; lat: number; lng: number }): PopupCard {
   // 요금 설명 "유료 · 기본 30분 1,000원 · 추가 15분 500원" → 칩 "유료" + 줄 "기본 …", "추가 …"
   const [feeKind = "", ...feeLines] = l.fee.split(" · ");
+  const fee = parkingFeeKind(l.fee);
   return {
-    badge: { text: FACILITY_STYLE.PARK.mark, color: FACILITY_STYLE.PARK.markBg ?? "#1d4ed8" },
+    badge: { text: FACILITY_STYLE.PARK.mark, color: PARKING_FEE_STYLE[fee].color },
     kicker: "주차장",
     title: l.name || "이름 없는 주차장",
-    chips: [l.se, l.type, feeKind].filter(Boolean),
+    chips: [l.se, l.type, fee === "MIXED" ? "일부 유료(혼합)" : feeKind].filter(Boolean),
     stat: l.spaces !== null ? { value: l.spaces.toLocaleString("ko-KR"), unit: "면" } : undefined,
     rows: [
       ...(l.hours ? [{ label: "운영", lines: l.hours.split(" · ") }] : []),
@@ -308,6 +309,7 @@ export function TrafficDashboard() {
   const [evLoading, setEvLoading] = useState(true);
   const [evProblem, setEvProblem] = useState(false);
   const [evFastOnly, setEvFastOnly] = useState(false);
+  const [parkFreeOnly, setParkFreeOnly] = useState(false);
   const [evLimit, setEvLimit] = useState(GAS_PAGE);
   // 내 위치(주정차 단속 반경 조회용). 이 화면 메모리에만 두고 서버로 보내거나 저장하지 않는다.
   const [myLocation, setMyLocation] = useState<Coordinate | null>(null);
@@ -574,16 +576,21 @@ export function TrafficDashboard() {
       ...(facilities?.facilities ?? [])
         .filter((f) => facilityTypes.has(f[1]))
         .map(([id, type, name, model, lat, lng]): FacilityPoint => ({ id, type, name, model, lat, lng })),
-      ...(facilityTypes.has("PARK") && myLocation ? (parking?.lots ?? []).filter((l) => distanceMeters(myLocation, { lat: l[8], lng: l[9] }) <= (NEARBY_RADIUS.PARK ?? 1000)) : []).map(
-        ([id, name, se, type, address, spaces, hours, fee, lat, lng]): FacilityPoint => ({
-          id: `PARK-${id}`,
-          type: "PARK",
-          name,
-          model: "",
-          lat,
-          lng,
-          card: parkingCard({ id, name, se, type, address, spaces, hours, fee, lat, lng }),
-        }),
+      ...(facilityTypes.has("PARK") && myLocation ? (parking?.lots ?? []).filter((l) => distanceMeters(myLocation, { lat: l[8], lng: l[9] }) <= (NEARBY_RADIUS.PARK ?? 1000) && (!parkFreeOnly || parkingFeeKind(l[7]) === "FREE")) : []).map(
+        ([id, name, se, type, address, spaces, hours, fee, lat, lng]): FacilityPoint => {
+          // 요금 구분 글자 표시(TASK-022 1.(a)): "P 무료"(초록)·"P 유료"(파랑)·"P 일부유료"(주황)·정보 없음 "P"(회색). 멀리 보면 점으로 접는다.
+          const kind = PARKING_FEE_STYLE[parkingFeeKind(fee)];
+          return {
+            id: `PARK-${id}`,
+            type: "PARK",
+            name,
+            model: "",
+            lat,
+            lng,
+            pin: { mark: "P", price: kind.label || null, color: kind.color, low: false, fold: true },
+            card: parkingCard({ id, name, se, type, address, spaces, hours, fee, lat, lng }),
+          };
+        },
       ),
       ...(facilityTypes.has("ENF") && myLocation ? (enforcement?.cameras ?? []).filter((c) => distanceMeters(myLocation, { lat: c[6], lng: c[7] }) <= (NEARBY_RADIUS.ENF ?? 1000)) : []).map(
         ([id, place, address, rotate, audit, oper, lat, lng]): FacilityPoint => ({
@@ -638,11 +645,12 @@ export function TrafficDashboard() {
         };
       }),
     ],
-    [facilities, facilityTypes, enforcement, parking, myLocation, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev],
+    [facilities, facilityTypes, enforcement, parking, parkFreeOnly, myLocation, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev],
   );
   const nearbyOn = NEARBY_KEYS.filter((k) => facilityTypes.has(k));
   const nearbyCount = (k: FacilityKey) => facilityPoints.filter((p) => p.type === k).length;
-  const nearbyLabel: Partial<Record<FacilityKey, string>> = { ENF: "주정차 단속 CCTV", PARK: "주차장", GAS: "주유소", LPG: "LPG 충전소", EV: "전기차 충전소" };
+  const nearbyFreeParking = facilityPoints.filter((p) => p.type === "PARK" && p.pin?.price === PARKING_FEE_STYLE.FREE.label).length;
+  const nearbyLabel: Partial<Record<FacilityKey, string>> = { ENF: "주정차 단속 CCTV", PARK: parkFreeOnly ? "무료 주차장" : "주차장", GAS: "주유소", LPG: "LPG 충전소", EV: "전기차 충전소" };
   // 반경이 같은 유형끼리 한 덩어리로: "내 위치 반경 1km 안 주정차 단속 CCTV 2곳 · 주차장 1곳 · 반경 3km 안 주유소 5곳 · 휘발유 최저 1,849원"
   const nearbyMaxRadius = Math.max(0, ...nearbyOn.map((k) => NEARBY_RADIUS[k] ?? 1000));
   const nearbyText = [...new Set(nearbyOn.map((k) => NEARBY_RADIUS[k] ?? 1000))]
@@ -655,7 +663,9 @@ export function TrafficDashboard() {
   function radiusText(r: number, keys: FacilityKey[]): string {
     const km = `${r / 1000}km`;
     const total = keys.reduce((s, k) => s + nearbyCount(k), 0);
-    if (total > 0) return `반경 ${km} 안 ${keys.map((k) => `${nearbyLabel[k]} ${nearbyCount(k).toLocaleString("ko-KR")}곳`).join(" · ")}`;
+    // 주차장은 무료 수를 붙인다(TASK-022 3.(a)): "주차장 12곳(무료 5곳)". "무료만"이면 "무료 주차장 5곳".
+    const freeNote = (k: FacilityKey) => (k === "PARK" && !parkFreeOnly && nearbyCount(k) > 0 ? `(무료 ${nearbyFreeParking.toLocaleString("ko-KR")}곳)` : "");
+    if (total > 0) return `반경 ${km} 안 ${keys.map((k) => `${nearbyLabel[k]} ${nearbyCount(k).toLocaleString("ko-KR")}곳${freeNote(k)}`).join(" · ")}`;
     const none = `반경 ${km} 안에 ${keys.map((k) => nearbyLabel[k]).join("·")}`;
     // 조사: "…CCTV가", "…주차장이"(마지막 이름 기준)
     // 조사: 받침이 있는 "주차장"만 "이", "…CCTV"·"주유소"는 "가"
@@ -1025,6 +1035,26 @@ export function TrafficDashboard() {
                   위치 다시 확인
                 </button>
               )}
+            </div>
+          )}
+          {facilityTypes.has("PARK") && myLocation && !locating && (
+            <div className="flex items-center justify-between gap-2">
+              <ul aria-label="주차장 요금 범례" className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-grey-700">
+                {(["FREE", "PAID", "MIXED"] as const).map((k) => (
+                  <li key={k} className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PARKING_FEE_STYLE[k].color }} aria-hidden="true" />
+                    {PARKING_FEE_STYLE[k].label}
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => setParkFreeOnly((v) => !v)}
+                aria-pressed={parkFreeOnly}
+                className={`min-h-11 shrink-0 rounded-xl px-3 text-sm font-semibold ${parkFreeOnly ? "bg-green-600 text-white" : "bg-grey-100 text-grey-700"}`}
+              >
+                P 무료만
+              </button>
             </div>
           )}
           {facilityTypes.has("GAS") && myLocation && !locating && gasList.length > 0 && (
