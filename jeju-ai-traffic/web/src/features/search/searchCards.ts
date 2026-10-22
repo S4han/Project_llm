@@ -59,8 +59,9 @@ const photoCredit = (src: string) => (src.includes("visitjeju.net") ? "사진 �
 export type DetailState = SearchDetailResponse | "loading" | "failed" | null;
 type Tile = NonNullable<PopupCard["tiles"]>[number];
 const HOURS_LABEL: Record<SearchCategory, string> = { ATTRACTION: "이용시간", ACCOMMODATION: "입실·퇴실", RESTAURANT: "영업시간", CAFE: "영업시간" };
-const short = (v: string, n = 26) => {
-  const line = v.split("\n")[0] ?? "";
+/** 큰 칸에는 첫 줄만. 관광공사 원문은 줄마다 "- "가 붙어 있어(시험: "- 08:30~21:00") 떼어 낸다. */
+export const short = (v: string, n = 26) => {
+  const line = (v.split("\n")[0] ?? "").replace(/^[-·•*]\s*/, "");
   return line.length > n ? `${line.slice(0, n - 1)}…` : line;
 };
 

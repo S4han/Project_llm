@@ -73,6 +73,8 @@ describe("관광 통합 검색 출처 어댑터 (TASK-029)", () => {
     expect(normalizeKtoIntro("1", "ATTRACTION", intro({ usetime: "09:00~18:00<br>", restdate: "연중무휴", parking: "가능", chkpet: "불가", infocenter: "064" }))).toEqual({ id: "1", hours: "09:00~18:00", rest: "연중무휴", parking: "가능", pet: "불가", info: "064", source: "kto" });
     expect(normalizeKtoIntro("2", "ACCOMMODATION", intro({ checkintime: "15:00", checkouttime: "11:00", parkinglodging: "가능", infocenterlodging: "064-1" }))).toEqual({ id: "2", hours: "입실 15:00\n퇴실 11:00", rest: "", parking: "가능", pet: "", info: "064-1", source: "kto" });
     expect(normalizeKtoIntro("3", "CAFE", intro({ opentimefood: "10:00~20:00", restdatefood: "화요일", parkingfood: "불가", infocenterfood: "064-2" }))).toEqual({ id: "3", hours: "10:00~20:00", rest: "화요일", parking: "불가", pet: "", info: "064-2", source: "kto" });
+    // 시험 응답 표본(가람돌솥밥)
+    expect(normalizeKtoIntro("2755053", "RESTAURANT", intro({ opentimefood: "- 08:30~21:00<br>- 준비시간 16:00~17:00<br>- 마지막 주문 20:00", restdatefood: "연중무휴", parkingfood: "가능", infocenterfood: "0507-1432-1200" })).hours).toBe("- 08:30~21:00\n- 준비시간 16:00~17:00\n- 마지막 주문 20:00");
     const urls: string[] = [];
     await createKtoDetail("k", (async (u: string) => (urls.push(u), Response.json(intro({ opentimefood: "a" })))) as unknown as typeof fetch).fetchDetail("2850913", "CAFE");
     expect(urls[0]).toContain("/detailIntro2?");

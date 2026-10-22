@@ -180,7 +180,7 @@ export const ktoTypeOf = (c: SearchCategory) => (c === "CAFE" ? KTO_TYPE.RESTAUR
 /**
  * 소개정보 → 운영시간·쉬는날·주차·반려동물·문의. 항목 이름은 분류마다 다르다:
  * 관광지 usetime·restdate·parking·chkpet·infocenter(TASK-026), 숙박 checkintime·checkouttime·parkinglodging·infocenterlodging(TASK-028 시험),
- * 음식점 opentimefood·restdatefood·parkingfood·infocenterfood.
+ * 음식점 opentimefood·restdatefood·parkingfood·infocenterfood(TASK-029 범위 변경 시험 2건: 카페 "가는곶 세화"·음식점 "가람돌솥밥"으로 확인).
  */
 export function normalizeKtoIntro(id: string, category: SearchCategory, body: unknown): SearchDetail {
   const i = ktoItems(body).list[0] ?? {};
