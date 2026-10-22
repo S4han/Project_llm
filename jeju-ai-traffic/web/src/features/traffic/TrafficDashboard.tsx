@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { IncidentKind, SpeedStatus, TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../../shared/contracts/traffic";
+import type { IncidentKind, SpeedStatus, TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficLinksResponse, TrafficSpeedsResponse, TrafficTourDetailResponse, TrafficTourResponse } from "../../../../shared/contracts/traffic";
 import { isStale } from "../../../../shared/rules/traffic";
 import { distanceMeters } from "../../../../shared/rules/geo";
 import type { Coordinate } from "../../../../shared/contracts/route";
 import { getCurrentLocation } from "../../services/geolocation";
 import { parkingRouteHref } from "../trip/routeLink";
-import { fetchTrafficEnforcement, fetchTrafficEv, fetchTrafficFacilities, fetchTrafficGas, fetchTrafficParking, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds } from "../../services/trafficApi";
+import { fetchTrafficEnforcement, fetchTrafficEv, fetchTrafficFacilities, fetchTrafficGas, fetchTrafficParking, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds, fetchTrafficTour, fetchTrafficTourDetail } from "../../services/trafficApi";
 import type { FacilityPoint, PopupCard, SpeedLine } from "../map/leafletMap";
-import { FACILITY_ORDER, FACILITY_STYLE, gasBrand, NEARBY_KEYS, NEARBY_RADIUS, PARKING_FEE_STYLE, parkingFeeKind, type FacilityKey } from "./facilityStyle";
+import { FACILITY_ORDER, FACILITY_STYLE, gasBrand, NEARBY_KEYS, NEARBY_RADIUS, PARKING_FEE_STYLE, parkingFeeKind, tourParking, type FacilityKey } from "./facilityStyle";
 import { IncidentFocusBar, IncidentGroupList } from "../routes/IncidentFocus";
 import { groupIncidents, useIncidentFocus } from "../routes/incidents";
 import { INCIDENT_LABEL, STATUS_STYLE } from "../routes/trafficStyle";
@@ -56,6 +56,8 @@ const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 export const EV_REFRESH_MS = 30 * 60_000;
 /** 주유소 목록을 한 번에 보여 줄 줄 수(TASK-018). */
 const GAS_PAGE = 5;
+/** 관광지 목록을 한 번에 보여 줄 줄 수(TASK-026). */
+const TOUR_PAGE = 10;
 
 type GasStation = { id: string; brand: string; name: string; gasoline: number | null; diesel: number | null; lat: number; lng: number; lpg: number | null; address: string; tel: string };
 
@@ -273,6 +275,71 @@ const PANEL = "md:col-span-2 xl:col-span-1 xl:col-start-2";
 const EMPTY_IDS: string[] = [];
 const NO_INCIDENTS: TrafficIncident[] = [];
 
+type TourRow = TrafficTourResponse["spots"][number];
+const TOUR_PARKING_CHIP = { YES: "주차 가능", NO: "주차 불가", UNKNOWN: "주차 정보 없음" } as const;
+
+/**
+ * 관광지 카드(TASK-026): 머리(관·이름), 대표 사진·출처, 주차 칩, 이용시간·쉬는날·주차(원문)·문의, 주소·자료 안내, 경로 안내.
+ * 상세는 누를 때 불러오므로 그동안(detail null)은 "불러오는 중", 실패면 그 안내.
+ */
+function tourCard(s: TourRow, detail: TrafficTourDetailResponse | null, failed = false): PopupCard {
+  const [id, name, address, lat, lng, image] = s;
+  const lines = (v: string) => (v ? v.split("\n") : ["정보 없음"]);
+  return {
+    badge: { text: FACILITY_STYLE.TOUR.mark, color: FACILITY_STYLE.TOUR.markBg ?? FACILITY_STYLE.TOUR.color },
+    kicker: "관광지",
+    title: name,
+    image: image ? { src: image, alt: name, credit: "사진 한국관광공사" } : undefined,
+    chips: detail ? [TOUR_PARKING_CHIP[tourParking(detail.parking)]] : [],
+    rows: detail
+      ? [
+          { label: "이용시간", lines: lines(detail.usetime) },
+          { label: "쉬는날", lines: lines(detail.restdate) },
+          { label: "주차", lines: lines(detail.parking) },
+          ...(detail.infocenter ? [{ label: "문의", lines: lines(detail.infocenter) }] : []),
+        ]
+      : [{ label: "안내", lines: [failed ? "이용시간·주차 정보를 불러오지 못했습니다. 다시 눌러 보세요." : "이용시간·주차 정보 불러오는 중…"] }],
+    footer: [address, `한국관광공사 관광정보${detail?.source === "mock" ? "(모의 데이터)" : ""} · 바뀌었을 수 있으니 방문 전 확인하세요.`].filter(Boolean).join("\n"),
+    action: { href: parkingRouteHref({ id, name, address, lat, lng }), label: "현재 위치에서 경로 안내" },
+  };
+}
+
+/** 관광지 목록(TASK-026 2.(a)): 가까운 순, 줄을 누르면 지도에서 그 관광지 카드. */
+function TourList({ rows, limit, onMore, onPick }: { rows: { s: TourRow; meters: number }[]; limit: number; onMore: () => void; onPick: (id: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <h3 className="text-sm font-semibold text-grey-700">반경 5km 관광지 · 가까운 순</h3>
+      {rows.length === 0 ? (
+        <p className="text-sm text-grey-600">반경 5km 안에 관광지가 없습니다.</p>
+      ) : (
+        <ul aria-label="관광지 목록" className="flex flex-col gap-1.5">
+          {rows.slice(0, limit).map(({ s, meters }) => (
+            <li key={s[0]}>
+              <button type="button" onClick={() => onPick(s[0])} className="flex min-h-14 w-full items-center gap-2.5 rounded-xl bg-grey-100 px-3 py-2 text-left text-sm">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-extrabold text-white" style={{ backgroundColor: FACILITY_STYLE.TOUR.color }} aria-hidden="true">
+                  {FACILITY_STYLE.TOUR.mark}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold text-grey-900">{s[1]}</span>
+                  <span className="block truncate text-xs text-grey-600">
+                    {(meters / 1000).toFixed(1)}km · {s[2]}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs font-semibold text-brand-700">지도 ›</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {rows.length > limit && (
+        <button type="button" onClick={onMore} className="min-h-12 rounded-2xl bg-grey-100 font-semibold text-grey-700">
+          더 보기 ({(rows.length - limit).toLocaleString("ko-KR")}곳 남음)
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** 불러오기·위치 확인 실패 안내와 다시 시도 버튼. */
 function RetryAlert({ text, onRetry }: { text: string; onRetry: () => void }) {
   return (
@@ -343,6 +410,11 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
   const [evFastOnly, setEvFastOnly] = useState(false);
   const [parkFreeOnly, setParkFreeOnly] = useState(false);
   const [evLimit, setEvLimit] = useState(GAS_PAGE);
+  // 제주 관광지(TASK-026, 한국관광공사): 화면을 열 때 목록 한 번, 상세는 누를 때.
+  const [tour, setTour] = useState<TrafficTourResponse | null>(null);
+  const [tourLoading, setTourLoading] = useState(true);
+  const [tourProblem, setTourProblem] = useState(false);
+  const [tourLimit, setTourLimit] = useState(TOUR_PAGE);
   // 내 위치(주정차 단속 반경 조회용). 이 화면 메모리에만 두고 서버로 보내거나 저장하지 않는다.
   const [myLocation, setMyLocation] = useState<Coordinate | null>(null);
   const [locating, setLocating] = useState(false);
@@ -477,6 +549,18 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
     setEvProblem(!r.ok);
     if (r.ok) setEv(r.data);
   }, []);
+  const fetchTour = useCallback(async () => {
+    const r = await fetchTrafficTour();
+    if (!alive.current) return;
+    setTourLoading(false);
+    setTourProblem(!r.ok);
+    if (r.ok) setTour(r.data);
+  }, []);
+  const retryTour = () => {
+    setTourLoading(true);
+    setTourProblem(false);
+    void fetchTour();
+  };
   const retryEv = () => {
     setEvLoading(true);
     setEvProblem(false);
@@ -509,6 +593,7 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
       void fetchParking();
       void fetchGas();
       void fetchEv();
+      void fetchTour();
     }, 0);
     // 충전 가능 수는 30분마다(화면이 켜져 있을 때만) 다시 받는다(TASK-019 1.(a)).
     const evTick = setInterval(() => {
@@ -518,7 +603,7 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
       clearTimeout(first);
       clearInterval(evTick);
     };
-  }, [fetchFacilities, fetchEnforcement, fetchParking, fetchGas, fetchEv]);
+  }, [fetchFacilities, fetchEnforcement, fetchParking, fetchGas, fetchEv, fetchTour]);
 
   // 도로 모양을 받는 동안 경과 시간(초)을 1초마다 갱신한다.
   useEffect(() => {
@@ -573,8 +658,9 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
     counts.GAS = gas?.stations.filter(isGasStation).length ?? 0;
     counts.LPG = gas?.stations.filter(isLpgStation).length ?? 0;
     counts.EV = ev?.stations.length ?? 0;
+    counts.TOUR = tour?.spots.length ?? 0;
     return counts;
-  }, [facilities, enforcement, parking, gas, ev]);
+  }, [facilities, enforcement, parking, gas, ev, tour]);
   // 반경 안 주유소와 휘발유 최저가(TASK-018 3.(a)).
   // 반경 계산은 켠 유형과 상관없이 한다(대시보드 카드 요약에도 씀, TASK-025). 지도·목록은 켠 유형만.
   const nearGas = useMemo(
@@ -587,6 +673,16 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
     [myLocation, gas],
   );
   const nearEnf = useMemo(() => (myLocation ? (enforcement?.cameras ?? []).filter((c) => distanceMeters(myLocation, { lat: c[6], lng: c[7] }) <= (NEARBY_RADIUS.ENF ?? 1000)) : []), [myLocation, enforcement]);
+  const nearTour = useMemo(
+    () =>
+      myLocation
+        ? (tour?.spots ?? [])
+            .map((s) => ({ s, meters: distanceMeters(myLocation, { lat: s[3], lng: s[4] }) }))
+            .filter((t) => t.meters <= (NEARBY_RADIUS.TOUR ?? 5000))
+            .sort((a, b) => a.meters - b.meters)
+        : [],
+    [myLocation, tour],
+  );
   const nearPark = useMemo(() => (myLocation ? (parking?.lots ?? []).filter((l) => distanceMeters(myLocation, { lat: l[8], lng: l[9] }) <= (NEARBY_RADIUS.PARK ?? 1000)) : []), [myLocation, parking]);
   // 반경 안 전기차 충전소(TASK-019). "급속만"이면 급속 충전기가 있는 곳만. 목록은 충전 가능 → 정보 없음 → 모두 사용 중, 같으면 가까운 순.
   const evNear = useMemo(() => {
@@ -619,7 +715,7 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
   // 강조할 최저가는 한 곳: 같은 최저가가 여럿이면 가장 가까운 곳(목록이 싼 순·가까운 순이라 맨 앞, TASK-021 2.(a)).
   const lowGasId = gasList[0]?.price != null ? gasList[0].id : null;
   const lowLpgId = lpgList[0]?.price != null ? lpgList[0].id : null;
-  const focusFuel = (kind: "GAS" | "LPG" | "EV", id: string) => {
+  const focusFuel = (kind: "GAS" | "LPG" | "EV" | "TOUR", id: string) => {
     setGasFocus((prev) => ({ id: `${kind}-${id}`, seq: (prev?.seq ?? 0) + 1 }));
     revealMap(mapBox.current);
   };
@@ -698,13 +794,25 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
           card: evCard(s, ev?.statusAt ?? null),
         };
       }),
+      // 관광지(TASK-026): "관" 동그라미(확대 17 이상이면 이름), 누르면 이용시간·주차를 불러와 카드를 채운다.
+      ...(facilityTypes.has("TOUR") ? nearTour : []).map(({ s }): FacilityPoint => ({
+        id: `TOUR-${s[0]}`,
+        type: "TOUR",
+        name: s[1],
+        model: "",
+        lat: s[3],
+        lng: s[4],
+        pin: { mark: FACILITY_STYLE.TOUR.mark, price: s[1], color: FACILITY_STYLE.TOUR.color, low: false, fold: true, dot: true },
+        card: tourCard(s, null),
+        loadCard: () => fetchTrafficTourDetail(s[0]).then((r) => tourCard(s, r.ok ? r.data : null, !r.ok)),
+      })),
     ],
-    [facilities, facilityTypes, nearEnf, nearPark, parkFreeOnly, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev],
+    [facilities, facilityTypes, nearEnf, nearPark, parkFreeOnly, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev, nearTour],
   );
   const nearbyOn = NEARBY_KEYS.filter((k) => facilityTypes.has(k));
   const nearbyCount = (k: FacilityKey) => facilityPoints.filter((p) => p.type === k).length;
   const nearbyFreeParking = facilityPoints.filter((p) => p.type === "PARK" && p.pin?.price === PARKING_FEE_STYLE.FREE.label).length;
-  const nearbyLabel: Partial<Record<FacilityKey, string>> = { ENF: "주정차 단속 CCTV", PARK: parkFreeOnly ? "무료 주차장" : "주차장", GAS: "주유소", LPG: "LPG 충전소", EV: "전기차 충전소" };
+  const nearbyLabel: Partial<Record<FacilityKey, string>> = { ENF: "주정차 단속 CCTV", PARK: parkFreeOnly ? "무료 주차장" : "주차장", GAS: "주유소", LPG: "LPG 충전소", EV: "전기차 충전소", TOUR: "관광지" };
   // 반경이 같은 유형끼리 한 덩어리로: "내 위치 반경 1km 안 주정차 단속 CCTV 2곳 · 주차장 1곳 · 반경 3km 안 주유소 5곳 · 휘발유 최저 1,849원"
   const nearbyMaxRadius = Math.max(0, ...nearbyOn.map((k) => NEARBY_RADIUS[k] ?? 1000));
   const nearbyText = [...new Set(nearbyOn.map((k) => NEARBY_RADIUS[k] ?? 1000))]
@@ -757,7 +865,7 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
       inaccurate: `위치가 부정확합니다(오차 약 ${"accuracyMeters" in r ? r.accuracyMeters : "?"}m). 실외나 와이파이가 켜진 곳에서 다시 시도하세요.`,
       outsideJeju: "현재 위치가 제주 밖이라 내 위치 주변을 표시할 수 없습니다.",
     };
-    setLocationProblem(`내 위치 주변(주정차 단속·주차장·주유소·LPG 충전소·전기차 충전소)을 표시하지 못했습니다: ${reason[r.kind]}`);
+    setLocationProblem(`내 위치 주변(주정차 단속·주차장·주유소·LPG 충전소·전기차 충전소·관광지)을 표시하지 못했습니다: ${reason[r.kind]}`);
     setFacilityTypes((prev) => new Set([...prev].filter((k) => !NEARBY_KEYS.includes(k))));
   }, []);
   // 주변 페이지를 열었는데 위치가 없으면(열 때 확인 실패) 한 번 더 확인한다. 실패 이유는 페이지에 보인다.
@@ -854,7 +962,7 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
     <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
       <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
       <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 교통 현황을 열 때 한 번 확인하며(허용한 경우), 이 기기에서 지도 위치와 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
-      <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS</p>
+      <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS · 관광지 한국관광공사(국문 관광정보)</p>
     </footer>
   );
   if (view === "home") {
@@ -961,12 +1069,22 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
             <h2 id="dash-more" className="font-bold text-grey-900">
               그 밖의 정보
             </h2>
-            <ul aria-label="그 밖의 정보 카드" className="grid grid-cols-2 gap-2">
+            <ul aria-label="그 밖의 정보 카드" className="grid grid-cols-2 gap-2 md:grid-cols-3">
               <li>
                 <DashCard title="돌발·통제·공사" value={state.snapshot ? `${all.length.toLocaleString("ko-KR")}건` : "–"} sub="제주 ITS 감지" onClick={() => onNavigate("incidents")} small />
               </li>
               <li>
                 <DashCard title="CCTV 등 교통시설물" value={facilities ? `${itsCount.toLocaleString("ko-KR")}곳` : "–"} sub={facilitiesProblem ? "불러오지 못했습니다" : "VMS·CCTV·웹카메라 등"} onClick={() => onNavigate("facilities")} small />
+              </li>
+              <li>
+                <DashCard
+                  title="관광지"
+                  mark={<span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: FACILITY_STYLE.TOUR.color }} aria-hidden="true" />}
+                  value={tour ? `${(here ? nearTour.length : facilityCounts.TOUR).toLocaleString("ko-KR")}곳` : "–"}
+                  sub={tourLoading ? "불러오는 중…" : tourProblem ? "불러오지 못했습니다" : here ? `반경 ${(NEARBY_RADIUS.TOUR ?? 5000) / 1000}km 안` : "제주 전체"}
+                  onClick={() => onNavigate("TOUR")}
+                  small
+                />
               </li>
             </ul>
           </section>
@@ -978,14 +1096,15 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
 
   // 항목별 지도 페이지(TASK-025 2.(a)): 위에 "← 대시보드"·제목, 지도에는 그 항목만, 아래(넓은 화면은 오른쪽)에 그 항목의 목록.
   const nearbyView = isNearbyView(view) ? view : null;
-  const nearbyNote: Record<"ENF" | "PARK" | "GAS" | "LPG" | "EV", string> = {
+  const nearbyNote: Record<"ENF" | "PARK" | "GAS" | "LPG" | "EV" | "TOUR", string> = {
     ENF: `제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다${enforcement?.source === "mock" ? "(모의 데이터)" : ""}.`,
     PARK: `전국주차장정보표준데이터(제주시·서귀포시)로 위치·면수·요금·운영 시간만 있고 실시간 남은 칸은 없습니다${parking?.source === "mock" ? "(모의 데이터)" : ""}.`,
     GAS: `제주 ITS 주유소 정보(오피넷 가격, 휘발유·경유·LPG, 1시간마다 다시 조회)${gas?.source === "mock" ? "(모의 데이터)" : ""}입니다.`,
     LPG: `제주 ITS 주유소 정보의 LPG 판매 정보(1시간마다 다시 조회)${gas?.source === "mock" ? "(모의 데이터)" : ""}입니다.`,
     EV: `제주 ITS 충전소·충전 가능 정보(30분마다 갱신)${ev?.source === "mock" ? "(모의 데이터)" : ""}입니다.`,
+    TOUR: `한국관광공사 국문 관광정보(제주 관광지)${tour?.source === "mock" ? "(모의 데이터)" : ""}입니다. 관광지를 누르면 이용시간·쉬는날·주차 정보를 불러옵니다. 바뀌었을 수 있으니 방문 전 확인하세요.`,
   };
-  const nearbyLoading = nearbyView ? { ENF: enforcementLoading, PARK: parkingLoading, GAS: gasLoading, LPG: gasLoading, EV: evLoading }[nearbyView] : false;
+  const nearbyLoading = nearbyView ? { ENF: enforcementLoading, PARK: parkingLoading, GAS: gasLoading, LPG: gasLoading, EV: evLoading, TOUR: tourLoading }[nearbyView] : false;
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 bg-grey-100 p-4 md:max-w-5xl xl:max-w-[96rem]">
       {/*
@@ -1336,6 +1455,10 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
             {nearbyView === "LPG" && myLocation && !locating && lpgList.length > 0 && (
               <FuelList title="반경 5km LPG 충전소 · LPG 싼 순" label="LPG 충전소 목록" fuel="LPG" rows={lpgList} low={lowLpg} lowId={lowLpgId} limit={lpgLimit} onMore={() => setLpgLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("LPG", id)} />
             )}
+            {nearbyView === "TOUR" && myLocation && !locating && tour && (
+              <TourList rows={nearTour} limit={tourLimit} onMore={() => setTourLimit((n) => n + TOUR_PAGE)} onPick={(id) => focusFuel("TOUR", id)} />
+            )}
+            {nearbyView === "TOUR" && tourProblem && <RetryAlert text="관광지 정보를 불러오지 못했습니다." onRetry={retryTour} />}
             {nearbyView === "EV" && evProblem && <RetryAlert text="전기차 충전소 정보를 불러오지 못했습니다." onRetry={retryEv} />}
             {(nearbyView === "GAS" || nearbyView === "LPG") && gasProblem && <RetryAlert text={gasProblem} onRetry={retryGas} />}
             {nearbyView === "PARK" && parkingProblem && <RetryAlert text="주차장 정보를 불러오지 못했습니다." onRetry={retryParking} />}

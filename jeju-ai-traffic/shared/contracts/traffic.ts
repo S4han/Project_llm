@@ -126,3 +126,28 @@ export interface TrafficEvResponse {
   builtAt: IsoDateTime;
   source: "jejuIts" | "mock";
 }
+
+/**
+ * GET /api/traffic/tour 응답(TASK-026, 한국관광공사 국문 관광정보 서비스 KorService2, 제주 관광지 contentTypeId 12).
+ * spots[i] = [콘텐츠 ID, 이름, 주소, 위도, 경도, 대표 사진 https 주소(없으면 ""), 사진 저작권 구분(Type1 출처표시·Type3 출처표시+변경금지, 없으면 "")].
+ */
+export interface TrafficTourResponse {
+  spots: [string, string, string, number, number, string, string][];
+  builtAt: IsoDateTime;
+  source: "kto" | "mock";
+}
+
+/** GET /api/traffic/tour?id= 응답(TASK-026): 관광지 하나의 소개정보. 원천 글자에서 HTML을 걷어 낸 값(없으면 ""). */
+export interface TrafficTourDetailResponse {
+  id: string;
+  /** 이용시간(여러 줄일 수 있음) */
+  usetime: string;
+  /** 쉬는날 */
+  restdate: string;
+  /** 주차시설 원문(예: "가능", "불가능", "주차가능 (승용차 50대)") */
+  parking: string;
+  /** 문의 및 안내 */
+  infocenter: string;
+  builtAt: IsoDateTime;
+  source: "kto" | "mock";
+}

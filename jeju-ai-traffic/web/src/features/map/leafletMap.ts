@@ -148,6 +148,8 @@ export interface PopupCard {
   footer?: string;
   /** 아래 꽉 찬 버튼. 이 서비스 안 화면은 같은 창, external이면 새 창(opener 차단). */
   action?: { href: string; label: string; external?: boolean };
+  /** 제목 아래 사진 한 장과 출처(관광지, TASK-026). https 주소만 그린다. */
+  image?: { src: string; alt: string; credit: string };
 }
 
 export function popupCard(card: PopupCard): HTMLElement {
@@ -167,6 +169,16 @@ export function popupCard(card: PopupCard): HTMLElement {
   titles.append(el("p", "popup-card-kicker", card.kicker), el("p", "popup-card-title", card.title));
   head.append(badge, titles);
   root.append(head);
+  if (card.image && card.image.src.startsWith("https://")) {
+    const fig = el("figure", "popup-card-photo");
+    const img = el("img", "") as HTMLImageElement;
+    img.src = card.image.src;
+    img.alt = card.image.alt;
+    img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
+    fig.append(img, el("figcaption", "", card.image.credit));
+    root.append(fig);
+  }
   if (card.chips.length || card.stat) {
     const meta = el("div", "popup-card-meta");
     for (const c of card.chips) meta.append(el("span", "popup-card-chip", c));
@@ -324,6 +336,8 @@ export interface FacilityPoint {
   model: string;
   /** 있으면 이 카드로(주정차 단속·주차장·주유소). 없으면 제주 ITS 시설물 카드. */
   card?: PopupCard;
+  /** 있으면 팝업을 열 때 불러와 카드를 바꾼다(관광지 이용시간·주차, TASK-026). 그동안은 card를 보인다. */
+  loadCard?: () => Promise<PopupCard>;
   /**
    * 있으면 점 대신 상표 색 가격 표시(주유소, TASK-018). low면 최저가 강조. fold면 멀리 볼 때 작은 점으로 접는다(TASK-021).
    * dot이면 평소에는 표시 글자(mark)만 든 색 동그라미, 아주 크게 확대했을 때만 글자를 함께(주차장, TASK-024). top이면 다른 표시보다 위에.
@@ -385,8 +399,26 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
     if (p.pin) {
       // 주유소: 반경 안 수십 곳이라 DOM 표시로 그린다. 글자는 고정 상표 표시와 숫자뿐(원천 이름은 카드에서만 textContent로).
       const m = L.marker([p.lat, p.lng], { icon: gasPinIcon(p.pin), keyboard: false, title: p.name, zIndexOffset: p.pin.low ? 1000 : p.pin.top ? 500 : 0 })
-        .bindPopup(() => popupCard(p.card ?? facilityCard(p)), { offset: [0, -30] })
+        // 불러와 길어지는 카드(관광지)는 휴대폰 지도 높이에 맞춰 높이를 제한하고 안에서 넘긴다(TASK-026 점검: 위가 잘림).
+        .bindPopup(() => popupCard(p.card ?? facilityCard(p)), { offset: p.pin.dot ? [0, -8] : [0, -30], maxHeight: p.loadCard ? 300 : undefined })
         .addTo(layer);
+      const load = p.loadCard;
+      if (load) {
+        m.on("popupopen", () =>
+          void load().then((card) => {
+            if (!m.isPopupOpen()) return;
+            m.setPopupContent(popupCard(card));
+            // 카드가 길어져 위가 지도 밖으로 잘리면 지도를 내린다. Leaflet 자동 이동은 열 때 이동 직후의 맞춤을 건너뛰고
+            // 목록에서 고를 때의 화면 이동과 겹치므로, 움직임이 끝난 뒤(0.3초) 직접 맞춘다.
+            setTimeout(() => {
+              const el = m.isPopupOpen() ? m.getPopup()?.getElement() : undefined;
+              if (!el) return;
+              const top = el.getBoundingClientRect().top - map.getContainer().getBoundingClientRect().top;
+              if (top < 10) map.panBy([0, top - 10]);
+            }, 300);
+          }),
+        );
+      }
       byId.set(p.id, m);
       continue;
     }

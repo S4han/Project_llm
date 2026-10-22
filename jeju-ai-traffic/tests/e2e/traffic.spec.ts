@@ -404,4 +404,33 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await page.locator(".leaflet-popup").scrollIntoViewIfNeeded();
     await shot(page, "TASK-019-02-card");
   });
+
+  test("관광지(TASK-026): 대시보드 카드 → 반경 5km 지도·가까운 순 목록, 누르면 이용시간·주차 카드", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    const card = page.getByRole("button", { name: /^관광지/ });
+    await expect(card).toHaveText("관광지2곳반경 5km 안지도 보기 ›");
+    await card.click();
+    await expect(page).toHaveURL(/\/map\/tour$/);
+    await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 5km 안 관광지 2곳");
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+    await expect(map.locator(".gas-pin")).toHaveCount(2);
+    const rows = page.getByRole("list", { name: "관광지 목록" }).getByRole("button");
+    await expect(rows.first()).toContainText("모의 신산공원");
+    await rows.nth(1).click();
+    const popup = page.locator(".leaflet-popup .popup-card");
+    await expect(popup.locator(".popup-card-title")).toHaveText("모의 사라봉");
+    await expect(popup.locator(".popup-card-chip")).toHaveText("주차 가능");
+    await expect(popup).toContainText("상시 개방");
+    await expect(popup).toContainText("가능 (승용차 30대)");
+    await expect(popup.getByRole("link", { name: "현재 위치에서 경로 안내" })).toHaveAttribute("href", /^\/route\?to=/);
+    await page.locator(".leaflet-popup").scrollIntoViewIfNeeded();
+    // 카드가 길어진 뒤 지도를 내려 카드 위쪽이 지도 안에 보인다
+    await expect.poll(async () => (await page.locator(".leaflet-popup").boundingBox())!.y - (await map.boundingBox())!.y).toBeGreaterThanOrEqual(0);
+    if (process.env.SCREENSHOTS === "TASK-026") await page.screenshot({ path: "reports/screenshots/TASK-026-01-tour-390.png", fullPage: true });
+    await rows.first().click();
+    // 앞 카드는 닫히며 잠깐(0.2초) 흐려지므로 새 카드만 본다
+    await expect(page.locator(".leaflet-popup .popup-card-title", { hasText: "모의 신산공원" })).toBeVisible();
+    await expect(page.locator(".leaflet-popup .popup-card-chip", { hasText: "주차 불가" })).toBeVisible();
+  });
 });

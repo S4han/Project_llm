@@ -1,5 +1,5 @@
 import type { ApiError, ApiErrorBody } from "../../../shared/contracts/common";
-import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../../shared/contracts/traffic";
+import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse, TrafficTourDetailResponse, TrafficTourResponse } from "../../../shared/contracts/traffic";
 
 export type TrafficIncidentsResult = { ok: true; data: TrafficIncidentsResponse } | { ok: false; error: ApiError };
 
@@ -70,4 +70,22 @@ export function fetchTrafficGas(signal?: AbortSignal): Promise<Result<TrafficGas
 /** GET /api/traffic/ev(TASK-019): 제주 전기차 충전소·충전 가능 수(충전 가능 30분 보관). 화면을 열 때와 30분마다 부른다. */
 export function fetchTrafficEv(signal?: AbortSignal): Promise<Result<TrafficEvResponse>> {
   return getJson<TrafficEvResponse>("/api/traffic/ev", (b) => "stations" in b, signal);
+}
+
+/** GET /api/traffic/tour(TASK-026): 제주 관광지 목록(서버 하루·CDN 7일 보관). 화면을 열 때 한 번만 부른다. */
+export function fetchTrafficTour(signal?: AbortSignal): Promise<Result<TrafficTourResponse>> {
+  return getJson<TrafficTourResponse>("/api/traffic/tour", (b) => "spots" in b, signal);
+}
+
+const tourDetails = new Map<string, Promise<Result<TrafficTourDetailResponse>>>();
+/** GET /api/traffic/tour?id=(TASK-026): 관광지 하나의 이용시간·쉬는날·주차. 관광지를 누를 때만, 이 화면에서는 한 번만(실패는 다시 받음). */
+export function fetchTrafficTourDetail(id: string): Promise<Result<TrafficTourDetailResponse>> {
+  const hit = tourDetails.get(id);
+  if (hit) return hit;
+  const p = getJson<TrafficTourDetailResponse>(`/api/traffic/tour?id=${encodeURIComponent(id)}`, (b) => "usetime" in b).then((r) => {
+    if (!r.ok) tourDetails.delete(id);
+    return r;
+  });
+  tourDetails.set(id, p);
+  return p;
 }

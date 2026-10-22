@@ -78,10 +78,10 @@ body {
   @apply mr-0.5 text-lg font-bold text-brand-700 tabular-nums;
 }
 .leaflet-popup-content .popup-card-rows {
-  @apply m-0 grid grid-cols-[2.75rem_1fr] gap-x-2 gap-y-1.5 rounded-xl bg-grey-50 p-2.5 text-[13px];
+  @apply m-0 grid grid-cols-[auto_1fr] gap-x-2.5 gap-y-1.5 rounded-xl bg-grey-50 p-2.5 text-[13px];
 }
 .leaflet-popup-content .popup-card-rows dt {
-  @apply font-semibold text-grey-500;
+  @apply font-semibold whitespace-nowrap text-grey-500;
 }
 .leaflet-popup-content .popup-card-rows dd {
   @apply m-0 flex flex-col text-grey-800;
@@ -94,6 +94,15 @@ body {
 }
 .leaflet-popup-content a.popup-card-action {
   color: #fff;
+}
+.leaflet-popup-content .popup-card-photo {
+  @apply m-0 flex flex-col gap-0.5;
+}
+.leaflet-popup-content .popup-card-photo img {
+  @apply h-28 w-full rounded-xl bg-grey-100 object-cover;
+}
+.leaflet-popup-content .popup-card-photo figcaption {
+  @apply text-[10px] text-grey-500;
 }
 
 /* 주유소 가격 표시(TASK-018): 크기 0 표시 안에서 위로 띄우고, 아래 꼭짓점이 주유소 위치 */

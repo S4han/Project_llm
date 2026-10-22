@@ -1,13 +1,13 @@
 import type { FacilityType } from "../../../../shared/contracts/traffic";
 
-/** 교통시설물 카드의 유형. 제주 ITS 7개 + 제주시 주정차 단속 CCTV(ENF, TASK-016) + 주차장(PARK, 표준데이터, TASK-017). */
-export type FacilityKey = FacilityType | "ENF" | "PARK" | "GAS" | "LPG" | "EV";
+/** 교통시설물 카드의 유형. 제주 ITS 7개 + 제주시 주정차 단속 CCTV(ENF, TASK-016) + 주차장(PARK, 표준데이터, TASK-017) + 관광지(TOUR, TASK-026). */
+export type FacilityKey = FacilityType | "ENF" | "PARK" | "GAS" | "LPG" | "EV" | "TOUR";
 
-/** 내 위치 반경 안만 보이는 유형(TASK-016·017·018). */
-export const NEARBY_KEYS: FacilityKey[] = ["ENF", "PARK", "GAS", "LPG", "EV"];
+/** 내 위치 반경 안만 보이는 유형(TASK-016·017·018·026). */
+export const NEARBY_KEYS: FacilityKey[] = ["ENF", "PARK", "GAS", "LPG", "EV", "TOUR"];
 
-/** 유형별 조회 반경(m). 주유소는 드문드문해서 3km(TASK-018 2.(a)), LPG 충전소는 더 드물어 5km, 나머지는 1km. */
-export const NEARBY_RADIUS: Partial<Record<FacilityKey, number>> = { ENF: 1000, PARK: 1000, GAS: 3000, LPG: 5000, EV: 1000 };
+/** 유형별 조회 반경(m). 주유소는 드문드문해서 3km(TASK-018 2.(a)), LPG 충전소는 더 드물어 5km, 관광지 5km(TASK-026 2.(a)), 나머지는 1km. */
+export const NEARBY_RADIUS: Partial<Record<FacilityKey, number>> = { ENF: 1000, PARK: 1000, GAS: 3000, LPG: 5000, EV: 1000, TOUR: 5000 };
 
 /** 오피넷 상표 코드 → 이름·짧은 표시·색(TASK-018). 목록에 없는 코드는 "기타". */
 export const GAS_BRANDS: Record<string, { name: string; mark: string; color: string; textColor?: string }> = {
@@ -44,9 +44,11 @@ export const FACILITY_STYLE: Record<FacilityKey, { label: string; short: string;
   LPG: { label: "LPG 충전소", short: "LPG 충전소", color: "#0284c7", stroke: "#0c4a6e", mark: "LPG" },
   // 지도에서는 충전 가능 수 표시(초록 = 가능, 회색 = 모두 사용 중·정보 없음)로 그린다(TASK-019).
   EV: { label: "전기차 충전소", short: "전기차 충전소", color: "#16a34a", stroke: "#14532d", mark: "⚡" },
+  // 지도에서는 "관" 동그라미(확대하면 이름)로 그린다(TASK-026).
+  TOUR: { label: "관광지", short: "관광지", color: "#4f46e5", mark: "관", markBg: "#4f46e5" },
 };
 
-export const FACILITY_ORDER: FacilityKey[] = ["FTY01", "FTY02", "FTY03", "FTY07", "FTY09", "FTY17", "FTY23", "ENF", "PARK", "GAS", "LPG", "EV"];
+export const FACILITY_ORDER: FacilityKey[] = ["FTY01", "FTY02", "FTY03", "FTY07", "FTY09", "FTY17", "FTY23", "ENF", "PARK", "GAS", "LPG", "EV", "TOUR"];
 
 /** 주차장 요금 구분(TASK-022). 원천 parkingchrgeInfo는 무료·유료·혼합이고, 비었거나 다른 글자면 정보 없음. */
 export type ParkingFeeKind = "FREE" | "PAID" | "MIXED" | "UNKNOWN";
@@ -60,4 +62,14 @@ export const PARKING_FEE_STYLE: Record<ParkingFeeKind, { label: string; color: s
 export function parkingFeeKind(fee: string): ParkingFeeKind {
   const kind = fee.split(" · ")[0]?.trim();
   return kind === "무료" ? "FREE" : kind === "유료" ? "PAID" : kind === "혼합" ? "MIXED" : "UNKNOWN";
+}
+
+/** 관광지 주차 원문(TASK-026) → 가능·불가·정보 없음. 애매하면 정보 없음으로 두고 화면에 원문을 함께 보인다. */
+export type TourParking = "YES" | "NO" | "UNKNOWN";
+export function tourParking(text: string): TourParking {
+  const t = text.replace(/\s+/g, "");
+  if (!t) return "UNKNOWN";
+  if (/불가|없음|없습니다|주차장없/.test(t)) return "NO";
+  if (/가능|있음|있습니다|\d+대|주차장/.test(t)) return "YES";
+  return "UNKNOWN";
 }

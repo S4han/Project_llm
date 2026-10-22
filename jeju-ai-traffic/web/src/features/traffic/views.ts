@@ -2,7 +2,7 @@ import type { SpeedStatus } from "../../../../shared/contracts/traffic";
 import type { FacilityKey } from "./facilityStyle";
 
 /** 내 위치 주변 유형(대시보드 카드 → 전용 지도 페이지, TASK-025). */
-export type NearbyView = Extract<FacilityKey, "ENF" | "PARK" | "GAS" | "LPG" | "EV">;
+export type NearbyView = Extract<FacilityKey, "ENF" | "PARK" | "GAS" | "LPG" | "EV" | "TOUR">;
 
 /**
  * 교통 현황의 화면(TASK-025 2.(a)). home은 지도 없는 대시보드 카드, 나머지는 그 항목만 지도에 보이는 페이지.
@@ -19,6 +19,7 @@ export const VIEW_PATH: Record<Exclude<TrafficView, "home">, string> = {
   GAS: "/map/gas",
   LPG: "/map/lpg",
   EV: "/map/ev",
+  TOUR: "/map/tour",
   incidents: "/map/incidents",
   facilities: "/map/facilities",
 };
@@ -32,6 +33,7 @@ export const VIEW_TITLE: Record<Exclude<TrafficView, "home">, string> = {
   GAS: "주유소",
   LPG: "LPG 충전소",
   EV: "전기차 충전소",
+  TOUR: "관광지",
   incidents: "돌발·통제·공사",
   facilities: "CCTV 등 교통시설물",
 };
@@ -46,4 +48,4 @@ export function viewFromPath(pathname: string): TrafficView {
 }
 
 export const isSpeedView = (v: TrafficView): v is SpeedStatus => v === "smooth" || v === "slow" || v === "congested";
-export const isNearbyView = (v: TrafficView): v is NearbyView => v === "ENF" || v === "PARK" || v === "GAS" || v === "LPG" || v === "EV";
+export const isNearbyView = (v: TrafficView): v is NearbyView => v === "ENF" || v === "PARK" || v === "GAS" || v === "LPG" || v === "EV" || v === "TOUR";

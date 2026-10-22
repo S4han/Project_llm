@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse } from "../../shared/contracts/traffic";
+import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse, TrafficTourDetailResponse, TrafficTourResponse } from "../../shared/contracts/traffic";
 import { encodePolyline } from "../../shared/rules/polyline";
 import { REFRESH_MS } from "../../web/src/features/traffic/TrafficDashboard";
 import { TrafficApp } from "../../web/src/features/traffic/TrafficApp";
@@ -74,6 +74,17 @@ const GAS: TrafficGasResponse = {
   source: "jejuIts",
 };
 
+const TOUR: TrafficTourResponse = {
+  spots: [
+    ["T1", "사라봉", "제주시 건입동", 33.5135, 126.5445, "https://tong.visitkorea.or.kr/cms/resource/1/a_image2_1.jpg", "Type3"],
+    ["T2", "신산공원", "제주시 일도2동", 33.5045, 126.5385, "", ""],
+    ["T3", "천지연폭포", "서귀포시 천지동", 33.2465, 126.5545, "", "Type1"],
+  ],
+  builtAt: AT,
+  source: "kto",
+};
+const TOUR_DETAIL: TrafficTourDetailResponse = { id: "T1", usetime: "상시 개방\n야간 조명 22시까지", restdate: "연중무휴", parking: "가능 (승용차 30대)", infocenter: "안내소 064-000-0000", builtAt: AT, source: "kto" };
+
 const EV: TrafficEvResponse = {
   stations: [
     ["E1", "시청 충전소", "제주시 이도2동", 33.5, 126.531, 2, 4, 1, 2, "24시간 이용가능", "환경부", "1661-9408", "Y"],
@@ -97,6 +108,9 @@ let linksRespond: () => Response | Promise<Response>;
 let linksCalls = 0;
 let calls = 0;
 let visibility: DocumentVisibilityState = "visible";
+let tourRespond: () => Response;
+let tourDetailRespond: (url: string) => Response;
+let tourDetailCalls = 0;
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
@@ -112,6 +126,9 @@ beforeEach(() => {
   parkingRespond = () => Response.json(PARKING);
   gasRespond = () => Response.json(GAS);
   evRespond = () => Response.json(EV);
+  tourRespond = () => Response.json(TOUR);
+  tourDetailRespond = (url) => Response.json({ ...TOUR_DETAIL, id: new URL(url, "http://x").searchParams.get("id") });
+  tourDetailCalls = 0;
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.stubGlobal(
@@ -126,6 +143,11 @@ beforeEach(() => {
       if (url.startsWith("/api/traffic/parking")) return parkingRespond();
       if (url.startsWith("/api/traffic/gas")) return gasRespond();
       if (url.startsWith("/api/traffic/ev")) return evRespond();
+      if (url.startsWith("/api/traffic/tour?id=")) {
+        tourDetailCalls += 1;
+        return tourDetailRespond(url);
+      }
+      if (url.startsWith("/api/traffic/tour")) return tourRespond();
       if (url.startsWith("/api/traffic/links")) {
         linksCalls += 1;
         return linksRespond();
@@ -191,6 +213,7 @@ describe("대시보드와 화면 전환 (TASK-025)", () => {
       "전기차 충전소1곳반경 1km 충전 가능 · 전체 3곳지도 보기 ›",
     ]);
     expect(card(/^돌발·통제·공사/).textContent).toContain("5건");
+    await waitFor(() => expect(card(/^관광지/).textContent).toBe("관광지2곳반경 5km 안지도 보기 ›"));
     expect(card(/^CCTV 등 교통시설물/).textContent).toContain("4곳");
     expect(screen.queryByRole("region", { name: "교통 현황 지도" })).toBeNull();
     expect(screen.getByRole("link", { name: "경로 추천 →" }).getAttribute("href")).toBe("/route");
@@ -459,7 +482,7 @@ describe("내 주변 페이지 (TASK-016~024 → TASK-025 /map/enforcement·park
     cleanup();
     const denied = stubLocation(null);
     openAt("/map/parking");
-    expect(await screen.findByText(/내 위치 주변\(주정차 단속·주차장·주유소·LPG 충전소·전기차 충전소\)을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
+    expect(await screen.findByText(/내 위치 주변\(주정차 단속·주차장·주유소·LPG 충전소·전기차 충전소·관광지\)을 표시하지 못했습니다: 위치 권한이 꺼져 있습니다/)).toBeTruthy();
     expect(denied).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("button", { name: "제주 전체" })).toBeNull();
     expect(map().getAttribute("data-facilities")).toBe("0");
@@ -631,5 +654,34 @@ describe("내 주변 페이지 (TASK-016~024 → TASK-025 /map/enforcement·park
     enforcementRespond = () => Response.json(ENFORCEMENT);
     fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
     expect(await screen.findByText("내 위치 반경 1km 안 주정차 단속 CCTV 2곳")).toBeTruthy();
+  });
+
+  it("관광지(TASK-026): 반경 5km 가까운 순 목록, 지도에 표시, 줄을 누르면 카드를 열고 이용시간·주차를 불러온다", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    openAt("/map/tour");
+    expect(await screen.findByText("내 위치 반경 5km 안 관광지 2곳")).toBeTruthy();
+    expect(screen.getByText(/한국관광공사 국문 관광정보\(제주 관광지\)/)).toBeTruthy();
+    const rows = within(screen.getByRole("list", { name: "관광지 목록" })).getAllByRole("button");
+    expect(rows.map((r) => r.textContent)).toEqual(["관신산공원0.4km · 제주시 일도2동지도 ›", "관사라봉1.5km · 제주시 건입동지도 ›"]);
+    expect(map().getAttribute("data-facilities")).toBe("2");
+    fireEvent.click(rows[1]!);
+    await waitFor(() => expect(tourDetailCalls).toBe(1));
+    expect(await screen.findByText("주차 가능")).toBeTruthy();
+    expect(screen.getByText("상시 개방")).toBeTruthy();
+    expect(screen.getByText("가능 (승용차 30대)")).toBeTruthy();
+    const img = document.querySelector(".popup-card-photo img") as HTMLImageElement;
+    expect(img.src).toBe("https://tong.visitkorea.or.kr/cms/resource/1/a_image2_1.jpg");
+    expect(screen.getByText("사진 한국관광공사")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "현재 위치에서 경로 안내" }).getAttribute("href")).toMatch(/^\/route\?to=/);
+  });
+
+  it("관광지 목록을 못 받으면 안내와 다시 시도", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    tourRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
+    openAt("/map/tour");
+    const msg = await screen.findByText("관광지 정보를 불러오지 못했습니다.");
+    tourRespond = () => Response.json(TOUR);
+    fireEvent.click(within(msg.parentElement!).getByRole("button", { name: "다시 시도" }));
+    expect(await screen.findByText("내 위치 반경 5km 안 관광지 2곳")).toBeTruthy();
   });
 });

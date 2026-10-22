@@ -267,3 +267,5 @@
 | 2026-10-22 | TASK-025 | 완료 승인 | "완료 승인: TASK-025" | 결과 검토 → 완료 | Production은 "main 반영"·"Main반영"(2026-10-22)으로 이미 출시 |
 | 2026-10-22 | TASK-026 | 신규 등록·계획 승인 | "제주도 관광지 정보를 알 수 있는 api. 관광지 위치, 운영시간, 주차장여부 등" → "다음" → "계획 승인: TASK-026 1. (a) 2. (a) 3. (a) 4. 승인 신청 완료" | — → 진행 중 | 한국관광공사 국문 관광정보 서비스_GW(공공데이터포털 15101578, 개발계정 1,000건/일, 무료). 시험 호출 최대 5건(임시 함수 `api/tour-probe.ts`, main 제외) |
 | 2026-10-22 | TASK-026 | 범위 변경 | (Preview 빌드 실패 캡처: "No more than 12 Serverless Functions … on the Hobby plan") → "범위 변경: TASK-026 함수 통합 (a)" | 진행 중 | 교통 함수 8개(incidents·speeds·links·facilities·enforcement·parking·gas·ev)를 `api/traffic/[kind].ts` 하나로. 주소·응답·보관 동일, 함수 12 → 5(+시험 함수 1). maxDuration 60은 통합 함수에. 개발 서버도 경로 조각 파일을 찾게 |
+| 2026-10-22 | TASK-026 | 시험 호출 결과 | (사용자가 Preview에서 /api/tour-probe 결과 전달) | 진행 중 | 4건(승인 5건): 제주 관광지 194곳, 사진 191곳, 목록 전화 0곳, 좌표 1곳 오타(경도 12.79), 소개정보 usetime·restdate·parking·infocenter 확인. 시험 함수 삭제 |
+| 2026-10-22 | TASK-026 | 결과 보고 | (구현 완료) | 진행 중 → 결과 검토 | 대시보드 관광지 카드, /map/tour 반경 5km·가까운 순, 누르면 이용시간·쉬는날·주차·문의를 불러오는 카드(사진·출처), 서버 목록 하루·CDN 7일·상세 30일, 내부 한도 kto 800. `reports/TASK-026-RESULT.md`. main 미반영 |
