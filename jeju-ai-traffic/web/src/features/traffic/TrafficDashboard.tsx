@@ -286,7 +286,7 @@ function RetryAlert({ text, onRetry }: { text: string; onRetry: () => void }) {
 }
 
 /** 대시보드 카드(TASK-025): 이름·핵심 숫자·한 줄 설명. 누르면 그 항목의 지도 페이지. */
-function DashCard({ title, mark, value, sub, onClick, small = false }: { title: string; mark?: ReactNode; value: string; sub: string; onClick: () => void; small?: boolean }) {
+function DashCard({ title, mark, value, sub, onClick, small = false }: { title: string; mark?: ReactNode; value: ReactNode; sub: string; onClick: () => void; small?: boolean }) {
   return (
     <button type="button" onClick={onClick} className={`flex w-full flex-col gap-1 rounded-[20px] bg-white p-3 text-left shadow-sm ring-1 ring-grey-200 active:bg-grey-50 ${small ? "min-h-20" : "min-h-28"}`}>
       <span className="flex items-center gap-1.5 text-sm font-semibold text-grey-700">
@@ -601,6 +601,7 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
   const evAvailCount = evList.filter((r) => (evAvail(r.s) ?? 0) > 0).length;
   const lowLpg = nearLpg.reduce<number | null>((m, s) => (s[7] !== null && (m === null || s[7] < m) ? s[7] : m), null);
   const lowGasoline = nearGas.reduce<number | null>((m, s) => (s[3] !== null && (m === null || s[3] < m) ? s[3] : m), null);
+  const lowDiesel = nearGas.reduce<number | null>((m, s) => (s[4] !== null && (m === null || s[4] < m) ? s[4] : m), null);
   // 목록: 휘발유 싼 순(가격 없음은 아래), 같으면 가까운 순.
   const toFuelRows = (list: TrafficGasResponse["stations"], kind: "GAS" | "LPG", here: Coordinate): FuelRow[] =>
     list
@@ -859,7 +860,7 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
   if (view === "home") {
     // 대시보드(TASK-025 1.(a)): 카드마다 핵심 숫자 한 줄, 누르면 그 항목의 지도 페이지. 내 위치가 있으면 반경 요약, 없으면 제주 전체 수.
     const here = myLocation !== null;
-    const nearbyCard = (k: "ENF" | "PARK" | "GAS" | "LPG" | "EV"): { value: string; sub: string } => {
+    const nearbyCard = (k: "ENF" | "PARK" | "GAS" | "LPG" | "EV"): { value: ReactNode; sub: string } => {
       const loading = { ENF: enforcementLoading, PARK: parkingLoading, GAS: gasLoading, LPG: gasLoading, EV: evLoading }[k];
       const failed = { ENF: enforcementProblem, PARK: parkingProblem, GAS: gasProblem !== null, LPG: gasProblem !== null, EV: evProblem }[k];
       if (loading) return { value: "–", sub: "불러오는 중…" };
@@ -874,7 +875,22 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
           return here ? { value: `${nearPark.length.toLocaleString("ko-KR")}곳`, sub: `반경 ${km} · 무료 ${free(nearPark)}곳` } : { value: all, sub: `제주 전체 · 무료 ${free(parking?.lots ?? [])}곳` };
         }
         case "GAS":
-          return here ? (lowGasoline !== null ? { value: won(lowGasoline), sub: `반경 ${km} 휘발유 최저 · ${nearGas.length}곳` } : { value: "없음", sub: `반경 ${km} 안 주유소` }) : { value: all, sub: "제주 전체" };
+          // 휘발유·경유 최저가를 나눠 보인다(TASK-025 점검, 사용자 "주유소 카드에 최저가를 휘발유,경유 구분").
+          if (!here) return { value: all, sub: "제주 전체" };
+          if (nearGas.length === 0) return { value: "없음", sub: `반경 ${km} 안 주유소` };
+          return {
+            value: (
+              <span className="flex flex-col gap-0.5 text-[clamp(0.95rem,4.6vw,1.25rem)] leading-tight">
+                {([["휘발유", lowGasoline], ["경유", lowDiesel]] as const).map(([fuel, price]) => (
+                  <span key={fuel} className="flex items-baseline gap-1.5">
+                    <span className="w-10 shrink-0 text-xs font-semibold text-grey-600">{fuel}</span>
+                    {price !== null ? won(price) : "정보 없음"}
+                  </span>
+                ))}
+              </span>
+            ),
+            sub: `반경 ${km} 최저 · ${nearGas.length}곳`,
+          };
         case "LPG":
           return here ? (lowLpg !== null ? { value: won(lowLpg), sub: `반경 ${km} LPG 최저 · ${nearLpg.length}곳` } : { value: "없음", sub: `반경 ${km} 안 LPG 충전소` }) : { value: all, sub: "제주 전체" };
         case "EV": {

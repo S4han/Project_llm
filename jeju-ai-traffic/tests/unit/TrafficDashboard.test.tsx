@@ -186,7 +186,7 @@ describe("대시보드와 화면 전환 (TASK-025)", () => {
     expect(within(screen.getByRole("list", { name: "내 주변 카드" })).getAllByRole("button").map((b) => b.textContent)).toEqual([
       "주정차 단속2곳반경 1km 안지도 보기 ›",
       "주차장1곳반경 1km · 무료 0곳지도 보기 ›",
-      "주유소1,849원반경 3km 휘발유 최저 · 2곳지도 보기 ›",
+      "주유소휘발유1,849원경유1,829원반경 3km 최저 · 2곳지도 보기 ›",
       "LPG 충전소1,178원반경 5km LPG 최저 · 1곳지도 보기 ›",
       "전기차 충전소1곳반경 1km 충전 가능 · 전체 3곳지도 보기 ›",
     ]);
