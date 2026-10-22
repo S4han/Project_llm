@@ -1,8 +1,8 @@
-import type { SearchCategory, SearchFeed, SearchRow } from "../../../shared/contracts/search.js";
+import type { PetTag, SearchCategory, SearchDetailResponse, SearchFeed, SearchRow } from "../../../shared/contracts/search.js";
 import { isInJeju, isJejuAddress, JEJU_BOUNDS } from "../../../shared/rules/geo.js";
 import { ProviderError } from "../errors.js";
 import { serviceKeyParam } from "./jejuCityEnforcement.js";
-import { imageUrl, plainText } from "./ktoTour.js";
+import { imageUrl, ktoItems, plainText } from "./ktoTour.js";
 import { stayPhoto } from "./visitJejuStay.js";
 
 /**
@@ -25,6 +25,17 @@ export function cleanTags(v: string): string {
     if (out.length >= TAGS_MAX) break;
   }
   return out.join(",");
+}
+
+/**
+ * 반려동물 태그(범위 변경 2026-10-23). TASK-029 시험 표본에 "애견동반"이 있었다. "불가"·"금지"가 붙으면 불가.
+ * 태그가 없으면 ""(모름). 없다고 불가로 보지 않는다.
+ */
+export function petTag(tags: string): PetTag {
+  const t = tags.replace(/\s+/g, "");
+  if (/(애견|반려동물|반려견|펫|애완동물|애완견)(동반|출입|입장)?(불가|금지)|노키즈펫/.test(t)) return "NO";
+  if (/애견동반|반려동물동반|반려견동반|애완동물동반|펫프렌들리|애견카페|애견가능|반려동물가능|반려동물출입가|애견출입가|펫동반/i.test(t)) return "YES";
+  return "";
 }
 
 /** 비짓제주 음식점(c4) 가운데 카페: 이름·태그에 카페·커피·디저트·베이커리가 있으면. */
@@ -59,7 +70,8 @@ export function normalizeVisitJejuPage(body: unknown, category: SearchFeed["cate
     const tag = text(i.tag);
     const photo = (i.repPhoto as { photoid?: { thumbnailpath?: unknown; imgpath?: unknown } } | undefined)?.photoid;
     const cat: SearchCategory = category === "RESTAURANT" && CAFE_WORDS.test(`${name},${tag}`) ? "CAFE" : category;
-    rows.push([`visitJeju:${id}`, cat, name, text(i.roadaddress) || text(i.address), lat, lng, text(i.phoneno), stayPhoto(photo?.imgpath) || stayPhoto(photo?.thumbnailpath), clipIntro(plainText(i.introduction)), cleanTags(`${tag},${text(i.alltag)}`), [["visitJeju", id]]]);
+    const alltag = text(i.alltag);
+    rows.push([`visitJeju:${id}`, cat, name, text(i.roadaddress) || text(i.address), lat, lng, text(i.phoneno), stayPhoto(photo?.imgpath) || stayPhoto(photo?.thumbnailpath), clipIntro(plainText(i.introduction)), cleanTags(`${tag},${alltag}`), [["visitJeju", id]], /주차/.test(alltag), petTag(`${tag},${alltag}`)]);
   }
   return { rows, pageCount: Number(b?.pageCount) || 1 };
 }
@@ -120,7 +132,7 @@ export function normalizeKtoPage(body: unknown, category: SearchFeed["category"]
     const cp = text(i.cpyrhtDivCd);
     // 사진은 공공누리 1·3유형만(TASK-026과 같이). 출처 표시는 화면에서.
     const photo = cp === "Type1" || cp === "Type3" ? imageUrl(i.firstimage) : "";
-    rows.push([`kto:${id}`, cafe ? "CAFE" : category, name, [text(i.addr1), text(i.addr2)].filter(Boolean).join(" "), lat, lng, text(i.tel), photo, "", "", [["kto", id]]]);
+    rows.push([`kto:${id}`, cafe ? "CAFE" : category, name, [text(i.addr1), text(i.addr2)].filter(Boolean).join(" "), lat, lng, text(i.tel), photo, "", "", [["kto", id]], false, ""]);
   }
   return { rows, totalCount: Number(b?.response?.body?.totalCount) || list.length };
 }
@@ -154,6 +166,68 @@ export function createKtoFeed(apiKey: string, category: SearchFeed["category"], 
   };
 }
 
+// ── 한국관광공사 소개정보(범위 변경 2026-10-23: 운영시간·주차·반려동물) ──
+export type SearchDetail = Omit<SearchDetailResponse, "builtAt">;
+
+export interface DetailProvider {
+  fetchDetail(id: string, category: SearchCategory): Promise<SearchDetail>;
+}
+
+const KTO_INTRO = "https://apis.data.go.kr/B551011/KorService2/detailIntro2";
+/** 카페는 관광공사에서 음식점(39)이다. */
+export const ktoTypeOf = (c: SearchCategory) => (c === "CAFE" ? KTO_TYPE.RESTAURANT : KTO_TYPE[c]);
+
+/**
+ * 소개정보 → 운영시간·쉬는날·주차·반려동물·문의. 항목 이름은 분류마다 다르다:
+ * 관광지 usetime·restdate·parking·chkpet·infocenter(TASK-026), 숙박 checkintime·checkouttime·parkinglodging·infocenterlodging(TASK-028 시험),
+ * 음식점 opentimefood·restdatefood·parkingfood·infocenterfood.
+ */
+export function normalizeKtoIntro(id: string, category: SearchCategory, body: unknown): SearchDetail {
+  const i = ktoItems(body).list[0] ?? {};
+  const t = (k: string) => plainText(i[k]);
+  if (category === "ATTRACTION") return { id, hours: t("usetime"), rest: t("restdate"), parking: t("parking"), pet: t("chkpet"), info: t("infocenter"), source: "kto" };
+  if (category === "ACCOMMODATION") {
+    const hours = [t("checkintime") && `입실 ${t("checkintime")}`, t("checkouttime") && `퇴실 ${t("checkouttime")}`].filter(Boolean).join("\n");
+    return { id, hours, rest: "", parking: t("parkinglodging"), pet: "", info: t("infocenterlodging"), source: "kto" };
+  }
+  return { id, hours: t("opentimefood"), rest: t("restdatefood"), parking: t("parkingfood"), pet: "", info: t("infocenterfood"), source: "kto" };
+}
+
+export function createKtoDetail(apiKey: string, fetchImpl: typeof fetch = fetch): DetailProvider {
+  return {
+    async fetchDetail(id, category) {
+      let res: Response;
+      try {
+        res = await fetchImpl(`${KTO_INTRO}?serviceKey=${serviceKeyParam(apiKey)}&MobileOS=ETC&MobileApp=JejuTraffic&_type=json&contentId=${encodeURIComponent(id)}&contentTypeId=${ktoTypeOf(category)}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+      } catch {
+        throw new ProviderError("unavailable", "관광정보 연결 실패");
+      }
+      if (res.status === 429) throw new ProviderError("rate_limited", "관광정보 한도");
+      if (!res.ok) throw new ProviderError("unavailable", `관광정보 HTTP ${res.status}`);
+      try {
+        return normalizeKtoIntro(id, category, await res.json());
+      } catch (e) {
+        throw e instanceof ProviderError ? e : new ProviderError("unavailable", "관광정보 응답 형식");
+      }
+    },
+  };
+}
+
+/** 모의 소개정보(모의 사라봉·모의 흑돼지). 실제 정보가 아니다. */
+export function createMockDetail(): DetailProvider & { calls: number } {
+  const rows: Record<string, Omit<SearchDetail, "id" | "source">> = {
+    "MOCK-K1": { hours: "상시 개방", rest: "연중무휴", parking: "가능 (승용차 30대)", pet: "가능 (목줄 착용)", info: "모의 안내소 064-000-0020" },
+    "MOCK-K2": { hours: "11:00~21:00", rest: "매주 화요일", parking: "불가", pet: "", info: "" },
+  };
+  return {
+    calls: 0,
+    async fetchDetail(id) {
+      this.calls += 1;
+      return { id, ...(rows[id] ?? { hours: "", rest: "", parking: "", pet: "", info: "" }), source: "mock" };
+    },
+  };
+}
+
 // ── 카카오 로컬(실시간, 저장하지 않음) ─────────────────────
 const KAKAO_GROUP: Partial<Record<string, SearchCategory>> = { FD6: "RESTAURANT", CE7: "CAFE", AT4: "ATTRACTION", AD5: "ACCOMMODATION" };
 export const KAKAO_CODE: Partial<Record<SearchCategory, string>> = { RESTAURANT: "FD6", CAFE: "CE7" };
@@ -172,7 +246,7 @@ export function normalizeKakaoSearch(body: unknown): SearchRow[] {
     const cat = KAKAO_GROUP[text(d.category_group_code)];
     if (!id || !name || (cat !== "RESTAURANT" && cat !== "CAFE") || !isInJeju({ lat, lng }) || !isJejuAddress(text(d.address_name))) continue;
     const kind = text(d.category_name).split(">").map((s) => s.trim()).filter(Boolean).slice(1).join(",");
-    rows.push([`kakaoLocal:${id}`, cat, name, address, lat, lng, text(d.phone), "", "", kind, [["kakaoLocal", id]]]);
+    rows.push([`kakaoLocal:${id}`, cat, name, address, lat, lng, text(d.phone), "", "", kind, [["kakaoLocal", id]], false, ""]);
   }
   return rows;
 }
@@ -231,19 +305,19 @@ export function createKakaoLiveProvider(apiKey: string, fetchImpl: typeof fetch 
 export function createMockFeeds(): FeedProvider[] {
   const vj: Record<SearchFeed["category"], SearchRow[]> = {
     ATTRACTION: [
-      ["visitJeju:MOCK-V1", "ATTRACTION", "모의 사라봉", "제주시 모의동 20", 33.5136, 126.5446, "064-000-0020", "", "모의 오름 산책길", "오름,산책", [["visitJeju", "MOCK-V1"]]],
-      ["visitJeju:MOCK-V2", "ATTRACTION", "모의 성산 일출봉", "서귀포시 모의동 40", 33.4585, 126.9425, "", "", "모의 해돋이 명소", "자연경관,해돋이", [["visitJeju", "MOCK-V2"]]],
+      ["visitJeju:MOCK-V1", "ATTRACTION", "모의 사라봉", "제주시 모의동 20", 33.5136, 126.5446, "064-000-0020", "", "모의 오름 산책길", "오름,산책", [["visitJeju", "MOCK-V1"]], true, ""],
+      ["visitJeju:MOCK-V2", "ATTRACTION", "모의 성산 일출봉", "서귀포시 모의동 40", 33.4585, 126.9425, "", "", "모의 해돋이 명소", "자연경관,해돋이", [["visitJeju", "MOCK-V2"]], false, ""],
     ],
-    ACCOMMODATION: [["visitJeju:MOCK-V3", "ACCOMMODATION", "모의 신산 호텔", "제주시 모의동 30", 33.5055, 126.5405, "064-000-0030", "", "모의 시내 호텔", "호텔,조식", [["visitJeju", "MOCK-V3"]]]],
+    ACCOMMODATION: [["visitJeju:MOCK-V3", "ACCOMMODATION", "모의 신산 호텔", "제주시 모의동 30", 33.5055, 126.5405, "064-000-0030", "", "모의 시내 호텔", "호텔,조식", [["visitJeju", "MOCK-V3"]], false, ""]],
     RESTAURANT: [
-      ["visitJeju:MOCK-V4", "RESTAURANT", "모의 고기국수", "제주시 모의동 50", 33.5005, 126.5305, "064-000-0050", "", "모의 국수집", "국수,한식", [["visitJeju", "MOCK-V4"]]],
-      ["visitJeju:MOCK-V5", "CAFE", "모의 바다 카페", "제주시 모의동 51", 33.5165, 126.5255, "", "", "모의 바다 앞 카페", "카페,오션뷰", [["visitJeju", "MOCK-V5"]]],
+      ["visitJeju:MOCK-V4", "RESTAURANT", "모의 고기국수", "제주시 모의동 50", 33.5005, 126.5305, "064-000-0050", "", "모의 국수집", "국수,한식", [["visitJeju", "MOCK-V4"]], true, "NO"],
+      ["visitJeju:MOCK-V5", "CAFE", "모의 바다 카페", "제주시 모의동 51", 33.5165, 126.5255, "", "", "모의 바다 앞 카페", "카페,오션뷰,애견동반", [["visitJeju", "MOCK-V5"]], true, "YES"],
     ],
   };
   const kto: Record<SearchFeed["category"], SearchRow[]> = {
-    ATTRACTION: [["kto:MOCK-K1", "ATTRACTION", "모의 사라봉 (제주시)", "제주시 모의동 20-1", 33.5139, 126.545, "", "", "", "", [["kto", "MOCK-K1"]]]],
+    ATTRACTION: [["kto:MOCK-K1", "ATTRACTION", "모의 사라봉 (제주시)", "제주시 모의동 20-1", 33.5139, 126.545, "", "", "", "", [["kto", "MOCK-K1"]], false, ""]],
     ACCOMMODATION: [],
-    RESTAURANT: [["kto:MOCK-K2", "RESTAURANT", "모의 흑돼지", "제주시 모의동 60", 33.4985, 126.5285, "064-000-0060", "", "", "", [["kto", "MOCK-K2"]]]],
+    RESTAURANT: [["kto:MOCK-K2", "RESTAURANT", "모의 흑돼지", "제주시 모의동 60", 33.4985, 126.5285, "064-000-0060", "", "", "", [["kto", "MOCK-K2"]], false, ""]],
   };
   return (["visitJeju", "kto"] as const).flatMap((source) =>
     (["ATTRACTION", "ACCOMMODATION", "RESTAURANT"] as const).map((category) => ({ feed: { source, category }, mock: true, fetch: async () => (source === "visitJeju" ? vj : kto)[category] })),
@@ -252,8 +326,8 @@ export function createMockFeeds(): FeedProvider[] {
 
 export function createMockLiveProvider(): LiveSearchProvider & { calls: number } {
   const rows: SearchRow[] = [
-    ["kakaoLocal:MOCK-L1", "CAFE", "모의 시청 커피", "제주시 모의동 70", 33.4995, 126.5315, "064-000-0070", "", "", "카페,커피전문점", [["kakaoLocal", "MOCK-L1"]]],
-    ["kakaoLocal:MOCK-L2", "RESTAURANT", "모의 고기국수", "제주시 모의동 50", 33.5006, 126.5307, "064-000-0050", "", "", "한식,국수", [["kakaoLocal", "MOCK-L2"]]],
+    ["kakaoLocal:MOCK-L1", "CAFE", "모의 시청 커피", "제주시 모의동 70", 33.4995, 126.5315, "064-000-0070", "", "", "카페,커피전문점", [["kakaoLocal", "MOCK-L1"]], false, ""],
+    ["kakaoLocal:MOCK-L2", "RESTAURANT", "모의 고기국수", "제주시 모의동 50", 33.5006, 126.5307, "064-000-0050", "", "", "한식,국수", [["kakaoLocal", "MOCK-L2"]], false, ""],
   ];
   return {
     calls: 0,

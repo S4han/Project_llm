@@ -1,6 +1,6 @@
 import type { ApiError, ApiErrorBody } from "../../../shared/contracts/common";
 import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse, TrafficStayResponse, TrafficTourDetailResponse, TrafficTourResponse } from "../../../shared/contracts/traffic";
-import type { SearchIndexResponse, SearchLiveResponse } from "../../../shared/contracts/search";
+import type { SearchDetailResponse, SearchIndexResponse, SearchLiveResponse } from "../../../shared/contracts/search";
 
 export type TrafficIncidentsResult = { ok: true; data: TrafficIncidentsResponse } | { ok: false; error: ApiError };
 
@@ -113,4 +113,18 @@ export function fetchSearchLive(input: { q: string; cat: string; origin: { lat: 
     p.set("lng", input.origin.lng.toFixed(3));
   }
   return getJson<SearchLiveResponse>(`/api/traffic/search?${p}`, (b) => "places" in b && "observedAt" in b, signal);
+}
+
+const searchDetails = new Map<string, Promise<Result<SearchDetailResponse>>>();
+/** GET /api/traffic/search?kto=&cat=(TASK-029 범위 변경): 관광공사 소개정보(운영시간·주차·반려동물). 카드를 열 때만, 이 화면에서는 한 번만(실패는 다시 받음). */
+export function fetchSearchDetail(id: string, cat: string): Promise<Result<SearchDetailResponse>> {
+  const key = `${cat === "CAFE" ? "RESTAURANT" : cat}:${id}`;
+  const hit = searchDetails.get(key);
+  if (hit) return hit;
+  const p = getJson<SearchDetailResponse>(`/api/traffic/search?kto=${encodeURIComponent(id)}&cat=${encodeURIComponent(cat)}`, (b) => "hours" in b && "parking" in b).then((r) => {
+    if (!r.ok) searchDetails.delete(key);
+    return r;
+  });
+  searchDetails.set(key, p);
+  return p;
 }

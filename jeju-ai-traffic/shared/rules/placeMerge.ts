@@ -36,6 +36,8 @@ export function mergePlaces(lists: SearchRow[][]): SearchRow[] {
       if (target && !target[10].some(([s]) => row[10].some(([t]) => t === s))) {
         if (target[1] === "RESTAURANT" && row[1] === "CAFE") target[1] = "CAFE";
         for (const i of [3, 6, 7, 8, 9] as const) if (!target[i]) target[i] = row[i];
+        target[11] = target[11] || row[11];
+        if (!target[12]) target[12] = row[12];
         target[10] = [...target[10], ...row[10]];
         continue;
       }

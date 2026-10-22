@@ -1,5 +1,6 @@
 import type { Coordinate } from "../../../../shared/contracts/route";
-import { SEARCH_CATEGORIES, SEARCH_CATEGORY_LABEL, SEARCH_SOURCE_LABEL, type SearchCategory, type SearchIndexResponse, type SearchRow } from "../../../../shared/contracts/search";
+import { SEARCH_CATEGORIES, SEARCH_CATEGORY_LABEL, SEARCH_SOURCE_LABEL, type SearchCategory, type SearchDetailResponse, type SearchIndexResponse, type SearchRow } from "../../../../shared/contracts/search";
+import { tourParking } from "../traffic/facilityStyle";
 import type { PopupCard } from "../map/leafletMap";
 import { formatKstTime } from "../trip/format";
 import { parkingRouteHref } from "../trip/routeLink";
@@ -54,30 +55,83 @@ const photoCredit = (src: string) => (src.includes("visitjeju.net") ? "사진 �
  * 장소 상세 카드(TASK-029 1.(a)): 받은 정보만 보이고 없는 값은 "정보 없음"(참고 PRD FR-007). 출처와 기준 시각을 함께.
  * 버튼은 이 서비스의 경로 안내, 아래 링크는 출처 사이트와 카카오맵 길찾기(새 창).
  */
-export function placeCard(row: SearchRow, meters: number | null, at: { listBuiltAt: string | null; liveAt: string | null }, originName: string | null): PopupCard {
-  const [id, cat, name, address, lat, lng, phone, photo, intro, tags, refs] = row;
+/** 관광공사 소개정보 상태: 받기 전(관광공사 자료 없음이면 null), 받는 중, 실패, 받은 값. */
+export type DetailState = SearchDetailResponse | "loading" | "failed" | null;
+type Tile = NonNullable<PopupCard["tiles"]>[number];
+const HOURS_LABEL: Record<SearchCategory, string> = { ATTRACTION: "이용시간", ACCOMMODATION: "입실·퇴실", RESTAURANT: "영업시간", CAFE: "영업시간" };
+const short = (v: string, n = 26) => {
+  const line = v.split("\n")[0] ?? "";
+  return line.length > n ? `${line.slice(0, n - 1)}…` : line;
+};
+
+/** 관광공사 자료가 있으면 그 번호(합친 곳 포함). 소개정보(운영시간·주차·반려동물)는 이 번호로 받는다. */
+export const ktoId = (row: SearchRow) => row[10].find(([s]) => s === "kto")?.[1] ?? null;
+
+/** 반려동물 원문(관광공사 chkpet)을 가능·불가로. 애매하면 원문 그대로 보통 색. */
+export function petFromText(v: string): Tile["tone"] {
+  const t = v.replace(/\s+/g, "");
+  if (/불가|안됨|금지|없음/.test(t)) return "bad";
+  if (/가능|동반/.test(t)) return "good";
+  return "neutral";
+}
+
+/**
+ * 장소 상세 카드(TASK-029 1.(a)): 받은 정보만 보이고 없는 값은 "정보 없음"(참고 PRD FR-006). 출처와 기준 시각을 함께.
+ * 범위 변경(2026-10-23): 큰 칸에 운영시간·주차·반려동물. 관광공사 자료가 있으면 소개정보로, 없으면 비짓제주 태그로, 그것도 없으면 "정보 없음".
+ * 버튼은 이 서비스의 경로 안내, 아래 링크는 출처 사이트와 카카오맵 길찾기(새 창).
+ */
+export function placeCard(row: SearchRow, meters: number | null, at: { listBuiltAt: string | null; liveAt: string | null }, originName: string | null, detail: DetailState = null): PopupCard {
+  const [id, cat, name, address, lat, lng, phone, photo, intro, tags, refs, parkingTag, petTagValue] = row;
   const st = CATEGORY_STYLE[cat];
   const live = refs.some(([s]) => s === "kakaoLocal");
   const listed = refs.some(([s]) => s !== "kakaoLocal");
-  const times = [listed && at.listBuiltAt ? `목록 ${formatKstTime(at.listBuiltAt)}` : "", live && at.liveAt ? `카카오 ${formatKstTime(at.liveAt)}` : ""].filter(Boolean).join(" · ");
+  const d = typeof detail === "object" && detail !== null ? detail : null;
+  const waiting = detail === "loading" ? "확인 중…" : detail === "failed" ? "–" : null;
+  const times = [listed && at.listBuiltAt ? `목록 ${formatKstTime(at.listBuiltAt)}` : "", live && at.liveAt ? `카카오 ${formatKstTime(at.liveAt)}` : "", d ? `관광공사 상세 ${formatKstTime(d.builtAt)}` : ""].filter(Boolean).join(" · ");
   const directions = `https://map.kakao.com/link/to/${encodeURIComponent(name.replaceAll(",", " "))},${lat.toFixed(6)},${lng.toFixed(6)}`;
+
+  const hours: Tile = d?.hours
+    ? { label: HOURS_LABEL[cat], value: short(d.hours), sub: d.rest ? `쉬는날 ${short(d.rest, 18)}` : "한국관광공사", tone: "neutral" }
+    : { label: HOURS_LABEL[cat], value: waiting ?? "정보 없음", sub: waiting ? undefined : detail === null ? "출처 상세에서 확인" : "한국관광공사", tone: "neutral" };
+  const parkKind = d?.parking ? tourParking(d.parking) : "UNKNOWN";
+  const parking: Tile =
+    parkKind !== "UNKNOWN"
+      ? { label: "주차", value: parkKind === "YES" ? "가능" : "불가", sub: "한국관광공사", tone: parkKind === "YES" ? "good" : "bad" }
+      : parkingTag
+        ? { label: "주차", value: "주차장 있음", sub: "비짓제주 태그", tone: "good" }
+        : { label: "주차", value: d?.parking ? short(d.parking, 14) : (waiting ?? "정보 없음"), sub: d?.parking ? "한국관광공사" : undefined, tone: "neutral" };
+  const pet: Tile = d?.pet
+    ? { label: "반려동물", value: petFromText(d.pet) === "good" ? "동반 가능" : petFromText(d.pet) === "bad" ? "동반 불가" : short(d.pet, 14), sub: "한국관광공사", tone: petFromText(d.pet) }
+    : petTagValue
+      ? { label: "반려동물", value: petTagValue === "YES" ? "동반 가능" : "동반 불가", sub: "비짓제주 태그", tone: petTagValue === "YES" ? "good" : "bad" }
+      : { label: "반려동물", value: waiting && cat === "ATTRACTION" ? waiting : "정보 없음", tone: "neutral" };
+  const lines = (v: string) => v.split("\n");
   return {
     size: "lg",
     badge: { text: st.mark, color: st.color },
     kicker: `${SEARCH_CATEGORY_LABEL[cat]} · ${sourceNames(row)}`,
     title: name,
     image: photo ? { src: photo, alt: name, credit: photoCredit(photo) } : undefined,
-    tiles: [
-      { label: "전화", value: phone || "정보 없음", tone: phone ? "good" : "neutral" },
-      meters !== null ? { label: `${originName ?? "기준"}에서`, value: distText(meters), sub: "직선 거리", tone: "neutral" } : { label: "출처", value: `${refs.length}곳`, sub: sourceNames(row), tone: "neutral" },
-    ],
+    tiles: [hours, parking, pet, meters !== null ? { label: `${originName ?? "기준"}에서`, value: distText(meters), sub: "직선 거리", tone: "neutral" } : { label: "전화", value: phone || "정보 없음", tone: phone ? "good" : "neutral" }],
     chips: [],
     rows: [
       { label: "소개", lines: [intro || "정보 없음"] },
+      ...(d?.hours ? [{ label: HOURS_LABEL[cat], lines: lines(d.hours) }] : []),
+      ...(d?.rest ? [{ label: "쉬는날", lines: lines(d.rest) }] : []),
+      ...(d?.parking ? [{ label: "주차 안내", lines: lines(d.parking) }] : []),
+      ...(d?.pet ? [{ label: "반려동물", lines: lines(d.pet) }] : []),
+      { label: "전화", lines: [phone || "정보 없음"] },
+      ...(d?.info ? [{ label: "문의", lines: lines(d.info) }] : []),
       { label: "주소", lines: [address || "정보 없음"] },
       { label: "특징", lines: [tags ? tags.split(",").join(", ") : "정보 없음"] },
     ],
-    footer: `출처 ${sourceNames(row)}${times ? ` · ${times} 기준` : ""} · 바뀌었을 수 있으니 방문 전 확인하세요. 예약·요금 정보는 없습니다.`,
+    footer: [
+      `출처 ${sourceNames(row)}${times ? ` · ${times} 기준` : ""} · 바뀌었을 수 있으니 방문 전 확인하세요. 예약·요금 정보는 없습니다.`,
+      detail === null ? "운영시간은 한국관광공사 자료가 있는 곳만 나옵니다. 아래 링크의 상세에서 확인하세요." : "",
+      detail === "failed" ? "운영시간·주차 정보를 불러오지 못했습니다. 다시 눌러 보세요." : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
     action: { href: parkingRouteHref({ id, name, address, lat, lng }), label: "현재 위치에서 경로 안내" },
     links: [...sourceLinks(row), { href: directions, label: "카카오맵 길찾기 ↗" }],
   };

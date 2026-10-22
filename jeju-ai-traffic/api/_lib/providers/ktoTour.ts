@@ -50,7 +50,7 @@ export function imageUrl(v: unknown): string {
   return m ? `https://${m[1]}${m[2]}` : "";
 }
 
-function items(body: unknown): { list: Record<string, unknown>[]; totalCount: number } {
+export function ktoItems(body: unknown): { list: Record<string, unknown>[]; totalCount: number } {
   const b = body as { response?: { header?: { resultCode?: unknown; resultMsg?: unknown }; body?: { totalCount?: unknown; items?: { item?: unknown } | string } } } | null;
   const code = text(b?.response?.header?.resultCode);
   if (code !== "0000") throw new ProviderError(code === "22" ? "rate_limited" : "unavailable", `관광정보 응답 오류 ${code || "형식"}`);
@@ -61,7 +61,7 @@ function items(body: unknown): { list: Record<string, unknown>[]; totalCount: nu
 
 /** 목록 한 쪽 → 관광지. 좌표가 없거나 제주 밖(원천 오타 포함)이면 버린다. */
 export function normalizeTourPage(body: unknown): { spots: TourRow[]; totalCount: number } {
-  const { list, totalCount } = items(body);
+  const { list, totalCount } = ktoItems(body);
   const spots: TourRow[] = [];
   for (const i of list) {
     const id = text(i.contentid);
@@ -76,7 +76,7 @@ export function normalizeTourPage(body: unknown): { spots: TourRow[]; totalCount
 
 /** 소개정보(detailIntro2, 관광지) → 이용시간·쉬는날·주차·문의. */
 export function normalizeTourDetail(id: string, body: unknown): TourDetail {
-  const i = items(body).list[0] ?? {};
+  const i = ktoItems(body).list[0] ?? {};
   return { id, usetime: plainText(i.usetime), restdate: plainText(i.restdate), parking: plainText(i.parking), infocenter: plainText(i.infocenter), source: "kto" };
 }
 

@@ -31,6 +31,11 @@ test.describe("관광 검색 /search (TASK-029)", () => {
     const card = page.locator(".leaflet-popup .popup-card-lg");
     await expect(card).toContainText("관광지 · 비짓제주·한국관광공사");
     await expect(card).toContainText("064-000-0020");
+    // 범위 변경: 관광공사 소개정보를 카드를 열 때 받아 이용시간·주차·반려동물 칸에
+    await expect(card.locator(".popup-card-tile").filter({ hasText: "이용시간" })).toContainText("상시 개방");
+    await expect(card.locator(".popup-card-tile").filter({ hasText: "주차" })).toContainText("가능");
+    await expect(card.locator(".popup-card-tile").filter({ hasText: "반려동물" })).toContainText("동반 가능");
+    await expect(card).toContainText("연중무휴");
     await expect(card.getByRole("link", { name: "비짓제주에서 자세히 보기 ↗" })).toHaveAttribute("href", "https://www.visitjeju.net/kr/detail/view?contentsid=MOCK-V1");
     await expect(card.getByRole("link", { name: "카카오맵 길찾기 ↗" })).toHaveAttribute("href", /^https:\/\/map\.kakao\.com\/link\/to\//);
     await expect(card.getByRole("link", { name: "현재 위치에서 경로 안내" })).toHaveAttribute("href", /^\/route\?to=/);
@@ -46,6 +51,22 @@ test.describe("관광 검색 /search (TASK-029)", () => {
     await expect(results).toContainText("모의 바다 카페");
     await expect(results).toContainText("모의 시청 커피");
     await expect(results).toContainText("출처 카카오");
+    // 목록 표시: 비짓제주 태그로 주차장·반려동물
+    await expect(results.getByRole("button", { name: /모의 바다 카페/ })).toContainText("P 주차장");
+    await expect(results.getByRole("button", { name: /모의 바다 카페/ })).toContainText("🐾 동반 가능");
+    // 카카오에만 있는 곳: 운영시간·주차·반려동물 모두 정보 없음, 상세 링크 안내
+    await results.getByRole("button", { name: /모의 시청 커피/ }).click();
+    const kakaoCard = page.locator(".leaflet-popup .popup-card-lg");
+    await expect(kakaoCard.locator(".popup-card-tile").filter({ hasText: "영업시간" })).toContainText("정보 없음");
+    await expect(kakaoCard).toContainText("운영시간은 한국관광공사 자료가 있는 곳만 나옵니다");
+    await shot(page, "TASK-029-05-kakao-card-390");
+    // 반려동물 동반 거르기: 표시가 있는 곳만, 주소에 pet=1
+    await page.getByRole("button", { name: "🐾 반려동물 동반" }).click();
+    await expect(page).toHaveURL(/pet=1/);
+    await expect(results.getByRole("listitem")).toHaveCount(1);
+    await expect(results).toContainText("모의 바다 카페");
+    await page.getByRole("button", { name: "🐾 반려동물 동반", pressed: true }).click();
+    await expect(results.getByRole("listitem")).toHaveCount(2);
     // 음식점: 비짓제주 "모의 고기국수"와 카카오 "모의 고기국수"(30m 안)는 한 곳
     await page.getByRole("button", { name: /음식점/ }).click();
     await expect(page).toHaveURL(/cat=RESTAURANT/);

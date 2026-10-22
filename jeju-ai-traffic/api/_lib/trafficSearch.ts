@@ -1,4 +1,4 @@
-import type { SearchCategory, SearchFeed, SearchIndexResponse, SearchLiveResponse, SearchRow } from "../../shared/contracts/search.js";
+import type { SearchCategory, SearchDetailResponse, SearchFeed, SearchIndexResponse, SearchLiveResponse, SearchRow } from "../../shared/contracts/search.js";
 import { SEARCH_CATEGORIES, SEARCH_NEAR_RADIUS, SEARCH_QUERY_MAX_LENGTH } from "../../shared/contracts/search.js";
 import { isInJeju } from "../../shared/rules/geo.js";
 import { mergePlaces } from "../../shared/rules/placeMerge.js";
@@ -7,12 +7,15 @@ import { guardedCall } from "./policies/guardedCall.js";
 import { quotaGuard, type QuotaGuard } from "./policies/quota.js";
 import { RateLimiter } from "./policies/rateLimit.js";
 import { TtlCache } from "./policies/ttlCache.js";
-import { createKakaoLiveProvider, createKtoFeed, createMockFeeds, createMockLiveProvider, createVisitJejuFeed, KAKAO_CODE, type FeedProvider, type LiveSearchProvider } from "./providers/tourSearch.js";
+import { createKakaoLiveProvider, createKtoDetail, createKtoFeed, createMockDetail, createMockFeeds, createMockLiveProvider, createVisitJejuFeed, KAKAO_CODE, type DetailProvider, type FeedProvider, type LiveSearchProvider, type SearchDetail } from "./providers/tourSearch.js";
 
 /** 목록은 서버 하루·CDN 7일(TASK-029 2.(a), 숙소·관광지와 같음). 일부 출처가 빠진 목록은 서버·CDN 10분만 두고 다시 받는다. */
 export const SEARCH_CACHE_TTL_MS = 24 * 60 * 60_000;
 export const SEARCH_CDN_SECONDS = 7 * 24 * 60 * 60;
 export const SEARCH_PARTIAL_TTL_MS = 10 * 60_000;
+/** 관광공사 소개정보(운영시간·주차·반려동물): 장소마다 서버·CDN 30일(범위 변경 2026-10-23, 관광지 TASK-026과 같음). */
+export const SEARCH_DETAIL_TTL_MS = 30 * 24 * 60 * 60_000;
+export const SEARCH_DETAIL_CDN_SECONDS = 30 * 24 * 60 * 60;
 /** 목록·실시간 검색 합쳐 IP별 분당 요청 수. */
 export const TRAFFIC_SEARCH_PER_MINUTE = 30;
 
@@ -26,7 +29,9 @@ export interface TrafficSearchDeps {
   feeds: FeedProvider[];
   live: LiveSearchProvider;
   liveMock: boolean;
+  detail: DetailProvider;
   cache: TtlCache<SearchIndex>;
+  detailCache: TtlCache<SearchDetail>;
   guard: QuotaGuard;
   limiter: RateLimiter;
   now?: () => Date;
@@ -39,13 +44,13 @@ const FEED_CATEGORIES = ["ATTRACTION", "ACCOMMODATION", "RESTAURANT"] as const;
  * 카카오는 장소 검색과 같이 PLACES_PROVIDER=kakao와 KAKAO_REST_API_KEY가 모두 있을 때만 실제 호출.
  * 합칠 때 앞의 출처를 우선한다(비짓제주: 사진·소개·전화가 더 많음).
  */
-export function selectSearchProviders(env: Record<string, string | undefined>): Pick<TrafficSearchDeps, "feeds" | "live" | "liveMock"> {
+export function selectSearchProviders(env: Record<string, string | undefined>): Pick<TrafficSearchDeps, "feeds" | "live" | "liveMock" | "detail"> {
   const vj = env.VISITJEJU_API_KEY?.trim();
   const kto = env.DATA_GO_KR_API_KEY;
   const feeds = [...(vj ? FEED_CATEGORIES.map((c) => createVisitJejuFeed(vj, c)) : []), ...(kto ? FEED_CATEGORIES.map((c) => createKtoFeed(kto, c)) : [])];
   const kakao = env.KAKAO_REST_API_KEY;
   const real = env.PLACES_PROVIDER === "kakao" && kakao;
-  return { feeds: feeds.length ? feeds : createMockFeeds(), live: real ? createKakaoLiveProvider(kakao) : createMockLiveProvider(), liveMock: !real };
+  return { feeds: feeds.length ? feeds : createMockFeeds(), live: real ? createKakaoLiveProvider(kakao) : createMockLiveProvider(), liveMock: !real, detail: kto ? createKtoDetail(kto) : createMockDetail() };
 }
 
 function clientKey(request: Request): string {
@@ -82,11 +87,24 @@ function parseCategory(v: string | null): SearchCategory | "ALL" {
 /**
  * GET /api/traffic/search: 비짓제주·관광공사 장소를 합친 목록(검색은 화면에서).
  * ?q=검색어 또는 ?lat=&lng=(내 주변)이 있으면 카카오 로컬 실시간 음식점·카페(카테고리 ALL·RESTAURANT·CAFE만, 저장하지 않음, no-store).
+ * ?kto=콘텐츠 ID&cat=카테고리면 그 장소의 관광공사 소개정보(운영시간·쉬는날·주차·반려동물, 30일).
  */
 export async function handleTrafficSearch(request: Request, deps: TrafficSearchDeps): Promise<Response> {
   const now = deps.now ?? (() => new Date());
   try {
     const params = new URL(request.url).searchParams;
+    if (params.has("kto")) {
+      const id = params.get("kto") ?? "";
+      const cat = parseCategory(params.get("cat"));
+      if (!/^(?:\d{1,12}|MOCK-K\d{1,3})$/.test(id) || cat === "ALL") throw new AppError("INVALID_INPUT", "장소 번호나 카테고리가 올바르지 않습니다.");
+      const retry = deps.limiter.tryAcquire(clientKey(request));
+      if (retry !== null) throw new AppError("QUOTA_BLOCKED", "검색 요청이 너무 잦습니다. 잠시 후 다시 시도하세요.", new Date(retry).toISOString());
+      // 카페와 음식점은 관광공사에서 같은 분류(39)라 같은 보관본을 쓴다.
+      const kind = cat === "CAFE" ? "RESTAURANT" : cat;
+      const d = await deps.detailCache.getOrLoad(`${kind}:${id}`, () => guardedCall(deps.guard, "kto", () => deps.detail.fetchDetail(id, kind)));
+      const body: SearchDetailResponse = { ...d, builtAt: now().toISOString() };
+      return Response.json(body, { headers: { "Cache-Control": `public, max-age=86400, s-maxage=${SEARCH_DETAIL_CDN_SECONDS}, stale-while-revalidate=86400` } });
+    }
     const live = params.has("q") || params.has("lat") || params.has("lng");
     let liveInput: Parameters<LiveSearchProvider["search"]>[0] | null = null;
     if (live) {
@@ -121,6 +139,7 @@ export async function handleTrafficSearch(request: Request, deps: TrafficSearchD
 export const defaultTrafficSearchDeps: TrafficSearchDeps = {
   ...selectSearchProviders(process.env),
   cache: new TtlCache<SearchIndex>(SEARCH_CACHE_TTL_MS),
+  detailCache: new TtlCache<SearchDetail>(SEARCH_DETAIL_TTL_MS),
   guard: quotaGuard,
   limiter: new RateLimiter(TRAFFIC_SEARCH_PER_MINUTE, 60_000),
 };

@@ -4,15 +4,15 @@ import { SEARCH_CATEGORY_LABEL, SEARCH_NEAR_RADIUS, SEARCH_QUERY_MAX_LENGTH, typ
 import { mergePlaces } from "../../../../shared/rules/placeMerge";
 import { searchPlaces, type SearchHit } from "../../../../shared/rules/placeSearch";
 import { getCurrentLocation } from "../../services/geolocation";
-import { fetchSearchIndex, fetchSearchLive } from "../../services/trafficApi";
+import { fetchSearchDetail, fetchSearchIndex, fetchSearchLive } from "../../services/trafficApi";
 import type { FacilityPoint } from "../map/leafletMap";
 import { IncidentMap } from "../traffic/IncidentMap";
-import { AREAS, CATEGORY_STYLE, CHIPS, chipLabel, distText, feedLabel, PAGE, placeCard, sourceNames, SUGGESTIONS, type Cat, type Origin } from "./searchCards";
+import { AREAS, CATEGORY_STYLE, CHIPS, chipLabel, distText, feedLabel, ktoId, PAGE, placeCard, sourceNames, SUGGESTIONS, type Cat, type Origin } from "./searchCards";
 
-function readUrl(): { q: string; cat: Cat } {
+function readUrl(): { q: string; cat: Cat; pet: boolean } {
   const p = new URLSearchParams(window.location.search);
   const cat = p.get("cat") ?? "ALL";
-  return { q: (p.get("q") ?? "").slice(0, SEARCH_QUERY_MAX_LENGTH), cat: (CHIPS as string[]).includes(cat) ? (cat as Cat) : "ALL" };
+  return { q: (p.get("q") ?? "").slice(0, SEARCH_QUERY_MAX_LENGTH), cat: (CHIPS as string[]).includes(cat) ? (cat as Cat) : "ALL", pet: p.get("pet") === "1" };
 }
 
 type Live = { rows: SearchRow[]; at: string | null; failed: ApiError | null; loading: boolean };
@@ -27,6 +27,8 @@ export function SearchPage() {
   const [input, setInput] = useState(initial.q);
   const [query, setQuery] = useState(initial.q);
   const [cat, setCat] = useState<Cat>(initial.cat);
+  // 반려동물 동반 표시가 있는 곳만(범위 변경 2026-10-23). 목록에서는 비짓제주 태그로 거른다.
+  const [petOnly, setPetOnly] = useState(initial.pet);
   const [origin, setOrigin] = useState<Origin | null>(null);
   const [locating, setLocating] = useState(false);
   const [locationProblem, setLocationProblem] = useState<string | null>(null);
@@ -63,9 +65,10 @@ export function SearchPage() {
     const p = new URLSearchParams();
     if (query) p.set("q", query);
     if (cat !== "ALL") p.set("cat", cat);
+    if (petOnly) p.set("pet", "1");
     const next = `/search${p.toString() ? `?${p}` : ""}`;
     if (`${window.location.pathname}${window.location.search}` !== next) window.history.replaceState(null, "", next);
-  }, [query, cat]);
+  }, [query, cat, petOnly]);
 
   // 카카오 실시간(음식점·카페). 관광지·숙박만 고르면 부르지 않는다. 요청마다 key를 붙여, 늦게 온 이전 응답은 쓰지 않는다.
   const originAt = origin?.at;
@@ -82,7 +85,7 @@ export function SearchPage() {
   }, [liveKey]);
   const live: Live = !liveKey ? NO_LIVE : liveResult?.key === liveKey ? liveResult : { ...NO_LIVE, loading: true };
 
-  const hits: SearchHit[] = useMemo(() => {
+  const allHits: SearchHit[] = useMemo(() => {
     const q = { q: query, cat, origin: originAt ?? null };
     const base = index ? searchPlaces(index.places, q) : [];
     if (!live.rows.length) return base;
@@ -90,6 +93,7 @@ export function SearchPage() {
     return searchPlaces(mergePlaces([base.map((h) => h.place), live.rows]), { ...q, keepUnmatched: true });
   }, [index, live.rows, query, cat, originAt]);
 
+  const hits = useMemo(() => (petOnly ? allHits.filter((h) => h.place[12] === "YES") : allHits), [allHits, petOnly]);
   const visible = hits.slice(0, shown);
   const visibleKey = visible.map((h) => h.place[0]).join(",");
   const at = { listBuiltAt: index?.builtAt ?? null, liveAt: live.at };
@@ -103,7 +107,15 @@ export function SearchPage() {
         lat: place[4],
         lng: place[5],
         pin: { mark: CATEGORY_STYLE[place[1]].mark, price: null, color: CATEGORY_STYLE[place[1]].color, low: false, dot: true, top: true },
-        card: placeCard(place, meters, at, origin?.name ?? null),
+        // 관광공사 자료가 있으면 카드를 열 때 운영시간·주차·반려동물을 받는다(범위 변경 2026-10-23).
+        ...(() => {
+          const kto = ktoId(place);
+          if (!kto) return { card: placeCard(place, meters, at, origin?.name ?? null) };
+          return {
+            card: placeCard(place, meters, at, origin?.name ?? null, "loading"),
+            loadCard: () => fetchSearchDetail(kto, place[1]).then((r) => placeCard(place, meters, at, origin?.name ?? null, r.ok ? r.data : "failed")),
+          };
+        })(),
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- at은 index·live에서 나온다
     [visibleKey, index, live.at, origin],
@@ -205,6 +217,17 @@ export function SearchPage() {
           <button type="button" onClick={() => void locate()} disabled={locating} className="min-h-10 rounded-full bg-white px-3 text-sm font-semibold text-brand-700 ring-1 ring-brand-300 disabled:opacity-60">
             {locating ? "위치 확인 중…" : origin?.kind === "me" ? "내 주변 ✓" : "내 주변"}
           </button>
+          <button
+            type="button"
+            aria-pressed={petOnly}
+            onClick={() => {
+              setPetOnly((v) => !v);
+              setShown(PAGE);
+            }}
+            className={`min-h-10 rounded-full px-3 text-sm font-semibold ring-1 ${petOnly ? "bg-emerald-700 text-white ring-emerald-700" : "bg-white text-emerald-800 ring-emerald-300"}`}
+          >
+            🐾 반려동물 동반
+          </button>
           {origin && (
             <button type="button" onClick={() => setOrigin(null)} className="min-h-10 rounded-full px-2 text-sm text-grey-600 underline">
               {origin.name} 기준 해제
@@ -285,7 +308,7 @@ export function SearchPage() {
               </div>
             )}
             {searched && !hits.length && !indexLoading && !live.loading && (
-              <p className="rounded-[20px] bg-white p-3 text-sm text-grey-700 shadow-sm ring-1 ring-grey-200">검색 결과가 없습니다. 다른 검색어나 카테고리를 골라 보세요.</p>
+              <p className="rounded-[20px] bg-white p-3 text-sm text-grey-700 shadow-sm ring-1 ring-grey-200">{petOnly && allHits.length ? "반려동물 동반 표시가 있는 곳이 없습니다. 표시가 없다고 동반이 안 되는 것은 아니니, 거르기를 끄고 상세에서 확인하세요." : "검색 결과가 없습니다. 다른 검색어나 카테고리를 골라 보세요."}</p>
             )}
             {visible.length > 0 && (
               <ol aria-label="검색 결과" className="flex flex-col gap-2">
@@ -310,7 +333,11 @@ export function SearchPage() {
                             {SEARCH_CATEGORY_LABEL[place[1]]}
                           </span>
                           <span className="truncate text-sm text-grey-600">{place[3] || "주소 정보 없음"}</span>
-                          <span className="text-xs text-grey-500">출처 {sourceNames(place)}</span>
+                          <span className="flex flex-wrap items-center gap-1.5 text-xs text-grey-500">
+                            {place[11] && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-800">P 주차장</span>}
+                            {place[12] === "YES" && <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-800">🐾 동반 가능</span>}
+                            <span>출처 {sourceNames(place)}</span>
+                          </span>
                         </span>
                       </button>
                     </li>
@@ -328,6 +355,7 @@ export function SearchPage() {
       </main>
       <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
         <p>관광지·숙박·음식점 비짓제주(제주관광공사)·한국관광공사 국문 관광정보, 음식점·카페 카카오 로컬(실시간, 저장하지 않음). 이름이 같고 100m 안인 곳만 한 장소로 합칩니다.</p>
+        <p>운영시간·주차·반려동물은 한국관광공사 상세(카드를 열 때)와 비짓제주 태그에 있는 곳만 나옵니다. "정보 없음"은 없다는 뜻이 아닙니다.</p>
         <p>위치는 "내 주변"을 누를 때만 확인하고 저장하지 않습니다. 카카오 검색에는 약 100m 단위로 줄인 위치만 보냅니다.</p>
         <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자</p>
       </footer>
