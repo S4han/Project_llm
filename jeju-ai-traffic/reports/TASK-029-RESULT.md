@@ -77,7 +77,7 @@
 ## 5. 테스트·빌드
 | 명령 | 결과 |
 |---|---|
-| `npm run check:release` | 통과 — 단위 **364건**(신규 19, 범위 변경 포함), lint·typecheck·build, 비밀정보 의심 없음, 취약점 0건 |
+| `npm run check:release` | 통과 — 단위 **365건**(신규 20, 범위 변경·주변 주차장 포함), lint·typecheck·build, 비밀정보 의심 없음, 취약점 0건 |
 | `npx playwright test` | **57건** 통과(신규 3, 범위 변경 확인 추가, 모의 공급자) |
 
 ## 6. 비용·보안
@@ -125,6 +125,17 @@
   - `web/src/services/trafficApi.ts`: `fetchSearchDetail`
   - 테스트: `tests/unit/tourSearch.test.ts`, `tests/unit/searchCards.test.ts`(신규), `tests/e2e/tourSearch.spec.ts`
   - 캡처: `reports/screenshots/TASK-029-05-kakao-card-390.png`, `README.md`
+
+### 주차 정보가 없을 때 반경 1km 주차장 (결과 검토 중 사용자 요청, 2026-10-23)
+- **근거**: 사용자 "주차장 정보가 없을 경우 해당 위치 반경 1키로 주차장 검색해서 유료/무료 까지 표시".
+- **동작**
+  - 관광공사 주차 정보와 비짓제주 주차장 태그가 모두 없는 곳은, 주차 칸이 **"주변 주차장 1km N곳 · 무료 a · 유료 b(· 일부유료 c)"**로 바뀝니다.
+  - 카드 아래에는 가까운 주차장 3곳을 "이름 · 거리 · 무료/유료"로 보입니다.
+  - 반경 안에 없으면 "없음 · 반경 1km 안"으로 보입니다.
+  - 관광공사 상세를 받는 동안에는 "확인 중…"을 보이고, 받은 결과에 주차 정보가 없을 때만 주변 주차장을 찾습니다.
+- **자료**: 이미 쓰는 전국주차장정보표준데이터(TASK-017, CDN 7일)를 검색 페이지를 열 때 한 번 받습니다. **외부 호출과 비용은 늘지 않습니다.** 직선 거리이며, 실시간 남은 칸 정보는 없다고 카드에 안내합니다.
+- **변경 파일**: `web/src/features/search/searchCards.ts`·`SearchPage.tsx`, `tests/unit/searchCards.test.ts`, `tests/e2e/tourSearch.spec.ts`, 캡처 `TASK-029-05-kakao-card-390.png`.
+- **테스트**: 단위 365건, 브라우저 57건 통과.
 
 ## 9. 확인 요청
 - Preview에서 대시보드 → **관광 검색** → 검색(예: "성산일출봉", "흑돼지") → 카테고리 → 결과 → 상세 카드(운영시간·주차·반려동물 칸), **🐾 반려동물 동반** 거르기, **내 주변**을 봐 주세요.

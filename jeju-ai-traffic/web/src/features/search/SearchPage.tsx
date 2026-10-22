@@ -4,10 +4,10 @@ import { SEARCH_CATEGORY_LABEL, SEARCH_NEAR_RADIUS, SEARCH_QUERY_MAX_LENGTH, typ
 import { mergePlaces } from "../../../../shared/rules/placeMerge";
 import { searchPlaces, type SearchHit } from "../../../../shared/rules/placeSearch";
 import { getCurrentLocation } from "../../services/geolocation";
-import { fetchSearchDetail, fetchSearchIndex, fetchSearchLive } from "../../services/trafficApi";
+import { fetchSearchDetail, fetchSearchIndex, fetchSearchLive, fetchTrafficParking } from "../../services/trafficApi";
 import type { FacilityPoint } from "../map/leafletMap";
 import { IncidentMap } from "../traffic/IncidentMap";
-import { AREAS, CATEGORY_STYLE, CHIPS, chipLabel, distText, feedLabel, ktoId, PAGE, placeCard, sourceNames, SUGGESTIONS, type Cat, type Origin } from "./searchCards";
+import { AREAS, CATEGORY_STYLE, CHIPS, chipLabel, distText, feedLabel, ktoId, PAGE, placeCard, sourceNames, SUGGESTIONS, type Cat, type Origin, type ParkingLots } from "./searchCards";
 
 function readUrl(): { q: string; cat: Cat; pet: boolean } {
   const p = new URLSearchParams(window.location.search);
@@ -54,6 +54,15 @@ export function SearchPage() {
       alive = false;
     };
   }, [indexTry]);
+  // 주차 정보가 없는 곳의 반경 1km 주차장용(전국주차장정보표준데이터, CDN 7일). 페이지를 열 때 한 번.
+  const [lots, setLots] = useState<ParkingLots>("loading");
+  useEffect(() => {
+    let alive = true;
+    void fetchTrafficParking().then((r) => alive && setLots(r.ok ? r.data.lots : "failed"));
+    return () => {
+      alive = false;
+    };
+  }, []);
   const loadIndex = () => {
     setIndexLoading(true);
     setIndexError(null);
@@ -110,15 +119,15 @@ export function SearchPage() {
         // 관광공사 자료가 있으면 카드를 열 때 운영시간·주차·반려동물을 받는다(범위 변경 2026-10-23).
         ...(() => {
           const kto = ktoId(place);
-          if (!kto) return { card: placeCard(place, meters, at, origin?.name ?? null) };
+          if (!kto) return { card: placeCard(place, meters, at, origin?.name ?? null, null, lots) };
           return {
-            card: placeCard(place, meters, at, origin?.name ?? null, "loading"),
-            loadCard: () => fetchSearchDetail(kto, place[1]).then((r) => placeCard(place, meters, at, origin?.name ?? null, r.ok ? r.data : "failed")),
+            card: placeCard(place, meters, at, origin?.name ?? null, "loading", lots),
+            loadCard: () => fetchSearchDetail(kto, place[1]).then((r) => placeCard(place, meters, at, origin?.name ?? null, r.ok ? r.data : "failed", lots)),
           };
         })(),
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- at은 index·live에서 나온다
-    [visibleKey, index, live.at, origin],
+    [visibleKey, index, live.at, origin, lots],
   );
 
   const run = (q: string, c: Cat = cat) => {

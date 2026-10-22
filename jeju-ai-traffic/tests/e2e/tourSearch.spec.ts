@@ -59,6 +59,11 @@ test.describe("관광 검색 /search (TASK-029)", () => {
     const kakaoCard = page.locator(".leaflet-popup .popup-card-lg");
     await expect(kakaoCard.locator(".popup-card-tile").filter({ hasText: "영업시간" })).toContainText("정보 없음");
     await expect(kakaoCard).toContainText("운영시간은 한국관광공사 자료가 있는 곳만 나옵니다");
+    // 주차 정보가 없으면 반경 1km 주차장(표준데이터 모의 2곳: 유료 1·무료 1)
+    const nearTile = kakaoCard.locator(".popup-card-tile").filter({ hasText: "주변 주차장 1km" });
+    await expect(nearTile).toContainText("2곳");
+    await expect(nearTile).toContainText("무료 1 · 유료 1");
+    await expect(kakaoCard).toContainText("모의 시청 공영주차장");
     await shot(page, "TASK-029-05-kakao-card-390");
     // 반려동물 동반 거르기: 표시가 있는 곳만, 주소에 pet=1
     await page.getByRole("button", { name: "🐾 반려동물 동반" }).click();
