@@ -276,7 +276,7 @@ const EMPTY_IDS: string[] = [];
 const NO_INCIDENTS: TrafficIncident[] = [];
 
 type TourRow = TrafficTourResponse["spots"][number];
-const TOUR_PARKING_CHIP = { YES: "주차 가능", NO: "주차 불가", UNKNOWN: "주차 정보 없음" } as const;
+const TOUR_PARKING_TILE = { YES: ["가능", "good"], NO: ["불가", "bad"], UNKNOWN: ["정보 없음", "neutral"] } as const;
 
 /**
  * 관광지 카드(TASK-026): 머리(관·이름), 대표 사진·출처, 주차 칩, 이용시간·쉬는날·주차(원문)·문의, 주소·자료 안내, 경로 안내.
@@ -302,36 +302,34 @@ function tourCard(s: TourRow, detail: TrafficTourDetailResponse | null, lots: To
   const lines = (v: string) => (v ? v.split("\n") : ["정보 없음"]);
   // 관광공사 주차 정보와 함께, 관광지 반경 1km 주차장(전국주차장정보표준데이터)을 보인다.
   const around = Array.isArray(lots) ? parkingAround(lat, lng, lots) : null;
+  const free = around ? around.filter((p) => parkingFeeKind(p.lot[7]) === "FREE").length : 0;
   const meters = (m: number) => (m < 1000 ? `${Math.round(m / 10) * 10}m` : `${(m / 1000).toFixed(1)}km`);
-  const aroundRow = {
-    label: "주변 주차장",
-    lines:
-      lots === "loading"
-        ? ["주차장 정보 불러오는 중…"]
-        : lots === "failed" || !around
-          ? ["주차장 정보를 불러오지 못했습니다."]
-          : around.length === 0
-            ? ["반경 1km 안 주차장 없음"]
-            : [
-                `반경 1km ${around.length.toLocaleString("ko-KR")}곳 · 무료 ${around.filter((p) => parkingFeeKind(p.lot[7]) === "FREE").length.toLocaleString("ko-KR")}곳`,
-                ...around.slice(0, TOUR_PARKING_SHOW).map(({ lot, meters: m }) => `${lot[1] || "이름 없는 주차장"} · ${meters(m)} · ${PARKING_FEE_STYLE[parkingFeeKind(lot[7])].label || "요금 정보 없음"}`),
-              ],
-  };
+  const parking = detail ? TOUR_PARKING_TILE[tourParking(detail.parking)] : null;
+  // 한눈에: 관광지 주차(관광공사)·주변 주차장 수(반경 1km) 큰 칸 두 개(TASK-026 점검 "더 크게 직관적으로").
+  const tiles: NonNullable<PopupCard["tiles"]> = [
+    { label: "관광지 주차", value: parking?.[0] ?? (failed ? "–" : "확인 중…"), sub: "한국관광공사", tone: parking?.[1] ?? "neutral" },
+    around
+      ? { label: "주변 주차장 1km", value: around.length ? `${around.length.toLocaleString("ko-KR")}곳` : "없음", sub: around.length ? `무료 ${free.toLocaleString("ko-KR")}곳` : "반경 1km 안", tone: around.length ? "good" : "neutral" }
+      : { label: "주변 주차장 1km", value: lots === "failed" ? "–" : "확인 중…", sub: lots === "failed" ? "불러오지 못했습니다" : undefined, tone: "neutral" },
+  ];
+  const aroundRows = around?.length ? [{ label: "가까운 주차장", lines: around.slice(0, TOUR_PARKING_SHOW).map(({ lot, meters: m }) => `${lot[1] || "이름 없는 주차장"} · ${meters(m)} · ${PARKING_FEE_STYLE[parkingFeeKind(lot[7])].label || "요금 정보 없음"}`) }] : [];
   return {
+    size: "lg",
     badge: { text: FACILITY_STYLE.TOUR.mark, color: FACILITY_STYLE.TOUR.markBg ?? FACILITY_STYLE.TOUR.color },
     kicker: "관광지",
     title: name,
     image: image ? { src: image, alt: name, credit: "사진 한국관광공사" } : undefined,
-    chips: [detail ? TOUR_PARKING_CHIP[tourParking(detail.parking)] : "", around?.length ? `주변 주차장 ${around.length.toLocaleString("ko-KR")}곳` : ""].filter(Boolean),
+    tiles,
+    chips: [],
     rows: detail
       ? [
           { label: "이용시간", lines: lines(detail.usetime) },
           { label: "쉬는날", lines: lines(detail.restdate) },
-          { label: "주차", lines: lines(detail.parking) },
-          aroundRow,
+          { label: "주차 안내", lines: lines(detail.parking) },
+          ...aroundRows,
           ...(detail.infocenter ? [{ label: "문의", lines: lines(detail.infocenter) }] : []),
         ]
-      : [{ label: "안내", lines: [failed ? "이용시간·주차 정보를 불러오지 못했습니다. 다시 눌러 보세요." : "이용시간·주차 정보 불러오는 중…"] }, aroundRow],
+      : [{ label: "안내", lines: [failed ? "이용시간·주차 정보를 불러오지 못했습니다. 다시 눌러 보세요." : "이용시간·주차 정보 불러오는 중…"] }, ...aroundRows],
     footer: [address, `주차는 한국관광공사 관광정보${detail?.source === "mock" ? "(모의 데이터)" : ""}, 주변 주차장은 전국주차장정보표준데이터 · 바뀌었을 수 있으니 방문 전 확인하세요.`].filter(Boolean).join("\n"),
     action: { href: parkingRouteHref({ id, name, address, lat, lng }), label: "현재 위치에서 경로 안내" },
   };
@@ -1164,7 +1162,7 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
             viewKey={kind}
             speedLines={showSpeeds ? filteredLines : EMPTY_LINES}
             speedObservedAt={speeds?.observedAt ?? null}
-            heightClass="h-[55vh] md:h-[60vh] xl:h-[calc(100dvh-7rem)]"
+            heightClass={view === "TOUR" ? "h-[68vh] md:h-[65vh] xl:h-[calc(100dvh-7rem)]" : "h-[55vh] md:h-[60vh] xl:h-[calc(100dvh-7rem)]"}
             overlay={mapOverlay}
             facilities={facilityPoints}
             nearby={nearbyOn.length > 0 && myLocation ? { ...myLocation, radiusMeters: nearbyMaxRadius } : null}

@@ -420,10 +420,10 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await rows.nth(1).click();
     const popup = page.locator(".leaflet-popup .popup-card");
     await expect(popup.locator(".popup-card-title")).toHaveText("모의 사라봉");
-    await expect(popup.locator(".popup-card-chip")).toHaveText("주차 가능");
+    await expect(popup.locator(".popup-card-tile").first()).toHaveText("관광지 주차가능한국관광공사");
     await expect(popup).toContainText("상시 개방");
     await expect(popup).toContainText("가능 (승용차 30대)");
-    await expect(popup).toContainText("반경 1km 안 주차장 없음");
+    await expect(popup.locator(".popup-card-tile").nth(1)).toHaveText("주변 주차장 1km없음반경 1km 안");
     await expect(popup.getByRole("link", { name: "현재 위치에서 경로 안내" })).toHaveAttribute("href", /^\/route\?to=/);
     await page.locator(".leaflet-popup").scrollIntoViewIfNeeded();
     // 카드가 길어진 뒤 지도를 내려 카드 위쪽이 지도 안에 보인다
@@ -432,11 +432,10 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await rows.first().click();
     // 앞 카드는 닫히며 잠깐(0.2초) 흐려지므로 새 카드만 본다
     await expect(page.locator(".leaflet-popup .popup-card-title", { hasText: "모의 신산공원" })).toBeVisible();
-    await expect(page.locator(".leaflet-popup .popup-card-chip", { hasText: "주차 불가" })).toBeVisible();
-    // 관광지(모의 신산공원) 기준 반경 1km 주차장 2곳(가까운 순, 요금 구분)
     const last = page.locator(".leaflet-popup .popup-card").last();
-    await expect(last.locator(".popup-card-chip", { hasText: "주변 주차장 2곳" })).toBeVisible();
-    await expect(last).toContainText("반경 1km 2곳 · 무료 1곳");
+    await expect(last.locator(".popup-card-tile.tone-bad")).toHaveText("관광지 주차불가한국관광공사");
+    // 관광지(모의 신산공원) 기준 반경 1km 주차장 2곳(가까운 순, 요금 구분)
+    await expect(last.locator(".popup-card-tile").nth(1)).toHaveText("주변 주차장 1km2곳무료 1곳");
     await expect(last).toContainText("모의 신설오름 주차장 · 120m · 무료");
     await expect(last).toContainText("모의 시청 공영주차장 · 710m · 유료");
   });

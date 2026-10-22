@@ -95,6 +95,55 @@ body {
 .leaflet-popup-content a.popup-card-action {
   color: #fff;
 }
+/* 큰 카드가 열려 있으면 지도 위 버튼을 감춘다(카드를 가리지 않게) */
+.popup-lg-open .leaflet-control-zoom,
+.popup-lg-open ~ .map-home-btn {
+  visibility: hidden;
+}
+/* 큰 카드(관광지, TASK-026 점검): 지도 폭에 맞춰 넓게, 글자 크게, 한눈에 볼 큰 칸 */
+.leaflet-popup-content .popup-card-lg {
+  width: min(20rem, calc(100vw - 5rem));
+  @apply gap-3;
+}
+.leaflet-popup-content .popup-card-lg .popup-card-title {
+  @apply text-lg;
+}
+.leaflet-popup-content .popup-card-lg .popup-card-badge {
+  @apply h-11 w-11 text-xl;
+}
+.leaflet-popup-content .popup-card-lg .popup-card-rows {
+  @apply text-sm;
+}
+.leaflet-popup-content .popup-card-lg .popup-card-photo img {
+  @apply h-40;
+}
+.leaflet-popup-content .popup-card-tiles {
+  @apply grid grid-cols-2 gap-2;
+}
+.leaflet-popup-content .popup-card-tile {
+  @apply flex flex-col gap-0.5 rounded-xl px-3 py-2;
+}
+.leaflet-popup-content .popup-card-tile:first-child:nth-last-child(odd) {
+  @apply col-span-2;
+}
+.leaflet-popup-content .popup-card-tile-label {
+  @apply text-xs font-semibold opacity-80;
+}
+.leaflet-popup-content .popup-card-tile-value {
+  @apply text-lg leading-tight font-bold;
+}
+.leaflet-popup-content .popup-card-tile-sub {
+  @apply text-xs opacity-80;
+}
+.leaflet-popup-content .popup-card-tile.tone-good {
+  @apply bg-green-50 text-green-800;
+}
+.leaflet-popup-content .popup-card-tile.tone-bad {
+  @apply bg-red-50 text-red-800;
+}
+.leaflet-popup-content .popup-card-tile.tone-neutral {
+  @apply bg-grey-100 text-grey-800;
+}
 .leaflet-popup-content .popup-card-photo {
   @apply m-0 flex flex-col gap-0.5;
 }

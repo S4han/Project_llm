@@ -666,11 +666,14 @@ describe("내 주변 페이지 (TASK-016~024 → TASK-025 /map/enforcement·park
     expect(map().getAttribute("data-facilities")).toBe("2");
     fireEvent.click(rows[1]!);
     await waitFor(() => expect(tourDetailCalls).toBe(1));
-    expect(await screen.findByText("주차 가능")).toBeTruthy();
+    const tiles = () => [...document.querySelectorAll(".popup-card-tile")].map((t) => t.textContent);
+    await waitFor(() => expect(tiles()[0]).toBe("관광지 주차가능한국관광공사"));
+    expect(document.querySelector(".popup-card-lg")).toBeTruthy();
+    expect(document.querySelector(".popup-card-tile.tone-good")).toBeTruthy();
     expect(screen.getByText("상시 개방")).toBeTruthy();
     expect(screen.getByText("가능 (승용차 30대)")).toBeTruthy();
     // 관광공사 주차 정보와 함께 관광지(사라봉) 기준 반경 1km 주차장(P1 시청 공영주차장 약 1.6km는 밖 → 없음)
-    expect(screen.getByText("반경 1km 안 주차장 없음")).toBeTruthy();
+    expect(tiles()[1]).toBe("주변 주차장 1km없음반경 1km 안");
     const img = document.querySelector(".popup-card-photo img") as HTMLImageElement;
     expect(img.src).toBe("https://tong.visitkorea.or.kr/cms/resource/1/a_image2_1.jpg");
     expect(screen.getByText("사진 한국관광공사")).toBeTruthy();
@@ -693,10 +696,9 @@ describe("내 주변 페이지 (TASK-016~024 → TASK-025 /map/enforcement·park
     openAt("/map/tour");
     const rows = within(await screen.findByRole("list", { name: "관광지 목록" })).getAllByRole("button");
     fireEvent.click(rows[0]!); // 신산공원
-    expect(await screen.findByText("주변 주차장 4곳")).toBeTruthy();
-    expect(screen.getByText("반경 1km 4곳 · 무료 1곳")).toBeTruthy();
+    await waitFor(() => expect([...document.querySelectorAll(".popup-card-tile")].map((t) => t.textContent)).toEqual(["관광지 주차가능한국관광공사", "주변 주차장 1km4곳무료 1곳"]));
     const lines = [...document.querySelectorAll(".popup-card-rows dd")].map((dd) => dd.textContent);
-    expect(lines.some((t) => t?.startsWith("반경 1km 4곳 · 무료 1곳신산 공영주차장 · 60m · 무료가까운 혼합 주차장 · 150m · 일부유료일도 주차장 · 220m · 유료"))).toBe(true);
+    expect(lines).toContain("신산 공영주차장 · 60m · 무료가까운 혼합 주차장 · 150m · 일부유료일도 주차장 · 220m · 유료");
     expect(screen.queryByText(/먼 주차장/)).toBeNull();
   });
 

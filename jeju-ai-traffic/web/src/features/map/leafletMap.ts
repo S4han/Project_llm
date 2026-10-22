@@ -150,6 +150,10 @@ export interface PopupCard {
   action?: { href: string; label: string; external?: boolean };
   /** 제목 아래 사진 한 장과 출처(관광지, TASK-026). https 주소만 그린다. */
   image?: { src: string; alt: string; credit: string };
+  /** 한눈에 볼 큰 칸(관광지 주차·주변 주차장·쉬는날, TASK-026 점검). tone은 색(좋음 초록·나쁨 빨강·보통 회색). */
+  tiles?: { label: string; value: string; sub?: string; tone: "good" | "bad" | "neutral" }[];
+  /** lg면 넓고 글자가 큰 카드(관광지). */
+  size?: "lg";
 }
 
 export function popupCard(card: PopupCard): HTMLElement {
@@ -159,7 +163,7 @@ export function popupCard(card: PopupCard): HTMLElement {
     if (text !== undefined) e.textContent = text;
     return e;
   };
-  const root = el("div", "popup-card");
+  const root = el("div", card.size === "lg" ? "popup-card popup-card-lg" : "popup-card");
   const head = el("div", "popup-card-head");
   const badge = el("span", "popup-card-badge", card.badge.text);
   badge.style.backgroundColor = card.badge.color;
@@ -178,6 +182,16 @@ export function popupCard(card: PopupCard): HTMLElement {
     img.referrerPolicy = "no-referrer";
     fig.append(img, el("figcaption", "", card.image.credit));
     root.append(fig);
+  }
+  if (card.tiles?.length) {
+    const grid = el("div", "popup-card-tiles");
+    for (const t of card.tiles) {
+      const tile = el("div", `popup-card-tile tone-${t.tone}`);
+      tile.append(el("span", "popup-card-tile-label", t.label), el("strong", "popup-card-tile-value", t.value));
+      if (t.sub) tile.append(el("span", "popup-card-tile-sub", t.sub));
+      grid.append(tile);
+    }
+    root.append(grid);
   }
   if (card.chips.length || card.stat) {
     const meta = el("div", "popup-card-meta");
@@ -400,8 +414,18 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
       // 주유소: 반경 안 수십 곳이라 DOM 표시로 그린다. 글자는 고정 상표 표시와 숫자뿐(원천 이름은 카드에서만 textContent로).
       const m = L.marker([p.lat, p.lng], { icon: gasPinIcon(p.pin), keyboard: false, title: p.name, zIndexOffset: p.pin.low ? 1000 : p.pin.top ? 500 : 0 })
         // 불러와 길어지는 카드(관광지)는 휴대폰 지도 높이에 맞춰 높이를 제한하고 안에서 넘긴다(TASK-026 점검: 위가 잘림).
-        .bindPopup(() => popupCard(p.card ?? facilityCard(p)), { offset: p.pin.dot ? [0, -8] : [0, -30], maxHeight: p.loadCard ? 300 : undefined })
+        .bindPopup(() => popupCard(p.card ?? facilityCard(p)), {
+          offset: p.pin.dot ? [0, -8] : [0, -30],
+          // 큰 카드(관광지)는 지도 폭·높이에 맞춰 넓고 길게(넘치면 안에서 넘김)
+          maxWidth: p.card?.size === "lg" ? 360 : undefined,
+          maxHeight: p.loadCard ? Math.max(260, map.getSize().y - 100) : undefined,
+        })
         .addTo(layer);
+      if (p.card?.size === "lg") {
+        // 큰 카드가 열려 있는 동안은 지도 위 버튼(확대·제주 전체)을 감춰 카드를 가리지 않게 한다.
+        m.on("popupopen", () => map.getContainer().classList.add("popup-lg-open"));
+        m.on("popupclose", () => map.getContainer().classList.remove("popup-lg-open"));
+      }
       const load = p.loadCard;
       if (load) {
         m.on("popupopen", () =>

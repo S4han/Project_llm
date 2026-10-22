@@ -177,7 +177,7 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
           <button
             type="button"
             onClick={() => mapRef.current?.fitBounds(JEJU_BOUNDS)}
-            className="absolute bottom-6 left-2 z-[500] min-h-11 rounded-xl bg-white px-3 text-sm font-semibold text-grey-800 shadow-md ring-1 ring-grey-300"
+            className="map-home-btn absolute bottom-6 left-2 z-[500] min-h-11 rounded-xl bg-white px-3 text-sm font-semibold text-grey-800 shadow-md ring-1 ring-grey-300"
           >
             제주 전체
           </button>
