@@ -38,7 +38,16 @@ export const VIEW_TITLE: Record<Exclude<TrafficView, "home">, string> = {
   facilities: "CCTV 등 교통시설물",
 };
 
-export const pathOf = (view: TrafficView): string => (view === "home" ? "/" : VIEW_PATH[view]);
+/** 화면 주소. 관광지 페이지에서 그 관광지 주변 주차장을 보는 중이면 ?parking=관광지 번호(TASK-027 3.(a), 공유·새로고침). */
+export const pathOf = (view: TrafficView, parkingOf: string | null = null): string =>
+  view === "home" ? "/" : view === "TOUR" && parkingOf ? `${VIEW_PATH.TOUR}?parking=${encodeURIComponent(parkingOf)}` : VIEW_PATH[view];
+
+/** 주소의 ?parking= 값(관광지 번호). 관광지 페이지에서만, 형식이 맞을 때만. */
+export function parkingOfFromLocation(pathname: string, search: string): string | null {
+  if (viewFromPath(pathname) !== "TOUR") return null;
+  const id = new URLSearchParams(search).get("parking");
+  return id && /^[A-Za-z0-9-]{1,20}$/.test(id) ? id : null;
+}
 
 /** 주소 → 화면. "/"·"/traffic"(예전 공유 주소)과 모르는 주소는 대시보드. */
 export function viewFromPath(pathname: string): TrafficView {

@@ -696,10 +696,56 @@ describe("내 주변 페이지 (TASK-016~024 → TASK-025 /map/enforcement·park
     openAt("/map/tour");
     const rows = within(await screen.findByRole("list", { name: "관광지 목록" })).getAllByRole("button");
     fireEvent.click(rows[0]!); // 신산공원
-    await waitFor(() => expect([...document.querySelectorAll(".popup-card-tile")].map((t) => t.textContent)).toEqual(["관광지 주차가능한국관광공사", "주변 주차장 1km4곳무료 1곳"]));
+    await waitFor(() => expect([...document.querySelectorAll(".popup-card-tile")].map((t) => t.textContent)).toEqual(["관광지 주차가능한국관광공사", "주변 주차장 1km4곳무료 1곳지도에 보기 ›"]));
     const lines = [...document.querySelectorAll(".popup-card-rows dd")].map((dd) => dd.textContent);
     expect(lines).toContain("신산 공영주차장 · 60m · 무료가까운 혼합 주차장 · 150m · 일부유료일도 주차장 · 220m · 유료");
     expect(screen.queryByText(/먼 주차장/)).toBeNull();
+  });
+
+  it("관광지 카드의 '주변 주차장' 칸 → 관광지 기준 반경 1km 주차장만 지도에·목록·무료만·주소(?parking=), 관광지 목록으로 돌아오기(TASK-027)", async () => {
+    parkingRespond = () =>
+      Response.json({
+        ...PARKING,
+        lots: [
+          ...PARKING.lots,
+          ["Q1", "신산 공영주차장", "공영", "노외", "제주시", 30, "", "무료", 33.5048, 126.539],
+          ["Q2", "일도 주차장", "민영", "노외", "제주시", 20, "", "유료 · 기본 30분 1,000원", 33.506, 126.54],
+        ],
+      });
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    openAt("/map/tour");
+    const rows = within(await screen.findByRole("list", { name: "관광지 목록" })).getAllByRole("button");
+    fireEvent.click(rows[0]!); // 신산공원
+    const go = await waitFor(() => {
+      const b = document.querySelector<HTMLButtonElement>("button.popup-card-tile-action");
+      expect(b?.textContent).toBe("주변 주차장 1km3곳무료 1곳지도에 보기 ›");
+      return b!;
+    });
+    fireEvent.click(go);
+    expect(window.location.pathname + window.location.search).toBe("/map/tour?parking=T2");
+    expect(screen.getByRole("heading", { name: "신산공원 주변 주차장" })).toBeTruthy();
+    expect(screen.getByRole("status", { name: "관광지 주변 주차장" }).textContent).toContain("반경 1km 주차장 3곳(무료 1곳) 표시 중");
+    // 지도: 관광지 1곳 + 주차장 3곳(P1 시청 0.7km 포함), 원은 관광지 기준
+    expect(map().getAttribute("data-facilities")).toBe("4");
+    expect(map().getAttribute("data-nearby")).toBe("1");
+    const list = within(screen.getByRole("list", { name: "관광지 주변 주차장 목록" })).getAllByRole("button");
+    expect(list.map((b) => b.textContent)).toEqual(["P신산 공영주차장60m · 무료 · 30면지도 ›", "P일도 주차장220m · 유료 · 20면지도 ›", "P시청 공영주차장710m · 유료 · 91면지도 ›"]);
+    fireEvent.click(screen.getByRole("button", { name: "P 무료만" }));
+    expect(map().getAttribute("data-facilities")).toBe("2");
+    expect(within(screen.getByRole("list", { name: "관광지 주변 주차장 목록" })).getAllByRole("button")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "관광지 목록으로" }));
+    expect(window.location.pathname + window.location.search).toBe("/map/tour");
+    expect(await screen.findByText("내 위치 반경 5km 안 관광지 2곳")).toBeTruthy();
+  });
+
+  it("주소 ?parking=관광지 번호로 바로 열면 그 관광지 주변 주차장(공유·새로고침), 없는 번호면 관광지 목록", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    openAt("/map/tour?parking=T2");
+    expect(await screen.findByRole("heading", { name: "신산공원 주변 주차장" })).toBeTruthy();
+    cleanup();
+    openAt("/map/tour?parking=NOPE");
+    expect(await screen.findByText("내 위치 반경 5km 안 관광지 2곳")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /주변 주차장$/ })).toBeNull();
   });
 
   it("관광지 목록을 못 받으면 안내와 다시 시도", async () => {

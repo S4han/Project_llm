@@ -135,6 +135,13 @@ body {
 .leaflet-popup-content .popup-card-tile-sub {
   @apply text-xs opacity-80;
 }
+.leaflet-popup-content .popup-card-tile-action {
+  @apply cursor-pointer border-0 text-left ring-1 ring-current/20 active:opacity-80;
+  font: inherit;
+}
+.leaflet-popup-content .popup-card-tile-go {
+  @apply mt-0.5 text-xs font-bold underline underline-offset-2;
+}
 .leaflet-popup-content .popup-card-tile.tone-good {
   @apply bg-green-50 text-green-800;
 }

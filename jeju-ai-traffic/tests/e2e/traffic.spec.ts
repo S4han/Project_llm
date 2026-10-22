@@ -435,8 +435,35 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     const last = page.locator(".leaflet-popup .popup-card").last();
     await expect(last.locator(".popup-card-tile.tone-bad")).toHaveText("관광지 주차불가한국관광공사");
     // 관광지(모의 신산공원) 기준 반경 1km 주차장 2곳(가까운 순, 요금 구분)
-    await expect(last.locator(".popup-card-tile").nth(1)).toHaveText("주변 주차장 1km2곳무료 1곳");
+    await expect(last.locator(".popup-card-tile").nth(1)).toHaveText("주변 주차장 1km2곳무료 1곳지도에 보기 ›");
     await expect(last).toContainText("모의 신설오름 주차장 · 120m · 무료");
     await expect(last).toContainText("모의 시청 공영주차장 · 710m · 유료");
+  });
+
+  test("관광지 주변 주차장(TASK-027): 카드의 '주변 주차장' 칸 → 관광지 기준 1km 주차장 지도·목록, 주차장 카드, 뒤로 가기", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/map/tour");
+    const rows = page.getByRole("list", { name: "관광지 목록" }).getByRole("button");
+    await rows.first().click(); // 모의 신산공원
+    const go = page.locator(".leaflet-popup button.popup-card-tile-action");
+    await expect(go).toHaveText("주변 주차장 1km2곳무료 1곳지도에 보기 ›");
+    await go.click();
+    await expect(page).toHaveURL(/\/map\/tour\?parking=MOCK-T2$/);
+    await expect(page.getByRole("heading", { name: "모의 신산공원 주변 주차장" })).toBeVisible();
+    await expect(page.getByRole("status", { name: "관광지 주변 주차장" })).toContainText("반경 1km 주차장 2곳(무료 1곳) 표시 중");
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+    await expect(map).toHaveAttribute("data-facilities", "3"); // 관광지 1 + 주차장 2
+    await expect(page.locator(".leaflet-popup")).toHaveCount(0);
+    const list = page.getByRole("list", { name: "관광지 주변 주차장 목록" }).getByRole("button");
+    await expect(list).toHaveText(["P모의 신설오름 주차장120m · 무료 · 20면지도 ›", "P모의 시청 공영주차장710m · 유료 · 91면지도 ›"]);
+    await map.scrollIntoViewIfNeeded();
+    if (process.env.SCREENSHOTS === "TASK-027") await page.screenshot({ path: "reports/screenshots/TASK-027-01-spot-parking-390.png", fullPage: true });
+    await list.nth(1).click();
+    const card = page.locator(".leaflet-popup .popup-card").last();
+    await expect(card.locator(".popup-card-kicker")).toHaveText("주차장");
+    await expect(card.getByRole("link", { name: "현재 위치에서 경로 안내" })).toHaveAttribute("href", /^\/route\?to=/);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/map\/tour$/);
+    await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 5km 안 관광지 2곳");
   });
 });

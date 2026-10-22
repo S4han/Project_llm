@@ -297,7 +297,7 @@ function parkingAround(lat: number, lng: number, lots: ParkingRow[]): { lot: Par
     .sort((a, b) => a.meters - b.meters);
 }
 
-function tourCard(s: TourRow, detail: TrafficTourDetailResponse | null, lots: TourParkingLots, failed = false): PopupCard {
+function tourCard(s: TourRow, detail: TrafficTourDetailResponse | null, lots: TourParkingLots, onParking?: (id: string) => void, failed = false): PopupCard {
   const [id, name, address, lat, lng, image] = s;
   const lines = (v: string) => (v ? v.split("\n") : ["정보 없음"]);
   // 관광공사 주차 정보와 함께, 관광지 반경 1km 주차장(전국주차장정보표준데이터)을 보인다.
@@ -309,7 +309,14 @@ function tourCard(s: TourRow, detail: TrafficTourDetailResponse | null, lots: To
   const tiles: NonNullable<PopupCard["tiles"]> = [
     { label: "관광지 주차", value: parking?.[0] ?? (failed ? "–" : "확인 중…"), sub: "한국관광공사", tone: parking?.[1] ?? "neutral" },
     around
-      ? { label: "주변 주차장 1km", value: around.length ? `${around.length.toLocaleString("ko-KR")}곳` : "없음", sub: around.length ? `무료 ${free.toLocaleString("ko-KR")}곳` : "반경 1km 안", tone: around.length ? "good" : "neutral" }
+      ? {
+          label: "주변 주차장 1km",
+          value: around.length ? `${around.length.toLocaleString("ko-KR")}곳` : "없음",
+          sub: around.length ? `무료 ${free.toLocaleString("ko-KR")}곳` : "반경 1km 안",
+          tone: around.length ? "good" : "neutral",
+          // 누르면 이 관광지 기준 주변 주차장을 지도에(TASK-027 1.(a)). 없으면 누를 수 없다.
+          action: around.length && onParking ? { label: "지도에 보기 ›", onClick: () => onParking(id) } : undefined,
+        }
       : { label: "주변 주차장 1km", value: lots === "failed" ? "–" : "확인 중…", sub: lots === "failed" ? "불러오지 못했습니다" : undefined, tone: "neutral" },
   ];
   const aroundRows = around?.length ? [{ label: "가까운 주차장", lines: around.slice(0, TOUR_PARKING_SHOW).map(({ lot, meters: m }) => `${lot[1] || "이름 없는 주차장"} · ${meters(m)} · ${PARKING_FEE_STYLE[parkingFeeKind(lot[7])].label || "요금 정보 없음"}`) }] : [];
@@ -333,6 +340,84 @@ function tourCard(s: TourRow, detail: TrafficTourDetailResponse | null, lots: To
     footer: [address, `주차는 한국관광공사 관광정보${detail?.source === "mock" ? "(모의 데이터)" : ""}, 주변 주차장은 전국주차장정보표준데이터 · 바뀌었을 수 있으니 방문 전 확인하세요.`].filter(Boolean).join("\n"),
     action: { href: parkingRouteHref({ id, name, address, lat, lng }), label: "현재 위치에서 경로 안내" },
   };
+}
+
+/**
+ * 주차장 지도 표시(TASK-022·024): 요금 구분 색 동그라미 "P"(무료 초록·유료 파랑·일부유료 주황·정보 없음 회색),
+ * 확대 17 이상에서만 "P 무료" 글자, 멀리 보면 점. 무료는 위에. 내 주변 주차장·관광지 주변 주차장(TASK-027)이 같이 쓴다.
+ */
+function parkingPoint([id, name, se, type, address, spaces, hours, fee, lat, lng]: ParkingRow): FacilityPoint {
+  const feeKind = parkingFeeKind(fee);
+  const kind = PARKING_FEE_STYLE[feeKind];
+  return {
+    id: `PARK-${id}`,
+    type: "PARK",
+    name,
+    model: "",
+    lat,
+    lng,
+    pin: { mark: "P", price: kind.label || null, color: kind.color, low: false, fold: true, dot: true, top: feeKind === "FREE" },
+    card: parkingCard({ id, name, se, type, address, spaces, hours, fee, lat, lng }),
+  };
+}
+
+/** 주차장 요금 범례와 "P 무료만" 버튼(TASK-022). */
+function ParkingLegend({ freeOnly, onToggle }: { freeOnly: boolean; onToggle: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <ul aria-label="주차장 요금 범례" className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-grey-700">
+        {(["FREE", "PAID", "MIXED"] as const).map((k) => (
+          <li key={k} className="flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PARKING_FEE_STYLE[k].color }} aria-hidden="true" />
+            {PARKING_FEE_STYLE[k].label}
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-pressed={freeOnly}
+        className={`min-h-11 shrink-0 rounded-xl px-3 text-sm font-semibold ${freeOnly ? "bg-green-600 text-white" : "bg-grey-100 text-grey-700"}`}
+      >
+        P 무료만
+      </button>
+    </div>
+  );
+}
+
+/** 관광지 주변 주차장 목록(TASK-027 2.(a)): 관광지에서 가까운 순, 이름·거리·요금 구분, 누르면 지도에서 그 주차장 카드. */
+function SpotParkingList({ spotName, rows, onPick }: { spotName: string; rows: { lot: ParkingRow; meters: number }[]; onPick: (id: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <h3 className="text-sm font-semibold text-grey-700">{spotName}에서 가까운 순</h3>
+      {rows.length === 0 ? (
+        <p className="text-sm text-grey-600">조건에 맞는 주차장이 없습니다.</p>
+      ) : (
+        <ul aria-label="관광지 주변 주차장 목록" className="flex flex-col gap-1.5">
+          {rows.map(({ lot, meters }) => {
+            const fee = PARKING_FEE_STYLE[parkingFeeKind(lot[7])];
+            return (
+              <li key={lot[0]}>
+                <button type="button" onClick={() => onPick(lot[0])} className="flex min-h-14 w-full items-center gap-2.5 rounded-xl bg-grey-100 px-3 py-2 text-left text-sm">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-extrabold text-white" style={{ backgroundColor: fee.color }} aria-hidden="true">
+                    P
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-grey-900">{lot[1] || "이름 없는 주차장"}</span>
+                    <span className="block truncate text-xs text-grey-600">
+                      {meters < 1000 ? `${Math.round(meters / 10) * 10}m` : `${(meters / 1000).toFixed(1)}km`} · {fee.label || "요금 정보 없음"}
+                      {lot[5] !== null && ` · ${lot[5].toLocaleString("ko-KR")}면`}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs font-semibold text-brand-700">지도 ›</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 /** 관광지 목록(TASK-026 2.(a)): 가까운 순, 줄을 누르면 지도에서 그 관광지 카드. */
@@ -402,7 +487,7 @@ function DashCard({ title, mark, value, sub, onClick, small = false }: { title: 
  * 제주 ITS 실시간 교통 현황(TASK-012). 화면이 켜져 있을 때만 1분마다 다시 조회한다.
  * view가 home이면 지도 없는 대시보드 카드, 그 밖이면 그 항목만 지도에 보이는 페이지(TASK-025). 화면을 바꿔도 받은 자료와 위치는 그대로 둔다.
  */
-export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNavigate: (view: TrafficView) => void }) {
+export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view: TrafficView; parkingOf?: string | null; onNavigate: (view: TrafficView, parkingOf?: string | null) => void }) {
   const [state, setState] = useState<DashboardState>({ snapshot: null, problem: null, loading: true });
   const [speeds, setSpeeds] = useState<TrafficSpeedsResponse | null>(null);
   const [links, setLinks] = useState<TrafficLinksResponse["links"] | null>(null);
@@ -466,9 +551,10 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
   const mapBox = useRef<HTMLDivElement>(null);
   const showSpeeds = isSpeedView(view);
   // 화면이 바뀌면 그 화면에 맞게 켤 유형·도로 상태를 다시 정하고 고른 것을 닫는다(렌더 중 조정, 효과 없이).
-  const [shownView, setShownView] = useState(view);
-  if (shownView !== view) {
-    setShownView(view);
+  const viewAt = `${view}|${parkingOf ?? ""}`;
+  const [shownView, setShownView] = useState(viewAt);
+  if (shownView !== viewAt) {
+    setShownView(viewAt);
     setFacilityTypes(new Set(isNearbyView(view) ? [view] : []));
     setSpeedFilter(isSpeedView(view) ? view : "all");
     setRoadKey(null);
@@ -748,7 +834,11 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
   const lowLpgId = lpgList[0]?.price != null ? lpgList[0].id : null;
   // 관광지 카드의 주변 주차장(TASK-026 범위 변경): 주차장 자료는 화면을 열 때 이미 받는다.
   const tourLots: TourParkingLots = parking ? parking.lots : parkingProblem ? "failed" : "loading";
-  const focusFuel = (kind: "GAS" | "LPG" | "EV" | "TOUR", id: string) => {
+  // 관광지 주변 주차장 보기(TASK-027): 주소의 ?parking=관광지 번호. 그 관광지와 반경 1km 주차장만 지도에.
+  const spot = view === "TOUR" && parkingOf ? (tour?.spots.find((t) => t[0] === parkingOf) ?? null) : null;
+  const spotParking = useMemo(() => (spot && parking ? parkingAround(spot[3], spot[4], parking.lots) : []), [spot, parking]);
+  const showSpotParking = useCallback((id: string) => onNavigate("TOUR", id), [onNavigate]);
+  const focusFuel = (kind: "GAS" | "LPG" | "EV" | "TOUR" | "PARK", id: string) => {
     setGasFocus((prev) => ({ id: `${kind}-${id}`, seq: (prev?.seq ?? 0) + 1 }));
     revealMap(mapBox.current);
   };
@@ -757,24 +847,8 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
       ...(facilities?.facilities ?? [])
         .filter((f) => facilityTypes.has(f[1]))
         .map(([id, type, name, model, lat, lng]): FacilityPoint => ({ id, type, name, model, lat, lng })),
-      ...(facilityTypes.has("PARK") ? nearPark.filter((l) => !parkFreeOnly || parkingFeeKind(l[7]) === "FREE") : []).map(
-        ([id, name, se, type, address, spaces, hours, fee, lat, lng]): FacilityPoint => {
-          // 요금 구분 색(TASK-022 1.(a)): 무료 초록·유료 파랑·일부유료 주황·정보 없음 회색. 시내에서 겹쳐 평소에는 색 동그라미 "P",
-          // 확대 17 이상에서만 "P 무료" 글자, 멀리 보면 점(TASK-024 1.(a)). 무료는 위에 그린다(2.(a)).
-          const feeKind = parkingFeeKind(fee);
-          const kind = PARKING_FEE_STYLE[feeKind];
-          return {
-            id: `PARK-${id}`,
-            type: "PARK",
-            name,
-            model: "",
-            lat,
-            lng,
-            pin: { mark: "P", price: kind.label || null, color: kind.color, low: false, fold: true, dot: true, top: feeKind === "FREE" },
-            card: parkingCard({ id, name, se, type, address, spaces, hours, fee, lat, lng }),
-          };
-        },
-      ),
+      // 주차장: 내 주변(주차장 페이지) 또는 관광지 주변(관광지 페이지에서 "주변 주차장 지도에 보기", TASK-027)
+      ...(facilityTypes.has("PARK") ? nearPark : spot ? spotParking.map((p) => p.lot) : []).filter((l) => !parkFreeOnly || parkingFeeKind(l[7]) === "FREE").map(parkingPoint),
       ...(facilityTypes.has("ENF") ? nearEnf : []).map(
         ([id, place, address, rotate, audit, oper, lat, lng]): FacilityPoint => ({
           id: `ENF-${id}`,
@@ -828,7 +902,7 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
         };
       }),
       // 관광지(TASK-026): "관" 동그라미(확대 17 이상이면 이름), 누르면 이용시간·주차를 불러와 카드를 채운다.
-      ...(facilityTypes.has("TOUR") ? nearTour : []).map(({ s }): FacilityPoint => ({
+      ...(facilityTypes.has("TOUR") ? (spot ? [{ s: spot }] : nearTour) : []).map(({ s }): FacilityPoint => ({
         id: `TOUR-${s[0]}`,
         type: "TOUR",
         name: s[1],
@@ -836,11 +910,11 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
         lat: s[3],
         lng: s[4],
         pin: { mark: FACILITY_STYLE.TOUR.mark, price: s[1], color: FACILITY_STYLE.TOUR.color, low: false, fold: true, dot: true },
-        card: tourCard(s, null, tourLots),
-        loadCard: () => fetchTrafficTourDetail(s[0]).then((r) => tourCard(s, r.ok ? r.data : null, tourLots, !r.ok)),
+        card: tourCard(s, null, tourLots, showSpotParking),
+        loadCard: () => fetchTrafficTourDetail(s[0]).then((r) => tourCard(s, r.ok ? r.data : null, tourLots, showSpotParking, !r.ok)),
       })),
     ],
-    [facilities, facilityTypes, nearEnf, nearPark, parkFreeOnly, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev, nearTour, tourLots],
+    [facilities, facilityTypes, nearEnf, nearPark, parkFreeOnly, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev, nearTour, tourLots, spot, spotParking, showSpotParking],
   );
   const nearbyOn = NEARBY_KEYS.filter((k) => facilityTypes.has(k));
   const nearbyCount = (k: FacilityKey) => facilityPoints.filter((p) => p.type === k).length;
@@ -1165,7 +1239,7 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
             heightClass={view === "TOUR" ? "h-[68vh] md:h-[65vh] xl:h-[calc(100dvh-7rem)]" : "h-[55vh] md:h-[60vh] xl:h-[calc(100dvh-7rem)]"}
             overlay={mapOverlay}
             facilities={facilityPoints}
-            nearby={nearbyOn.length > 0 && myLocation ? { ...myLocation, radiusMeters: nearbyMaxRadius } : null}
+            nearby={spot ? { lat: spot[3], lng: spot[4], radiusMeters: TOUR_PARKING_RADIUS, spot: true } : nearbyOn.length > 0 && myLocation ? { ...myLocation, radiusMeters: nearbyMaxRadius } : null}
             home={myLocation}
             openFacility={gasFocus}
             highlightIds={showSpeeds ? highlightIds : EMPTY_IDS}
@@ -1434,7 +1508,37 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
           </section>
         )}
 
-        {nearbyView && (
+        {spot && (
+          <section aria-labelledby="spot-heading" className={`flex flex-col gap-3 rounded-[20px] bg-white p-4 ${PANEL}`}>
+            <div>
+              <h2 id="spot-heading" className="font-bold text-grey-900">
+                {spot[1]} 주변 주차장
+              </h2>
+              <p className="text-xs text-grey-600">관광지 기준 반경 1km · 전국주차장정보표준데이터(위치·면수·요금, 실시간 남은 칸 없음){parking?.source === "mock" && "(모의 데이터)"}.</p>
+            </div>
+            <div role="status" aria-label="관광지 주변 주차장" className="flex items-center justify-between gap-2 rounded-2xl bg-grey-100 p-2 text-sm text-grey-800">
+              <span>
+                {parking
+                  ? `반경 1km 주차장 ${spotParking.length.toLocaleString("ko-KR")}곳(무료 ${spotParking.filter((p) => parkingFeeKind(p.lot[7]) === "FREE").length.toLocaleString("ko-KR")}곳) 표시 중`
+                  : parkingProblem
+                    ? "주차장 정보를 불러오지 못했습니다."
+                    : "주차장 불러오는 중…"}
+              </span>
+              <button type="button" onClick={() => onNavigate("TOUR")} className="min-h-12 shrink-0 rounded-2xl bg-white px-3 font-semibold text-grey-700">
+                관광지 목록으로
+              </button>
+            </div>
+            {parking && (
+              <>
+                <ParkingLegend freeOnly={parkFreeOnly} onToggle={() => setParkFreeOnly((v) => !v)} />
+                <SpotParkingList spotName={spot[1]} rows={spotParking.filter((p) => !parkFreeOnly || parkingFeeKind(p.lot[7]) === "FREE")} onPick={(id) => focusFuel("PARK", id)} />
+              </>
+            )}
+            {parkingProblem && <RetryAlert text="주차장 정보를 불러오지 못했습니다." onRetry={retryParking} />}
+          </section>
+        )}
+
+        {nearbyView && !spot && (
           <section aria-labelledby="nearby-heading" className={`flex flex-col gap-3 rounded-[20px] bg-white p-4 ${PANEL}`}>
             <div>
               <h2 id="nearby-heading" className="font-bold text-grey-900">
@@ -1459,26 +1563,7 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
               </div>
             )}
             {locationProblem && <RetryAlert text={locationProblem} onRetry={retryLocate} />}
-            {nearbyView === "PARK" && myLocation && !locating && (
-              <div className="flex items-center justify-between gap-2">
-                <ul aria-label="주차장 요금 범례" className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-grey-700">
-                  {(["FREE", "PAID", "MIXED"] as const).map((k) => (
-                    <li key={k} className="flex items-center gap-1">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PARKING_FEE_STYLE[k].color }} aria-hidden="true" />
-                      {PARKING_FEE_STYLE[k].label}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  onClick={() => setParkFreeOnly((v) => !v)}
-                  aria-pressed={parkFreeOnly}
-                  className={`min-h-11 shrink-0 rounded-xl px-3 text-sm font-semibold ${parkFreeOnly ? "bg-green-600 text-white" : "bg-grey-100 text-grey-700"}`}
-                >
-                  P 무료만
-                </button>
-              </div>
-            )}
+            {nearbyView === "PARK" && myLocation && !locating && <ParkingLegend freeOnly={parkFreeOnly} onToggle={() => setParkFreeOnly((v) => !v)} />}
             {nearbyView === "GAS" && myLocation && !locating && gasList.length > 0 && (
               <FuelList title="반경 3km 주유소 · 휘발유 싼 순" label="주유소 목록" fuel="휘발유" rows={gasList} low={lowGasoline} lowId={lowGasId} limit={gasLimit} onMore={() => setGasLimit((n) => n + GAS_PAGE)} onPick={(id) => focusFuel("GAS", id)} />
             )}

@@ -29,7 +29,7 @@ interface Props {
   /** 켜 둔 유형의 교통시설물(TASK-013). */
   facilities?: FacilityPoint[];
   /** 내 위치와 조회 반경(TASK-016 주정차 단속). 있으면 원과 내 위치 점을 그리고 원이 보이게 맞춘다. */
-  nearby?: { lat: number; lng: number; radiusMeters: number } | null;
+  nearby?: { lat: number; lng: number; radiusMeters: number; spot?: boolean } | null;
   /** 바뀌면 그 시설물로 옮기고 카드를 연다(주유소 목록, TASK-018). seq는 같은 곳을 다시 고를 때 구분용. */
   openFacility?: { id: string; seq: number } | null;
   /** 화면을 열 때 확인한 내 위치(TASK-023). 있으면 제주 전체 대신 내 위치 기준으로 열고 "제주 전체" 버튼을 보인다. */
@@ -72,6 +72,8 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
   const nearbyLat = nearby?.lat;
   const nearbyLng = nearby?.lng;
   const nearbyRadius = nearby?.radiusMeters;
+  // spot이면 원의 중심이 내 위치가 아니라 관광지(관광지 주변 주차장, TASK-027): 중심에 "나" 점을 찍지 않고 내 위치 점은 따로.
+  const nearbySpot = nearby?.spot ?? false;
   const homeLat = home?.lat;
   const homeLng = home?.lng;
   useEffect(() => {
@@ -79,7 +81,9 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
     if (!mapReady || !map) return;
     if (!nearbyLayer.current || !map.hasLayer(nearbyLayer.current)) nearbyLayer.current = L.layerGroup().addTo(map);
     nearbyLayer.current.clearLayers();
-    if (nearbyLat === undefined || nearbyLng === undefined || nearbyRadius === undefined) {
+    if (nearbyLat === undefined || nearbyLng === undefined || nearbyRadius === undefined || nearbySpot) {
+      if (nearbyLat !== undefined && nearbyLng !== undefined && nearbyRadius !== undefined)
+        L.circle(toLatLng({ lat: nearbyLat, lng: nearbyLng }), { radius: nearbyRadius, color: "#4f46e5", weight: 1.5, dashArray: "6 6", fillColor: "#4f46e5", fillOpacity: 0.06, interactive: false }).addTo(nearbyLayer.current);
       // 주변 유형을 켜지 않았어도 내 위치 점은 보인다(TASK-023).
       if (homeLat === undefined || homeLng === undefined) return;
       L.circleMarker(toLatLng({ lat: homeLat, lng: homeLng }), { radius: 7, color: "#fff", weight: 2, fillColor: "#2272eb", fillOpacity: 1 })
@@ -110,7 +114,7 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
         }),
       )
       .addTo(nearbyLayer.current);
-  }, [mapReady, mapRef, nearbyLat, nearbyLng, nearbyRadius, homeLat, homeLng]);
+  }, [mapReady, mapRef, nearbyLat, nearbyLng, nearbyRadius, nearbySpot, homeLat, homeLng]);
 
   // 확대 수준이 바뀌면 선 두께만 바꾼다(다시 그리지 않음).
   useEffect(() => {

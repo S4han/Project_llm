@@ -151,7 +151,7 @@ export interface PopupCard {
   /** 제목 아래 사진 한 장과 출처(관광지, TASK-026). https 주소만 그린다. */
   image?: { src: string; alt: string; credit: string };
   /** 한눈에 볼 큰 칸(관광지 주차·주변 주차장·쉬는날, TASK-026 점검). tone은 색(좋음 초록·나쁨 빨강·보통 회색). */
-  tiles?: { label: string; value: string; sub?: string; tone: "good" | "bad" | "neutral" }[];
+  tiles?: { label: string; value: string; sub?: string; tone: "good" | "bad" | "neutral"; action?: { label: string; onClick: () => void } }[];
   /** lg면 넓고 글자가 큰 카드(관광지). */
   size?: "lg";
 }
@@ -186,9 +186,16 @@ export function popupCard(card: PopupCard): HTMLElement {
   if (card.tiles?.length) {
     const grid = el("div", "popup-card-tiles");
     for (const t of card.tiles) {
-      const tile = el("div", `popup-card-tile tone-${t.tone}`);
+      // 누를 수 있는 칸(관광지 주변 주차장 지도에 보기, TASK-027)은 버튼으로. 글자는 textContent로만.
+      const tile = el(t.action ? "button" : "div", `popup-card-tile tone-${t.tone}${t.action ? " popup-card-tile-action" : ""}`);
       tile.append(el("span", "popup-card-tile-label", t.label), el("strong", "popup-card-tile-value", t.value));
       if (t.sub) tile.append(el("span", "popup-card-tile-sub", t.sub));
+      if (t.action) {
+        const action = t.action;
+        (tile as HTMLButtonElement).type = "button";
+        tile.append(el("span", "popup-card-tile-go", action.label));
+        tile.addEventListener("click", () => action.onClick());
+      }
       grid.append(tile);
     }
     root.append(grid);
@@ -412,7 +419,7 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
     const style = FACILITY_STYLE[p.type];
     if (p.pin) {
       // 주유소: 반경 안 수십 곳이라 DOM 표시로 그린다. 글자는 고정 상표 표시와 숫자뿐(원천 이름은 카드에서만 textContent로).
-      const m = L.marker([p.lat, p.lng], { icon: gasPinIcon(p.pin), keyboard: false, title: p.name, zIndexOffset: p.pin.low ? 1000 : p.pin.top ? 500 : 0 })
+      const m = L.marker([p.lat, p.lng], { icon: gasPinIcon(p.pin), keyboard: false, title: p.name, zIndexOffset: p.pin.low ? 1000 : p.type === "TOUR" ? 800 : p.pin.top ? 500 : 0 })
         // 불러와 길어지는 카드(관광지)는 휴대폰 지도 높이에 맞춰 높이를 제한하고 안에서 넘긴다(TASK-026 점검: 위가 잘림).
         .bindPopup(() => popupCard(p.card ?? facilityCard(p)), {
           offset: p.pin.dot ? [0, -8] : [0, -30],
