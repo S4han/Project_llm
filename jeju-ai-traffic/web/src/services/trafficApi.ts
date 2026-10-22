@@ -1,5 +1,5 @@
 import type { ApiError, ApiErrorBody } from "../../../shared/contracts/common";
-import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse, TrafficTourDetailResponse, TrafficTourResponse } from "../../../shared/contracts/traffic";
+import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse, TrafficStayResponse, TrafficTourDetailResponse, TrafficTourResponse } from "../../../shared/contracts/traffic";
 
 export type TrafficIncidentsResult = { ok: true; data: TrafficIncidentsResponse } | { ok: false; error: ApiError };
 
@@ -75,6 +75,11 @@ export function fetchTrafficEv(signal?: AbortSignal): Promise<Result<TrafficEvRe
 /** GET /api/traffic/tour(TASK-026): 제주 관광지 목록(서버 하루·CDN 7일 보관). 화면을 열 때 한 번만 부른다. */
 export function fetchTrafficTour(signal?: AbortSignal): Promise<Result<TrafficTourResponse>> {
   return getJson<TrafficTourResponse>("/api/traffic/tour", (b) => "spots" in b, signal);
+}
+
+/** GET /api/traffic/stay(TASK-028): 제주 숙소(비짓제주, 서버 하루·CDN 7일 보관). 화면을 열 때 한 번만 부른다. */
+export function fetchTrafficStay(signal?: AbortSignal): Promise<Result<TrafficStayResponse>> {
+  return getJson<TrafficStayResponse>("/api/traffic/stay", (b) => "stays" in b, signal);
 }
 
 const tourDetails = new Map<string, Promise<Result<TrafficTourDetailResponse>>>();

@@ -27,7 +27,7 @@ web/            React 앱 (Vite root, index.html, src/)
   src/features/monitor/ 5분 재평가 제어기(monitor)와 화면(MonitorPanel)
   src/features/traffic/ 교통 현황: / 대시보드 카드, /map/{smooth|slow|congested|enforcement|parking|gas|lpg|ev|incidents|facilities} 항목별 지도 페이지(TASK-025, TrafficApp·views)
   src/services/       API 호출(placesApi, routesApi, explanationsApi), 위치(geolocation), 앱 주소 열기(appLink)
-api/            Vercel Functions — 파일 하나가 엔드포인트 (api/health.ts, api/places.ts, api/routes/compare.ts, api/explanations.ts, api/traffic/[kind].ts — /api/traffic/{incidents|speeds|links|facilities|enforcement|parking|gas|ev}를 함수 하나로, Hobby 함수 12개 한도 때문에 TASK-026에서 통합)
+api/            Vercel Functions — 파일 하나가 엔드포인트 (api/health.ts, api/places.ts, api/routes/compare.ts, api/explanations.ts, api/traffic/[kind].ts — /api/traffic/{incidents|speeds|links|facilities|enforcement|parking|gas|ev|tour|stay}를 함수 하나로, Hobby 함수 12개 한도 때문에 TASK-026에서 통합)
 api/_lib/       함수 공용 코드 (밑줄 폴더는 Vercel이 엔드포인트로 배포하지 않음)
   errors.ts       오류 코드 ↔ HTTP 상태, 공통 오류 응답
   places.ts       장소 검색 처리(입력 검사·빈도 제한·사용량·제주 필터)
@@ -81,6 +81,7 @@ tests/fixtures/ 합성 모의 데이터 (실제 응답 원문 아님)
 - `GET /api/traffic/ev` → `{ stations: [[충전소 ID, 이름, 주소, 위도, 경도, 급속 수, 완속 수, 급속 가능, 완속 가능, 이용 시간, 운영기관, 전화, 주차 무료]], statusAt, builtAt, source }`(TASK-019). 제주 ITS C-ITS `infoEvInfoList`(충전기 단위 → 충전소로 묶음, 02·08 완속·그 외 급속)·`infoEvList`(충전 가능). 키 `JEJU_ITS_API_KEY`. 기본정보 하루·충전 가능 30분 보관. 내 위치는 받지 않음(화면이 반경 1km를 거름).
 - `GET /api/traffic/enforcement` → `{ cameras: [[데이터 코드, 설치 장소, 설치 주소, 회전형 수, 검지 수, 운영 시간, 위도, 경도]], builtAt, source }`(TASK-016). 제주시 주정차 단속 CCTV(공공데이터포털 15109175, `apis.data.go.kr/6510000/parkingControlCctvService/getParkingControlCctvList`, 제주시만 약 370곳). 키 `DATA_GO_KR_API_KEY`(인코딩 키는 그대로 붙임). 서버 하루 + CDN 7일 보관.
 - `GET /api/traffic/tour` → `{ spots: [[콘텐츠 ID, 이름, 주소, 위도, 경도, 대표 사진 https 주소, 사진 저작권 구분]], builtAt, source }`, `?id=` → `{ id, usetime, restdate, parking, infocenter, builtAt, source }`(TASK-026). 한국관광공사 국문 관광정보 서비스_GW(공공데이터포털 15101578, KorService2 `areaBasedList2` 제주 areaCode 39·관광지 12 / `detailIntro2`). 키 `DATA_GO_KR_API_KEY`. 목록 서버 하루·CDN 7일, 상세 관광지마다 30일. 내부 한도 800건/일(공급자 개발계정 1,000).
+- `GET /api/traffic/stay` → `{ stays: [[콘텐츠 ID, 이름, 주소, 위도, 경도, 종류(HOTEL·PENSION·GUEST·MINBAK·ETC), 주차장 태그, 전화, 사진 https, 소개, 태그]], builtAt, source }`(TASK-028). 비짓제주 관광정보 OPEN API(제주관광공사, `https://api.visitjeju.net/vsjApi/contents/searchList?apiKey&locale=kr&category=c3&page`, 숙박 약 916곳·10쪽). 키 `VISITJEJU_API_KEY`(비짓제주에서 따로 발급, 공공데이터포털 키는 거부). 서버 하루·CDN 7일. 내부 한도 200건/일.
 - 화면 주소: `/`(첫 화면) 교통 현황 대시보드, `/route` 경로 추천, `/traffic`(예전 주소) 교통 현황(TASK-012). Vercel은 `vercel.json` `rewrites`로 `/route`·`/traffic`에도 같은 `index.html`을 준다. 대시보드는 화면이 켜져 있을 때만 1분마다 다시 조회한다.
   - 경로 표시 후 화면이 따로 요청한다. 경로 이름은 정해진 4개만 받는다(지시문 주입 방지). IP별 분당 10회.
   - AI 문장은 검증(숫자·도로 이름·조건부 단어·3문장·180자)을 통과해야 쓰고, 아니면 규칙 기반 설명. AI 4초 제한, 일일 200건.

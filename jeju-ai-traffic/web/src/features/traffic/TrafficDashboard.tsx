@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { IncidentKind, SpeedStatus, TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficLinksResponse, TrafficSpeedsResponse, TrafficTourDetailResponse, TrafficTourResponse } from "../../../../shared/contracts/traffic";
+import type { IncidentKind, SpeedStatus, TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficLinksResponse, StayKind, TrafficSpeedsResponse, TrafficStayResponse, TrafficTourDetailResponse, TrafficTourResponse } from "../../../../shared/contracts/traffic";
 import { isStale } from "../../../../shared/rules/traffic";
 import { distanceMeters } from "../../../../shared/rules/geo";
 import type { Coordinate } from "../../../../shared/contracts/route";
 import { getCurrentLocation } from "../../services/geolocation";
 import { parkingRouteHref } from "../trip/routeLink";
-import { fetchTrafficEnforcement, fetchTrafficEv, fetchTrafficFacilities, fetchTrafficGas, fetchTrafficParking, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds, fetchTrafficTour, fetchTrafficTourDetail } from "../../services/trafficApi";
+import { fetchTrafficEnforcement, fetchTrafficEv, fetchTrafficFacilities, fetchTrafficGas, fetchTrafficParking, fetchTrafficIncidents, fetchTrafficLinks, fetchTrafficSpeeds, fetchTrafficStay, fetchTrafficTour, fetchTrafficTourDetail } from "../../services/trafficApi";
 import type { FacilityPoint, PopupCard, SpeedLine } from "../map/leafletMap";
 import { FACILITY_ORDER, FACILITY_STYLE, gasBrand, NEARBY_KEYS, NEARBY_RADIUS, PARKING_FEE_STYLE, parkingFeeKind, tourParking, type FacilityKey } from "./facilityStyle";
 import { IncidentFocusBar, IncidentGroupList } from "../routes/IncidentFocus";
@@ -15,7 +15,7 @@ import { formatKstTime } from "../trip/format";
 import { revealMap } from "../map/revealMap";
 import { IncidentMap } from "./IncidentMap";
 import { buildCongestionRows, groupByRoad, joinSpeedLines, sectionText } from "./speedLines";
-import { isNearbyView, isSpeedView, VIEW_TITLE, type TrafficView } from "./views";
+import { isNearbyView, isSpeedView, VIEW_TITLE, type Around, type TrafficView } from "./views";
 
 /** 자동 갱신 간격. 서버는 제주 ITS 결과를 60초 캐시하므로 더 자주 불러도 새 정보가 없다(TASK-012 3. (a)). */
 export const REFRESH_MS = 60_000;
@@ -297,11 +297,60 @@ function parkingAround(lat: number, lng: number, lots: ParkingRow[]): { lot: Par
     .sort((a, b) => a.meters - b.meters);
 }
 
-function tourCard(s: TourRow, detail: TrafficTourDetailResponse | null, lots: TourParkingLots, onParking?: (id: string) => void, failed = false): PopupCard {
+type StayRow = TrafficStayResponse["stays"][number];
+/** 관광지 주변 숙소(TASK-028 2.(a)): 관광지 기준 반경 2km. */
+const TOUR_STAY_RADIUS = 2000;
+type TourStays = StayRow[] | "loading" | "failed";
+const STAY_KIND_LABEL: Record<StayKind, string> = { HOTEL: "호텔·리조트", PENSION: "펜션", GUEST: "게스트하우스", MINBAK: "민박", ETC: "기타" };
+const STAY_KINDS: StayKind[] = ["HOTEL", "PENSION", "GUEST", "MINBAK", "ETC"];
+const distText = (m: number) => (m < 1000 ? `${Math.round(m / 10) * 10}m` : `${(m / 1000).toFixed(1)}km`);
+
+/** 관광지 기준 반경 2km 숙소를 가까운 순으로. */
+function staysAround(lat: number, lng: number, stays: StayRow[]): { stay: StayRow; meters: number }[] {
+  return stays
+    .map((stay) => ({ stay, meters: distanceMeters({ lat, lng }, { lat: stay[3], lng: stay[4] }) }))
+    .filter((p) => p.meters <= TOUR_STAY_RADIUS)
+    .sort((a, b) => a.meters - b.meters);
+}
+
+/**
+ * 숙소 카드(TASK-028 3.(a)): 사진, 종류, 큰 칸(주차장 태그·관광지에서 거리), 소개·전화·특징, 주소·자료 안내, 경로 안내, 비짓제주 상세(새 창).
+ * 비짓제주 자료에는 입실 시간·객실 수·요금·빈방이 없다.
+ */
+function stayCard([id, name, address, lat, lng, kind, parking, phone, photo, intro, tag]: StayRow, spotName: string, meters: number): PopupCard {
+  const features = tag
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t && !/^(숙소|숙박)$/.test(t))
+    .slice(0, 6);
+  return {
+    size: "lg",
+    badge: { text: FACILITY_STYLE.STAY.mark, color: FACILITY_STYLE.STAY.markBg ?? FACILITY_STYLE.STAY.color },
+    kicker: `숙소 · ${STAY_KIND_LABEL[kind]}`,
+    title: name,
+    image: photo ? { src: photo, alt: name, credit: "사진 비짓제주" } : undefined,
+    tiles: [
+      { label: "주차", value: parking ? "주차장 있음" : "정보 없음", sub: "비짓제주 태그", tone: parking ? "good" : "neutral" },
+      { label: `${spotName}에서`, value: distText(meters), sub: "직선 거리", tone: "neutral" },
+    ],
+    chips: [],
+    rows: [
+      ...(intro ? [{ label: "소개", lines: [intro] }] : []),
+      ...(phone ? [{ label: "전화", lines: [phone] }] : []),
+      ...(features.length ? [{ label: "특징", lines: [features.join(", ")] }] : []),
+    ],
+    footer: [address, "비짓제주(제주관광공사) 숙박 정보 · 요금·빈방은 없으니 전화나 숙소 누리집으로 확인하세요."].filter(Boolean).join("\n"),
+    action: { href: parkingRouteHref({ id, name, address, lat, lng }), label: "현재 위치에서 경로 안내" },
+    links: [{ href: `https://www.visitjeju.net/kr/detail/view?contentsid=${encodeURIComponent(id)}`, label: "비짓제주에서 자세히 보기 ↗" }],
+  };
+}
+
+function tourCard(s: TourRow, detail: TrafficTourDetailResponse | null, lots: TourParkingLots, stays: TourStays, onAround?: (around: Around) => void, failed = false): PopupCard {
   const [id, name, address, lat, lng, image] = s;
   const lines = (v: string) => (v ? v.split("\n") : ["정보 없음"]);
   // 관광공사 주차 정보와 함께, 관광지 반경 1km 주차장(전국주차장정보표준데이터)을 보인다.
   const around = Array.isArray(lots) ? parkingAround(lat, lng, lots) : null;
+  const nearStays = Array.isArray(stays) ? staysAround(lat, lng, stays) : null;
   const free = around ? around.filter((p) => parkingFeeKind(p.lot[7]) === "FREE").length : 0;
   const meters = (m: number) => (m < 1000 ? `${Math.round(m / 10) * 10}m` : `${(m / 1000).toFixed(1)}km`);
   const parking = detail ? TOUR_PARKING_TILE[tourParking(detail.parking)] : null;
@@ -315,9 +364,19 @@ function tourCard(s: TourRow, detail: TrafficTourDetailResponse | null, lots: To
           sub: around.length ? `무료 ${free.toLocaleString("ko-KR")}곳` : "반경 1km 안",
           tone: around.length ? "good" : "neutral",
           // 누르면 이 관광지 기준 주변 주차장을 지도에(TASK-027 1.(a)). 없으면 누를 수 없다.
-          action: around.length && onParking ? { label: "지도에 보기 ›", onClick: () => onParking(id) } : undefined,
+          action: around.length && onAround ? { label: "지도에 보기 ›", onClick: () => onAround({ kind: "parking", id }) } : undefined,
         }
       : { label: "주변 주차장 1km", value: lots === "failed" ? "–" : "확인 중…", sub: lots === "failed" ? "불러오지 못했습니다" : undefined, tone: "neutral" },
+    // 주변 숙소(TASK-028 3.(a)): 관광지 기준 반경 2km 수, 누르면 지도에.
+    nearStays
+      ? {
+          label: "주변 숙소 2km",
+          value: nearStays.length ? `${nearStays.length.toLocaleString("ko-KR")}곳` : "없음",
+          sub: nearStays.length ? `가장 가까운 곳 ${distText(nearStays[0]!.meters)}` : "반경 2km 안",
+          tone: nearStays.length ? "good" : "neutral",
+          action: nearStays.length && onAround ? { label: "지도에 보기 ›", onClick: () => onAround({ kind: "stay", id }) } : undefined,
+        }
+      : { label: "주변 숙소 2km", value: stays === "failed" ? "–" : "확인 중…", sub: stays === "failed" ? "불러오지 못했습니다" : undefined, tone: "neutral" },
   ];
   const aroundRows = around?.length ? [{ label: "가까운 주차장", lines: around.slice(0, TOUR_PARKING_SHOW).map(({ lot, meters: m }) => `${lot[1] || "이름 없는 주차장"} · ${meters(m)} · ${PARKING_FEE_STYLE[parkingFeeKind(lot[7])].label || "요금 정보 없음"}`) }] : [];
   return {
@@ -337,7 +396,7 @@ function tourCard(s: TourRow, detail: TrafficTourDetailResponse | null, lots: To
           ...(detail.infocenter ? [{ label: "문의", lines: lines(detail.infocenter) }] : []),
         ]
       : [{ label: "안내", lines: [failed ? "이용시간·주차 정보를 불러오지 못했습니다. 다시 눌러 보세요." : "이용시간·주차 정보 불러오는 중…"] }, ...aroundRows],
-    footer: [address, `주차는 한국관광공사 관광정보${detail?.source === "mock" ? "(모의 데이터)" : ""}, 주변 주차장은 전국주차장정보표준데이터 · 바뀌었을 수 있으니 방문 전 확인하세요.`].filter(Boolean).join("\n"),
+    footer: [address, `주차는 한국관광공사 관광정보${detail?.source === "mock" ? "(모의 데이터)" : ""}, 주변 주차장은 전국주차장정보표준데이터, 주변 숙소는 비짓제주 · 바뀌었을 수 있으니 방문 전 확인하세요.`].filter(Boolean).join("\n"),
     action: { href: parkingRouteHref({ id, name, address, lat, lng }), label: "현재 위치에서 경로 안내" },
   };
 }
@@ -420,6 +479,38 @@ function SpotParkingList({ spotName, rows, onPick }: { spotName: string; rows: {
   );
 }
 
+/** 관광지 주변 숙소 목록(TASK-028 3.(a)): 관광지에서 가까운 순, 이름·거리·종류·주차장, 누르면 지도에서 그 숙소 카드. */
+function SpotStayList({ spotName, rows, onPick }: { spotName: string; rows: { stay: StayRow; meters: number }[]; onPick: (id: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <h3 className="text-sm font-semibold text-grey-700">{spotName}에서 가까운 순</h3>
+      {rows.length === 0 ? (
+        <p className="text-sm text-grey-600">조건에 맞는 숙소가 없습니다.</p>
+      ) : (
+        <ul aria-label="관광지 주변 숙소 목록" className="flex flex-col gap-1.5">
+          {rows.map(({ stay, meters }) => (
+            <li key={stay[0]}>
+              <button type="button" onClick={() => onPick(stay[0])} className="flex min-h-14 w-full items-center gap-2.5 rounded-xl bg-grey-100 px-3 py-2 text-left text-sm">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-extrabold text-white" style={{ backgroundColor: FACILITY_STYLE.STAY.color }} aria-hidden="true">
+                  {FACILITY_STYLE.STAY.mark}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold text-grey-900">{stay[1]}</span>
+                  <span className="block truncate text-xs text-grey-600">
+                    {distText(meters)} · {STAY_KIND_LABEL[stay[5]]}
+                    {stay[6] && " · 주차장"}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs font-semibold text-brand-700">지도 ›</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** 관광지 목록(TASK-026 2.(a)): 가까운 순, 줄을 누르면 지도에서 그 관광지 카드. */
 function TourList({ rows, limit, onMore, onPick }: { rows: { s: TourRow; meters: number }[]; limit: number; onMore: () => void; onPick: (id: string) => void }) {
   return (
@@ -487,7 +578,7 @@ function DashCard({ title, mark, value, sub, onClick, small = false }: { title: 
  * 제주 ITS 실시간 교통 현황(TASK-012). 화면이 켜져 있을 때만 1분마다 다시 조회한다.
  * view가 home이면 지도 없는 대시보드 카드, 그 밖이면 그 항목만 지도에 보이는 페이지(TASK-025). 화면을 바꿔도 받은 자료와 위치는 그대로 둔다.
  */
-export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view: TrafficView; parkingOf?: string | null; onNavigate: (view: TrafficView, parkingOf?: string | null) => void }) {
+export function TrafficDashboard({ view, around = null, onNavigate }: { view: TrafficView; around?: Around | null; onNavigate: (view: TrafficView, around?: Around | null) => void }) {
   const [state, setState] = useState<DashboardState>({ snapshot: null, problem: null, loading: true });
   const [speeds, setSpeeds] = useState<TrafficSpeedsResponse | null>(null);
   const [links, setLinks] = useState<TrafficLinksResponse["links"] | null>(null);
@@ -531,6 +622,10 @@ export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view:
   const [tourLoading, setTourLoading] = useState(true);
   const [tourProblem, setTourProblem] = useState(false);
   const [tourLimit, setTourLimit] = useState(TOUR_PAGE);
+  // 제주 숙소(TASK-028, 비짓제주): 화면을 열 때 한 번. 관광지 주변 숙소를 거리로 고른다.
+  const [stay, setStay] = useState<TrafficStayResponse | null>(null);
+  const [stayProblem, setStayProblem] = useState(false);
+  const [stayKindFilter, setStayKindFilter] = useState<StayKind | "ALL">("ALL");
   // 내 위치(주정차 단속 반경 조회용). 이 화면 메모리에만 두고 서버로 보내거나 저장하지 않는다.
   const [myLocation, setMyLocation] = useState<Coordinate | null>(null);
   const [locating, setLocating] = useState(false);
@@ -551,7 +646,7 @@ export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view:
   const mapBox = useRef<HTMLDivElement>(null);
   const showSpeeds = isSpeedView(view);
   // 화면이 바뀌면 그 화면에 맞게 켤 유형·도로 상태를 다시 정하고 고른 것을 닫는다(렌더 중 조정, 효과 없이).
-  const viewAt = `${view}|${parkingOf ?? ""}`;
+  const viewAt = `${view}|${around ? `${around.kind}:${around.id}` : ""}`;
   const [shownView, setShownView] = useState(viewAt);
   if (shownView !== viewAt) {
     setShownView(viewAt);
@@ -564,6 +659,7 @@ export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view:
     setKind("all");
     setGasFocus(null);
     setLocationProblem(null);
+    setStayKindFilter("ALL");
   }
 
   const load = useCallback(async () => {
@@ -673,6 +769,16 @@ export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view:
     setTourProblem(!r.ok);
     if (r.ok) setTour(r.data);
   }, []);
+  const fetchStay = useCallback(async () => {
+    const r = await fetchTrafficStay();
+    if (!alive.current) return;
+    setStayProblem(!r.ok);
+    if (r.ok) setStay(r.data);
+  }, []);
+  const retryStay = () => {
+    setStayProblem(false);
+    void fetchStay();
+  };
   const retryTour = () => {
     setTourLoading(true);
     setTourProblem(false);
@@ -711,6 +817,7 @@ export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view:
       void fetchGas();
       void fetchEv();
       void fetchTour();
+      void fetchStay();
     }, 0);
     // 충전 가능 수는 30분마다(화면이 켜져 있을 때만) 다시 받는다(TASK-019 1.(a)).
     const evTick = setInterval(() => {
@@ -720,7 +827,7 @@ export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view:
       clearTimeout(first);
       clearInterval(evTick);
     };
-  }, [fetchFacilities, fetchEnforcement, fetchParking, fetchGas, fetchEv, fetchTour]);
+  }, [fetchFacilities, fetchEnforcement, fetchParking, fetchGas, fetchEv, fetchTour, fetchStay]);
 
   // 도로 모양을 받는 동안 경과 시간(초)을 1초마다 갱신한다.
   useEffect(() => {
@@ -835,10 +942,15 @@ export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view:
   // 관광지 카드의 주변 주차장(TASK-026 범위 변경): 주차장 자료는 화면을 열 때 이미 받는다.
   const tourLots: TourParkingLots = parking ? parking.lots : parkingProblem ? "failed" : "loading";
   // 관광지 주변 주차장 보기(TASK-027): 주소의 ?parking=관광지 번호. 그 관광지와 반경 1km 주차장만 지도에.
-  const spot = view === "TOUR" && parkingOf ? (tour?.spots.find((t) => t[0] === parkingOf) ?? null) : null;
-  const spotParking = useMemo(() => (spot && parking ? parkingAround(spot[3], spot[4], parking.lots) : []), [spot, parking]);
-  const showSpotParking = useCallback((id: string) => onNavigate("TOUR", id), [onNavigate]);
-  const focusFuel = (kind: "GAS" | "LPG" | "EV" | "TOUR" | "PARK", id: string) => {
+  // 관광지 주변 숙소(TASK-028): 주소의 ?stay=관광지 번호. 숙소 자료도 화면을 열 때 이미 받는다.
+  const tourStays: TourStays = stay ? stay.stays : stayProblem ? "failed" : "loading";
+  const spot = view === "TOUR" && around ? (tour?.spots.find((t) => t[0] === around.id) ?? null) : null;
+  const spotMode = spot ? around?.kind : undefined;
+  const spotParking = useMemo(() => (spot && spotMode === "parking" && parking ? parkingAround(spot[3], spot[4], parking.lots) : []), [spot, spotMode, parking]);
+  const spotStays = useMemo(() => (spot && spotMode === "stay" && stay ? staysAround(spot[3], spot[4], stay.stays) : []), [spot, spotMode, stay]);
+  const shownStays = stayKindFilter === "ALL" ? spotStays : spotStays.filter((p) => p.stay[5] === stayKindFilter);
+  const showAround = useCallback((a: Around) => onNavigate("TOUR", a), [onNavigate]);
+  const focusFuel = (kind: "GAS" | "LPG" | "EV" | "TOUR" | "PARK" | "STAY", id: string) => {
     setGasFocus((prev) => ({ id: `${kind}-${id}`, seq: (prev?.seq ?? 0) + 1 }));
     revealMap(mapBox.current);
   };
@@ -848,7 +960,7 @@ export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view:
         .filter((f) => facilityTypes.has(f[1]))
         .map(([id, type, name, model, lat, lng]): FacilityPoint => ({ id, type, name, model, lat, lng })),
       // 주차장: 내 주변(주차장 페이지) 또는 관광지 주변(관광지 페이지에서 "주변 주차장 지도에 보기", TASK-027)
-      ...(facilityTypes.has("PARK") ? nearPark : spot ? spotParking.map((p) => p.lot) : []).filter((l) => !parkFreeOnly || parkingFeeKind(l[7]) === "FREE").map(parkingPoint),
+      ...(facilityTypes.has("PARK") ? nearPark : spotParking.map((p) => p.lot)).filter((l) => !parkFreeOnly || parkingFeeKind(l[7]) === "FREE").map(parkingPoint),
       ...(facilityTypes.has("ENF") ? nearEnf : []).map(
         ([id, place, address, rotate, audit, oper, lat, lng]): FacilityPoint => ({
           id: `ENF-${id}`,
@@ -910,11 +1022,22 @@ export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view:
         lat: s[3],
         lng: s[4],
         pin: { mark: FACILITY_STYLE.TOUR.mark, price: s[1], color: FACILITY_STYLE.TOUR.color, low: false, fold: true, dot: true },
-        card: tourCard(s, null, tourLots, showSpotParking),
-        loadCard: () => fetchTrafficTourDetail(s[0]).then((r) => tourCard(s, r.ok ? r.data : null, tourLots, showSpotParking, !r.ok)),
+        card: tourCard(s, null, tourLots, tourStays, showAround),
+        loadCard: () => fetchTrafficTourDetail(s[0]).then((r) => tourCard(s, r.ok ? r.data : null, tourLots, tourStays, showAround, !r.ok)),
+      })),
+      // 관광지 주변 숙소(TASK-028): "숙" 동그라미(확대 17 이상이면 이름), 누르면 숙소 카드.
+      ...(spot ? shownStays : []).map(({ stay: st, meters }): FacilityPoint => ({
+        id: `STAY-${st[0]}`,
+        type: "STAY",
+        name: st[1],
+        model: "",
+        lat: st[3],
+        lng: st[4],
+        pin: { mark: FACILITY_STYLE.STAY.mark, price: st[1], color: FACILITY_STYLE.STAY.color, low: false, fold: true, dot: true },
+        card: stayCard(st, spot![1], meters),
       })),
     ],
-    [facilities, facilityTypes, nearEnf, nearPark, parkFreeOnly, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev, nearTour, tourLots, spot, spotParking, showSpotParking],
+    [facilities, facilityTypes, nearEnf, nearPark, parkFreeOnly, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev, nearTour, tourLots, tourStays, spot, spotParking, shownStays, showAround],
   );
   const nearbyOn = NEARBY_KEYS.filter((k) => facilityTypes.has(k));
   const nearbyCount = (k: FacilityKey) => facilityPoints.filter((p) => p.type === k).length;
@@ -1069,7 +1192,7 @@ export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view:
     <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
       <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
       <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 교통 현황을 열 때 한 번 확인하며(허용한 경우), 이 기기에서 지도 위치와 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
-      <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS · 관광지 한국관광공사(국문 관광정보)</p>
+      <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS · 관광지 한국관광공사(국문 관광정보) · 숙소 비짓제주(제주관광공사)</p>
     </footer>
   );
   if (view === "home") {
@@ -1239,7 +1362,7 @@ export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view:
             heightClass={view === "TOUR" ? "h-[68vh] md:h-[65vh] xl:h-[calc(100dvh-7rem)]" : "h-[55vh] md:h-[60vh] xl:h-[calc(100dvh-7rem)]"}
             overlay={mapOverlay}
             facilities={facilityPoints}
-            nearby={spot ? { lat: spot[3], lng: spot[4], radiusMeters: TOUR_PARKING_RADIUS, spot: true } : nearbyOn.length > 0 && myLocation ? { ...myLocation, radiusMeters: nearbyMaxRadius } : null}
+            nearby={spot ? { lat: spot[3], lng: spot[4], radiusMeters: spotMode === "stay" ? TOUR_STAY_RADIUS : TOUR_PARKING_RADIUS, spot: true } : nearbyOn.length > 0 && myLocation ? { ...myLocation, radiusMeters: nearbyMaxRadius } : null}
             home={myLocation}
             openFacility={gasFocus}
             highlightIds={showSpeeds ? highlightIds : EMPTY_IDS}
@@ -1508,7 +1631,45 @@ export function TrafficDashboard({ view, parkingOf = null, onNavigate }: { view:
           </section>
         )}
 
-        {spot && (
+        {spot && spotMode === "stay" && (
+          <section aria-labelledby="spot-stay-heading" className={`flex flex-col gap-3 rounded-[20px] bg-white p-4 ${PANEL}`}>
+            <div>
+              <h2 id="spot-stay-heading" className="font-bold text-grey-900">
+                {spot[1]} 주변 숙소
+              </h2>
+              <p className="text-xs text-grey-600">관광지 기준 반경 2km · 비짓제주(제주관광공사) 숙박 정보{stay?.source === "mock" && "(모의 데이터)"}. 요금·빈방 정보는 없습니다.</p>
+            </div>
+            <div role="status" aria-label="관광지 주변 숙소" className="flex items-center justify-between gap-2 rounded-2xl bg-grey-100 p-2 text-sm text-grey-800">
+              <span>{stay ? `반경 2km 숙소 ${spotStays.length.toLocaleString("ko-KR")}곳 표시 중` : stayProblem ? "숙소 정보를 불러오지 못했습니다." : "숙소 불러오는 중…"}</span>
+              <button type="button" onClick={() => onNavigate("TOUR")} className="min-h-12 shrink-0 rounded-2xl bg-white px-3 font-semibold text-grey-700">
+                관광지 목록으로
+              </button>
+            </div>
+            {stay && spotStays.length > 0 && (
+              <ul aria-label="숙소 종류" className="flex flex-wrap gap-1.5">
+                {(["ALL", ...STAY_KINDS] as const)
+                  .map((k) => [k, k === "ALL" ? spotStays.length : spotStays.filter((p) => p.stay[5] === k).length] as const)
+                  .filter(([k, n]) => k === "ALL" || n > 0)
+                  .map(([k, n]) => (
+                    <li key={k}>
+                      <button
+                        type="button"
+                        onClick={() => setStayKindFilter(k)}
+                        aria-pressed={stayKindFilter === k}
+                        className={`min-h-10 rounded-xl px-3 text-sm font-semibold ${stayKindFilter === k ? "bg-brand-700 text-white" : "bg-grey-100 text-grey-700"}`}
+                      >
+                        {k === "ALL" ? "전체" : STAY_KIND_LABEL[k]} {n}
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
+            {stay && <SpotStayList spotName={spot[1]} rows={shownStays} onPick={(id) => focusFuel("STAY", id)} />}
+            {stayProblem && <RetryAlert text="숙소 정보를 불러오지 못했습니다." onRetry={retryStay} />}
+          </section>
+        )}
+
+        {spot && spotMode === "parking" && (
           <section aria-labelledby="spot-heading" className={`flex flex-col gap-3 rounded-[20px] bg-white p-4 ${PANEL}`}>
             <div>
               <h2 id="spot-heading" className="font-bold text-grey-900">

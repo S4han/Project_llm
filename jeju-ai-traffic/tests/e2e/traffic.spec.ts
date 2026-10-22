@@ -445,7 +445,7 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await page.goto("/map/tour");
     const rows = page.getByRole("list", { name: "관광지 목록" }).getByRole("button");
     await rows.first().click(); // 모의 신산공원
-    const go = page.locator(".leaflet-popup button.popup-card-tile-action");
+    const go = page.locator(".leaflet-popup button.popup-card-tile-action", { hasText: "주변 주차장" });
     await expect(go).toHaveText("주변 주차장 1km2곳무료 1곳지도에 보기 ›");
     await go.click();
     await expect(page).toHaveURL(/\/map\/tour\?parking=MOCK-T2$/);
@@ -465,5 +465,40 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await page.goBack();
     await expect(page).toHaveURL(/\/map\/tour$/);
     await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 5km 안 관광지 2곳");
+  });
+
+  test("관광지 주변 숙소(TASK-028): 카드의 '주변 숙소' 칸 → 관광지 기준 2km 숙소 지도·목록·종류 거르기, 숙소 카드, 관광지 목록으로", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/map/tour");
+    await page.getByRole("list", { name: "관광지 목록" }).getByRole("button").first().click(); // 모의 신산공원
+    const go = page.locator(".leaflet-popup button.popup-card-tile-action", { hasText: "주변 숙소" });
+    await expect(go).toContainText("주변 숙소 2km3곳");
+    await go.click();
+    await expect(page).toHaveURL(/\/map\/tour\?stay=MOCK-T2$/);
+    await expect(page.getByRole("heading", { name: "모의 신산공원 주변 숙소" })).toBeVisible();
+    await expect(page.getByRole("status", { name: "관광지 주변 숙소" })).toContainText("반경 2km 숙소 3곳 표시 중");
+    const map = page.getByRole("region", { name: "교통 현황 지도" });
+    await expect(map).toHaveAttribute("data-facilities", "4");
+    const list = page.getByRole("list", { name: "관광지 주변 숙소 목록" }).getByRole("button");
+    await expect(list).toHaveCount(3);
+    await expect(list.first()).toContainText("모의 신산 호텔");
+    await page.getByRole("list", { name: "숙소 종류" }).getByRole("button", { name: /^펜션/ }).click();
+    await expect(list).toHaveCount(1);
+    await expect(map).toHaveAttribute("data-facilities", "2");
+    await page.getByRole("list", { name: "숙소 종류" }).getByRole("button", { name: /^전체/ }).click();
+    await map.scrollIntoViewIfNeeded();
+    if (process.env.SCREENSHOTS === "TASK-028") await page.screenshot({ path: "reports/screenshots/TASK-028-01-stays-390.png", fullPage: true });
+    await list.first().click();
+    const card = page.locator(".leaflet-popup .popup-card").last();
+    await expect(card.locator(".popup-card-kicker")).toHaveText("숙소 · 호텔·리조트");
+    await expect(card.locator(".popup-card-tile").first()).toHaveText("주차주차장 있음비짓제주 태그");
+    await expect(card.getByRole("link", { name: "현재 위치에서 경로 안내" })).toHaveAttribute("href", /^\/route\?to=/);
+    await expect(card.getByRole("link", { name: "비짓제주에서 자세히 보기 ↗" })).toHaveAttribute("target", "_blank");
+    // 숙소 카드 위가 지도 안에 보인다
+    await expect.poll(async () => (await page.locator(".leaflet-popup").last().boundingBox())!.y - (await map.boundingBox())!.y).toBeGreaterThanOrEqual(0);
+    await page.locator(".leaflet-popup").last().scrollIntoViewIfNeeded();
+    if (process.env.SCREENSHOTS === "TASK-028") await page.screenshot({ path: "reports/screenshots/TASK-028-02-stay-card-390.png", fullPage: true });
+    await page.getByRole("button", { name: "관광지 목록으로" }).click();
+    await expect(page).toHaveURL(/\/map\/tour$/);
   });
 });

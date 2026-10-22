@@ -151,3 +151,16 @@ export interface TrafficTourDetailResponse {
   builtAt: IsoDateTime;
   source: "kto" | "mock";
 }
+
+/** 숙소 종류(TASK-028, 비짓제주 태그로 나눔). */
+export type StayKind = "HOTEL" | "PENSION" | "GUEST" | "MINBAK" | "ETC";
+
+/**
+ * GET /api/traffic/stay 응답(TASK-028, 비짓제주 관광정보 OPEN API 숙박 c3).
+ * stays[i] = [콘텐츠 ID, 이름, 주소, 위도, 경도, 종류, 주차장 태그 있음, 전화, 사진 https 주소(없으면 ""), 간단 소개, 특징 태그(쉼표)].
+ */
+export interface TrafficStayResponse {
+  stays: [string, string, string, number, number, StayKind, boolean, string, string, string, string][];
+  builtAt: IsoDateTime;
+  source: "visitJeju" | "mock";
+}

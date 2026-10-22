@@ -154,6 +154,8 @@ export interface PopupCard {
   tiles?: { label: string; value: string; sub?: string; tone: "good" | "bad" | "neutral"; action?: { label: string; onClick: () => void } }[];
   /** lg면 넓고 글자가 큰 카드(관광지). */
   size?: "lg";
+  /** 아래 작은 바깥 링크(새 창, opener 차단). 예: 비짓제주 상세(TASK-028). */
+  links?: { href: string; label: string }[];
 }
 
 export function popupCard(card: PopupCard): HTMLElement {
@@ -220,6 +222,14 @@ export function popupCard(card: PopupCard): HTMLElement {
     root.append(dl);
   }
   if (card.footer) root.append(el("p", "popup-card-footer", card.footer));
+  for (const l of card.links ?? []) {
+    if (!/^https:\/\//.test(l.href)) continue;
+    const a = el("a", "popup-card-link", l.label) as HTMLAnchorElement;
+    a.href = l.href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    root.append(a);
+  }
   if (card.action) {
     const a = el("a", "popup-card-action", card.action.label) as HTMLAnchorElement;
     a.href = card.action.href;
@@ -420,17 +430,28 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
     if (p.pin) {
       // 주유소: 반경 안 수십 곳이라 DOM 표시로 그린다. 글자는 고정 상표 표시와 숫자뿐(원천 이름은 카드에서만 textContent로).
       const m = L.marker([p.lat, p.lng], { icon: gasPinIcon(p.pin), keyboard: false, title: p.name, zIndexOffset: p.pin.low ? 1000 : p.type === "TOUR" ? 800 : p.pin.top ? 500 : 0 })
-        // 불러와 길어지는 카드(관광지)는 휴대폰 지도 높이에 맞춰 높이를 제한하고 안에서 넘긴다(TASK-026 점검: 위가 잘림).
+        // 큰 카드(관광지·숙소)는 지도 폭·높이에 맞춰 넓고 길게, 넘치면 안에서 넘긴다(TASK-026 점검: 위가 잘림).
         .bindPopup(() => popupCard(p.card ?? facilityCard(p)), {
           offset: p.pin.dot ? [0, -8] : [0, -30],
-          // 큰 카드(관광지)는 지도 폭·높이에 맞춰 넓고 길게(넘치면 안에서 넘김)
           maxWidth: p.card?.size === "lg" ? 360 : undefined,
-          maxHeight: p.loadCard ? Math.max(260, map.getSize().y - 100) : undefined,
+          maxHeight: p.card?.size === "lg" || p.loadCard ? Math.max(260, map.getSize().y - 100) : undefined,
         })
         .addTo(layer);
+      // 카드 위가 지도 밖으로 잘리면 지도를 내린다. Leaflet 자동 이동은 열 때 이동 직후의 맞춤을 건너뛰고
+      // 목록에서 고를 때의 화면 이동과 겹치므로, 움직임이 끝난 뒤(0.3초) 직접 맞춘다.
+      const fitTop = () =>
+        setTimeout(() => {
+          const el = m.isPopupOpen() ? m.getPopup()?.getElement() : undefined;
+          if (!el) return;
+          const top = el.getBoundingClientRect().top - map.getContainer().getBoundingClientRect().top;
+          if (top < 10) map.panBy([0, top - 10]);
+        }, 300);
       if (p.card?.size === "lg") {
         // 큰 카드가 열려 있는 동안은 지도 위 버튼(확대·제주 전체)을 감춰 카드를 가리지 않게 한다.
-        m.on("popupopen", () => map.getContainer().classList.add("popup-lg-open"));
+        m.on("popupopen", () => {
+          map.getContainer().classList.add("popup-lg-open");
+          fitTop();
+        });
         m.on("popupclose", () => map.getContainer().classList.remove("popup-lg-open"));
       }
       const load = p.loadCard;
@@ -439,14 +460,7 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
           void load().then((card) => {
             if (!m.isPopupOpen()) return;
             m.setPopupContent(popupCard(card));
-            // 카드가 길어져 위가 지도 밖으로 잘리면 지도를 내린다. Leaflet 자동 이동은 열 때 이동 직후의 맞춤을 건너뛰고
-            // 목록에서 고를 때의 화면 이동과 겹치므로, 움직임이 끝난 뒤(0.3초) 직접 맞춘다.
-            setTimeout(() => {
-              const el = m.isPopupOpen() ? m.getPopup()?.getElement() : undefined;
-              if (!el) return;
-              const top = el.getBoundingClientRect().top - map.getContainer().getBoundingClientRect().top;
-              if (top < 10) map.panBy([0, top - 10]);
-            }, 300);
+            fitTop();
           }),
         );
       }

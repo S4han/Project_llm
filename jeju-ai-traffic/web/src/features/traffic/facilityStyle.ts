@@ -1,7 +1,7 @@
 import type { FacilityType } from "../../../../shared/contracts/traffic";
 
 /** 교통시설물 카드의 유형. 제주 ITS 7개 + 제주시 주정차 단속 CCTV(ENF, TASK-016) + 주차장(PARK, 표준데이터, TASK-017) + 관광지(TOUR, TASK-026). */
-export type FacilityKey = FacilityType | "ENF" | "PARK" | "GAS" | "LPG" | "EV" | "TOUR";
+export type FacilityKey = FacilityType | "ENF" | "PARK" | "GAS" | "LPG" | "EV" | "TOUR" | "STAY";
 
 /** 내 위치 반경 안만 보이는 유형(TASK-016·017·018·026). */
 export const NEARBY_KEYS: FacilityKey[] = ["ENF", "PARK", "GAS", "LPG", "EV", "TOUR"];
@@ -46,6 +46,8 @@ export const FACILITY_STYLE: Record<FacilityKey, { label: string; short: string;
   EV: { label: "전기차 충전소", short: "전기차 충전소", color: "#16a34a", stroke: "#14532d", mark: "⚡" },
   // 지도에서는 "관" 동그라미(확대하면 이름)로 그린다(TASK-026).
   TOUR: { label: "관광지", short: "관광지", color: "#4f46e5", mark: "관", markBg: "#4f46e5" },
+  // 관광지 주변 숙소(TASK-028, 비짓제주). 교통시설물 카드 목록(FACILITY_ORDER)에는 넣지 않는다.
+  STAY: { label: "숙소", short: "숙소", color: "#c026d3", mark: "숙", markBg: "#c026d3" },
 };
 
 export const FACILITY_ORDER: FacilityKey[] = ["FTY01", "FTY02", "FTY03", "FTY07", "FTY09", "FTY17", "FTY23", "ENF", "PARK", "GAS", "LPG", "EV", "TOUR"];

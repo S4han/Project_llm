@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse, TrafficTourDetailResponse, TrafficTourResponse } from "../../shared/contracts/traffic";
+import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncident, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse, TrafficStayResponse, TrafficTourDetailResponse, TrafficTourResponse } from "../../shared/contracts/traffic";
 import { encodePolyline } from "../../shared/rules/polyline";
 import { REFRESH_MS } from "../../web/src/features/traffic/TrafficDashboard";
 import { TrafficApp } from "../../web/src/features/traffic/TrafficApp";
@@ -85,6 +85,18 @@ const TOUR: TrafficTourResponse = {
 };
 const TOUR_DETAIL: TrafficTourDetailResponse = { id: "T1", usetime: "상시 개방\n야간 조명 22시까지", restdate: "연중무휴", parking: "가능 (승용차 30대)", infocenter: "안내소 064-000-0000", builtAt: AT, source: "kto" };
 
+// 숙소(TASK-028): T2 신산공원(33.5045,126.5385) 기준 S1 약 0.2km 호텔, S2 약 0.5km 게스트하우스, S3 약 1.8km 펜션, S4 서귀포(밖)
+const STAY: TrafficStayResponse = {
+  stays: [
+    ["S1", "신산 호텔", "제주시 일도2동 1", 33.5055, 126.5405, "HOTEL", true, "064-000-0001", "https://api.cdn.visitjeju.net/photomng/imgpath/a.webp", "시내 호텔", "호텔,숙소,조식 포함"],
+    ["S2", "일도 게스트하우스", "제주시 일도1동 2", 33.5085, 126.5345, "GUEST", false, "", "", "", "게스트하우스,숙소"],
+    ["S3", "사라봉 펜션", "제주시 건입동 3", 33.5205, 126.5385, "PENSION", true, "", "", "", "펜션"],
+    ["S4", "서귀포 리조트", "서귀포시 4", 33.2485, 126.5605, "HOTEL", true, "", "", "", "리조트"],
+  ],
+  builtAt: AT,
+  source: "visitJeju",
+};
+
 const EV: TrafficEvResponse = {
   stations: [
     ["E1", "시청 충전소", "제주시 이도2동", 33.5, 126.531, 2, 4, 1, 2, "24시간 이용가능", "환경부", "1661-9408", "Y"],
@@ -111,6 +123,7 @@ let visibility: DocumentVisibilityState = "visible";
 let tourRespond: () => Response;
 let tourDetailRespond: (url: string) => Response;
 let tourDetailCalls = 0;
+let stayRespond: () => Response;
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
@@ -129,6 +142,7 @@ beforeEach(() => {
   tourRespond = () => Response.json(TOUR);
   tourDetailRespond = (url) => Response.json({ ...TOUR_DETAIL, id: new URL(url, "http://x").searchParams.get("id") });
   tourDetailCalls = 0;
+  stayRespond = () => Response.json(STAY);
   visibility = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
   vi.stubGlobal(
@@ -148,6 +162,7 @@ beforeEach(() => {
         return tourDetailRespond(url);
       }
       if (url.startsWith("/api/traffic/tour")) return tourRespond();
+      if (url.startsWith("/api/traffic/stay")) return stayRespond();
       if (url.startsWith("/api/traffic/links")) {
         linksCalls += 1;
         return linksRespond();
@@ -696,7 +711,7 @@ describe("내 주변 페이지 (TASK-016~024 → TASK-025 /map/enforcement·park
     openAt("/map/tour");
     const rows = within(await screen.findByRole("list", { name: "관광지 목록" })).getAllByRole("button");
     fireEvent.click(rows[0]!); // 신산공원
-    await waitFor(() => expect([...document.querySelectorAll(".popup-card-tile")].map((t) => t.textContent)).toEqual(["관광지 주차가능한국관광공사", "주변 주차장 1km4곳무료 1곳지도에 보기 ›"]));
+    await waitFor(() => expect([...document.querySelectorAll(".popup-card-tile")].map((t) => t.textContent)).toEqual(["관광지 주차가능한국관광공사", "주변 주차장 1km4곳무료 1곳지도에 보기 ›", "주변 숙소 2km3곳가장 가까운 곳 220m지도에 보기 ›"]));
     const lines = [...document.querySelectorAll(".popup-card-rows dd")].map((dd) => dd.textContent);
     expect(lines).toContain("신산 공영주차장 · 60m · 무료가까운 혼합 주차장 · 150m · 일부유료일도 주차장 · 220m · 유료");
     expect(screen.queryByText(/먼 주차장/)).toBeNull();
@@ -746,6 +761,59 @@ describe("내 주변 페이지 (TASK-016~024 → TASK-025 /map/enforcement·park
     openAt("/map/tour?parking=NOPE");
     expect(await screen.findByText("내 위치 반경 5km 안 관광지 2곳")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: /주변 주차장$/ })).toBeNull();
+  });
+
+  it("관광지 카드의 '주변 숙소' 칸 → 관광지 기준 반경 2km 숙소 지도·가까운 순 목록·종류 거르기·숙소 카드, 주소 ?stay=(TASK-028)", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    openAt("/map/tour");
+    const rows = within(await screen.findByRole("list", { name: "관광지 목록" })).getAllByRole("button");
+    fireEvent.click(rows[0]!); // 신산공원
+    const go = await waitFor(() => {
+      const b = [...document.querySelectorAll<HTMLButtonElement>("button.popup-card-tile-action")].find((x) => x.textContent?.startsWith("주변 숙소"));
+      expect(b?.textContent).toBe("주변 숙소 2km3곳가장 가까운 곳 220m지도에 보기 ›");
+      return b!;
+    });
+    fireEvent.click(go);
+    expect(window.location.pathname + window.location.search).toBe("/map/tour?stay=T2");
+    expect(screen.getByRole("heading", { name: "신산공원 주변 숙소" })).toBeTruthy();
+    expect(screen.getByRole("status", { name: "관광지 주변 숙소" }).textContent).toContain("반경 2km 숙소 3곳 표시 중");
+    expect(map().getAttribute("data-facilities")).toBe("4"); // 관광지 1 + 숙소 3
+    const list = () => within(screen.getByRole("list", { name: "관광지 주변 숙소 목록" })).getAllByRole("button").map((b) => b.textContent);
+    expect(list()).toEqual(["숙신산 호텔220m · 호텔·리조트 · 주차장지도 ›", "숙일도 게스트하우스580m · 게스트하우스지도 ›", "숙사라봉 펜션1.8km · 펜션 · 주차장지도 ›"]);
+    expect(within(screen.getByRole("list", { name: "숙소 종류" })).getAllByRole("button").map((b) => b.textContent)).toEqual(["전체 3", "호텔·리조트 1", "펜션 1", "게스트하우스 1"]);
+    fireEvent.click(screen.getByRole("button", { name: "펜션 1" }));
+    expect(list()).toEqual(["숙사라봉 펜션1.8km · 펜션 · 주차장지도 ›"]);
+    expect(map().getAttribute("data-facilities")).toBe("2");
+    fireEvent.click(screen.getByRole("button", { name: "전체 3" }));
+    fireEvent.click(within(screen.getByRole("list", { name: "관광지 주변 숙소 목록" })).getAllByRole("button")[0]!);
+    const card = await waitFor(() => {
+      const c = document.querySelector(".popup-card-lg");
+      expect(c?.textContent).toContain("신산 호텔");
+      return c!;
+    });
+    expect(card.querySelector(".popup-card-kicker")?.textContent).toBe("숙소 · 호텔·리조트");
+    expect([...card.querySelectorAll(".popup-card-tile")].map((t) => t.textContent)).toEqual(["주차주차장 있음비짓제주 태그", "신산공원에서220m직선 거리"]);
+    expect(card.textContent).toContain("064-000-0001");
+    expect(card.textContent).toContain("호텔, 조식 포함");
+    expect((card.querySelector("a.popup-card-link") as HTMLAnchorElement).href).toBe("https://www.visitjeju.net/kr/detail/view?contentsid=S1");
+    expect((card.querySelector("a.popup-card-link") as HTMLAnchorElement).rel).toBe("noopener noreferrer");
+    expect((card.querySelector(".popup-card-photo img") as HTMLImageElement).src).toBe("https://api.cdn.visitjeju.net/photomng/imgpath/a.webp");
+    fireEvent.click(screen.getByRole("button", { name: "관광지 목록으로" }));
+    expect(window.location.pathname + window.location.search).toBe("/map/tour");
+  });
+
+  it("숙소 자료를 못 받으면 관광지 카드에 안내, 숙소 화면에 다시 시도", async () => {
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    stayRespond = () => Response.json({ error: { code: "PROVIDER_UNAVAILABLE", message: "x" } }, { status: 503 });
+    openAt("/map/tour?stay=T2");
+    const alert = await waitFor(() => {
+      const a = screen.getAllByRole("alert").find((x) => x.textContent?.includes("숙소 정보를 불러오지 못했습니다."));
+      expect(a).toBeTruthy();
+      return a!;
+    });
+    stayRespond = () => Response.json(STAY);
+    fireEvent.click(within(alert).getByRole("button", { name: "다시 시도" }));
+    expect(await screen.findByText("반경 2km 숙소 3곳 표시 중")).toBeTruthy();
   });
 
   it("관광지 목록을 못 받으면 안내와 다시 시도", async () => {

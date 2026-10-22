@@ -6,6 +6,7 @@ import { defaultTrafficFacilitiesDeps, handleTrafficFacilities } from "../_lib/t
 import { defaultTrafficGasDeps, handleTrafficGas } from "../_lib/trafficGas.js";
 import { defaultTrafficLinksDeps, defaultTrafficSpeedsDeps, handleTrafficLinks, handleTrafficSpeeds } from "../_lib/trafficLayers.js";
 import { defaultTrafficParkingDeps, handleTrafficParking } from "../_lib/trafficParking.js";
+import { defaultTrafficStayDeps, handleTrafficStay } from "../_lib/trafficStay.js";
 import { defaultTrafficTourDeps, handleTrafficTour } from "../_lib/trafficTour.js";
 
 /**
@@ -16,6 +17,7 @@ import { defaultTrafficTourDeps, handleTrafficTour } from "../_lib/trafficTour.j
  * - facilities: 제주 ITS 교통시설물 7개 유형(TASK-013) / enforcement: 제주시 주정차 단속 CCTV(TASK-016)
  * - parking: 전국주차장정보표준데이터(TASK-017) / gas: 제주 ITS 주유소·가격(TASK-018) / ev: 전기차 충전소(TASK-019)
  * - tour: 한국관광공사 제주 관광지 목록, ?id=면 그 관광지 이용시간·쉬는날·주차(TASK-026)
+ * - stay: 비짓제주 제주 숙소(TASK-028)
  */
 const HANDLERS: Record<string, (request: Request) => Promise<Response>> = {
   incidents: (r) => handleTrafficIncidents(r, defaultTrafficIncidentsDeps),
@@ -27,6 +29,7 @@ const HANDLERS: Record<string, (request: Request) => Promise<Response>> = {
   gas: (r) => handleTrafficGas(r, defaultTrafficGasDeps),
   ev: (r) => handleTrafficEv(r, defaultTrafficEvDeps),
   tour: (r) => handleTrafficTour(r, defaultTrafficTourDeps),
+  stay: (r) => handleTrafficStay(r, defaultTrafficStayDeps),
 };
 
 /** 주소의 마지막 경로("/api/traffic/gas" → "gas"). */

@@ -135,6 +135,9 @@ body {
 .leaflet-popup-content .popup-card-tile-sub {
   @apply text-xs opacity-80;
 }
+.leaflet-popup-content a.popup-card-link {
+  @apply text-center text-sm font-semibold text-brand-700 underline underline-offset-2;
+}
 .leaflet-popup-content .popup-card-tile-action {
   @apply cursor-pointer border-0 text-left ring-1 ring-current/20 active:opacity-80;
   font: inherit;
