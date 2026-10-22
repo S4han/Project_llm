@@ -21,7 +21,7 @@
     }
   ],
   "functions": {
-    "api/traffic/links.ts": {
+    "api/traffic/[kind].ts": {
       "maxDuration": 60
     }
   }

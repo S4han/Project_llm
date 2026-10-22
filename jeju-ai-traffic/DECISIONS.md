@@ -266,3 +266,4 @@
 | 2026-10-22 | — | 기타 | "Main반영" | — | 작업 브랜치 `claude/adoring-sagan-harjwg`를 main에 fast-forward로 반영(TASK-025 주유소 카드 휘발유·경유 최저가 구분). Production 자동 배포. 임시 확인 함수 없음. **TASK-025는 결과 검토 상태 유지**(`완료 승인: TASK-025` 미수신) |
 | 2026-10-22 | TASK-025 | 완료 승인 | "완료 승인: TASK-025" | 결과 검토 → 완료 | Production은 "main 반영"·"Main반영"(2026-10-22)으로 이미 출시 |
 | 2026-10-22 | TASK-026 | 신규 등록·계획 승인 | "제주도 관광지 정보를 알 수 있는 api. 관광지 위치, 운영시간, 주차장여부 등" → "다음" → "계획 승인: TASK-026 1. (a) 2. (a) 3. (a) 4. 승인 신청 완료" | — → 진행 중 | 한국관광공사 국문 관광정보 서비스_GW(공공데이터포털 15101578, 개발계정 1,000건/일, 무료). 시험 호출 최대 5건(임시 함수 `api/tour-probe.ts`, main 제외) |
+| 2026-10-22 | TASK-026 | 범위 변경 | (Preview 빌드 실패 캡처: "No more than 12 Serverless Functions … on the Hobby plan") → "범위 변경: TASK-026 함수 통합 (a)" | 진행 중 | 교통 함수 8개(incidents·speeds·links·facilities·enforcement·parking·gas·ev)를 `api/traffic/[kind].ts` 하나로. 주소·응답·보관 동일, 함수 12 → 5(+시험 함수 1). maxDuration 60은 통합 함수에. 개발 서버도 경로 조각 파일을 찾게 |

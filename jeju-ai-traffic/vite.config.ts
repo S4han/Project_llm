@@ -1,3 +1,4 @@
+import { existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -5,8 +6,17 @@ import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 
 const apiDir = fileURLToPath(new URL("./api", import.meta.url));
 
+/** /api/a/b → api/a/b.ts, 없으면 같은 폴더의 [이름].ts(Vercel 경로 조각, 예: api/traffic/[kind].ts). */
+function apiFile(path: string): string | null {
+  const exact = `${apiDir}/${path}.ts`;
+  if (existsSync(exact)) return exact;
+  const dir = `${apiDir}/${path.split("/").slice(0, -1).join("/")}`;
+  const dynamic = existsSync(dir) ? readdirSync(dir).find((f) => /^\[[a-z]+\]\.ts$/.test(f)) : undefined;
+  return dynamic ? `${dir}/${dynamic}` : null;
+}
+
 /**
- * 개발 서버 전용: /api/<경로>를 api/<경로>.ts의 GET·POST 핸들러로 실행한다(Vercel 로그인 없이 로컬 확인).
+ * 개발 서버 전용: /api/<경로>를 api/<경로>.ts(또는 경로 조각 파일)의 GET·POST 핸들러로 실행한다(Vercel 로그인 없이 로컬 확인).
  * 빌드 결과에는 포함되지 않는다. 장소·경로는 환경 변수가 없으면 모의 공급자를 쓴다.
  */
 function devApi(): Plugin {
@@ -18,9 +28,10 @@ function devApi(): Plugin {
         const url = new URL(req.url ?? "/", "http://localhost");
         const match = /^\/api\/([a-z]+(?:\/[a-z]+)*)$/.exec(url.pathname);
         const method = req.method === "POST" ? "POST" : req.method === "GET" ? "GET" : null;
-        if (!match || !method) return next();
+        const file = match ? apiFile(match[1]!) : null;
+        if (!file || !method) return next();
         try {
-          const mod = (await server.ssrLoadModule(`${apiDir}/${match[1]}.ts`)) as Partial<
+          const mod = (await server.ssrLoadModule(file)) as Partial<
             Record<"GET" | "POST", (request: Request) => Response | Promise<Response>>
           >;
           const handler = mod[method];
