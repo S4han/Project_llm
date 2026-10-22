@@ -4,7 +4,8 @@
 // 건수·쪽 수·분류 분포·숙박(c3) 표본·항목 이름만 돌려준다. 인스턴스당 1번만 연다. 키 값은 응답에 넣지 않는다.
 // 사용: 미리보기 주소 + /api/visitjeju-probe 를 한 번만 연다.
 let opened = false;
-const BASE = "http://api.visitjeju.net/vsjApi/contents/searchList";
+// 2차 시험(2건): http 주소로는 두 번 모두 "fetch failed"(1차에서는 https·http 모두 응답) → https로, 실패 원인(cause)도 함께.
+const BASE = "https://api.visitjeju.net/vsjApi/contents/searchList";
 
 function clip(v: unknown, n = 200): unknown {
   if (typeof v === "string") return v.length > n ? `${v.slice(0, n)}…` : v;
@@ -33,6 +34,8 @@ async function call(key: string, extra: string) {
     out.withPhoto = stays.filter((i) => (i.repPhoto as { photoid?: { imgpath?: unknown } } | undefined)?.photoid?.imgpath).length;
   } catch (e) {
     out.error = String(e);
+    const cause = (e as { cause?: { code?: unknown; message?: unknown } }).cause;
+    if (cause) out.cause = { code: cause.code, message: cause.message };
   }
   return out;
 }
