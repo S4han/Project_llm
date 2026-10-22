@@ -281,3 +281,4 @@
 | 2026-10-22 | TASK-028 | 시험 호출 결과 | (사용자가 Preview에서 /api/stay-probe 결과 전달) | 진행 중(전제 변경, 사용자 결정 대기) | 4건(승인 4건): 관광공사 제주 숙박 **31곳뿐**(게스트하우스 18·관광호텔 6·펜션 3·콘도 2·모텔 1·유스호스텔 1), 사진 12곳, 목록 전화 0. 상세 항목 checkintime·checkouttime·parkinglodging·roomcount·reservationlodging·reservationurl·infocenterlodging, 공통 homepage. 반경 2km로는 대부분 관광지에서 0곳 → 자료 선택 다시 결정 필요. 시험 함수 삭제 |
 | 2026-10-22 | TASK-028 | 범위 변경 | "범위 변경: TASK-028 (b) 시험 4건 승인 신청 완료" | 진행 중 | 숙소 자료를 비짓제주(제주관광공사) 오픈 API로(공공데이터포털 15076361 활용신청 완료). 시험 호출 4건(임시 함수 `api/visitjeju-probe.ts`, main 제외). 키는 VISITJEJU_API_KEY(있으면)·DATA_GO_KR_API_KEY 순서로 시험 |
 | 2026-10-22 | TASK-028 | 시험 호출 결과 | (사용자가 /api/visitjeju-probe 결과 전달) | 진행 중(키 대기) | 2건(누적 2/4): 공공데이터포털 키로는 비짓제주가 "403 apiKey is invalid"(주소·응답 형식은 정상). 비짓제주에서 따로 받는 키(`VISITJEJU_API_KEY`) 필요. 시험 함수는 그 키로만 남은 2건 |
+| 2026-10-22 | TASK-028 | 기타 | "키 등록 완료" → "푸시 다시 해줘" | 진행 중 | 사용자가 Vercel에 `VISITJEJU_API_KEY` 등록(값은 확인·기록하지 않음). 새 Preview 배포를 위해 다시 푸시 |
