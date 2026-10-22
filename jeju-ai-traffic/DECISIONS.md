@@ -263,3 +263,4 @@
 | 2026-10-22 | TASK-025 | 결과 보고 | (구현 완료) | 진행 중 → 결과 검토 | 같은 탭에서는 페이지를 새로 읽지 않고 전환(자료·위치 유지), /traffic·모르는 주소는 대시보드, vercel.json에 /map/:view. `reports/TASK-025-RESULT.md`. main 미반영 |
 | 2026-10-22 | — | 기타 | "main 반영" | — | 작업 브랜치 `claude/adoring-sagan-harjwg`를 main에 fast-forward로 반영(TASK-024 완료 기록, TASK-025 대시보드 카드 첫 화면·항목별 지도 페이지). Production 자동 배포(vercel.json `/map/:view` 포함). 임시 확인 함수 없음. **TASK-025는 결과 검토 상태 유지**(`완료 승인: TASK-025` 미수신) |
 | 2026-10-22 | TASK-025 | 범위 변경 | "주유소 카드에 최저가를 휘발유,경유 구분" (Production 휴대폰 캡처) | 결과 검토 유지 | 대시보드 주유소 카드에 반경 3km 휘발유·경유 최저가를 두 줄로(경유 가격이 없으면 "정보 없음") |
+| 2026-10-22 | — | 기타 | "Main반영" | — | 작업 브랜치 `claude/adoring-sagan-harjwg`를 main에 fast-forward로 반영(TASK-025 주유소 카드 휘발유·경유 최저가 구분). Production 자동 배포. 임시 확인 함수 없음. **TASK-025는 결과 검토 상태 유지**(`완료 승인: TASK-025` 미수신) |
