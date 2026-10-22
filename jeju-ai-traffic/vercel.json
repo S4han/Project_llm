@@ -16,6 +16,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/search",
+      "destination": "/index.html"
+    },
+    {
       "source": "/map/:view",
       "destination": "/index.html"
     }

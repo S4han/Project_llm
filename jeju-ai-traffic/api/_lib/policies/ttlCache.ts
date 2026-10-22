@@ -13,7 +13,8 @@ export class TtlCache<T> {
     this.clock = clock;
   }
 
-  async getOrLoad(key: string, load: () => Promise<T>): Promise<T> {
+  /** ttlFor가 있으면 불러온 값마다 보관 시간을 정한다(예: 부분 결과는 짧게, TASK-029). */
+  async getOrLoad(key: string, load: () => Promise<T>, ttlFor?: (value: T) => number): Promise<T> {
     const hit = this.entries.get(key);
     if (hit && hit.expiresAt > this.clock()) return hit.value;
 
@@ -22,7 +23,7 @@ export class TtlCache<T> {
 
     const promise = load()
       .then((value) => {
-        this.entries.set(key, { value, expiresAt: this.clock() + this.ttlMs });
+        this.entries.set(key, { value, expiresAt: this.clock() + (ttlFor ? ttlFor(value) : this.ttlMs) });
         return value;
       })
       .finally(() => this.inflight.delete(key));

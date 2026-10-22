@@ -34,13 +34,17 @@ interface Props {
   openFacility?: { id: string; seq: number } | null;
   /** 화면을 열 때 확인한 내 위치(TASK-023). 있으면 제주 전체 대신 내 위치 기준으로 열고 "제주 전체" 버튼을 보인다. */
   home?: { lat: number; lng: number } | null;
+  /** 바뀌면 시설물(검색 결과)이 모두 보이게 맞춘다(관광 검색, TASK-029). */
+  fitKey?: string | null;
+  /** 지도 영역의 읽기 이름. */
+  label?: string;
 }
 
 const NO_IDS: string[] = [];
 const NO_FACILITIES: FacilityPoint[] = [];
 
 /** 제주 전체 교통 사건 지도(TASK-012). */
-export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null, facilities = NO_FACILITIES, nearby = null, openFacility = null, home = null }: Props) {
+export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null, facilities = NO_FACILITIES, nearby = null, openFacility = null, home = null, fitKey = null, label = "교통 현황 지도" }: Props) {
   const { attach, mapRef, layerRef, mapReady, failed, tilesFailed } = useLeafletMap();
   const speedLayer = useRef<L.LayerGroup | null>(null);
   const polylines = useRef<L.Polyline[]>([]);
@@ -166,6 +170,13 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
     else map.fitBounds(JEJU_BOUNDS);
   }, [mapReady, mapRef, currentLat, currentLng, viewKey, highlightBounds, nearbyLat, nearbyLng, nearbyRadius, homeLat, homeLng]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map || !fitKey || !facilities.length) return;
+    map.fitBounds(L.latLngBounds(facilities.map((p) => [p.lat, p.lng] as L.LatLngTuple)), { padding: [24, 24], maxZoom: 15 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 검색할 때만 다시 맞춘다
+  }, [mapReady, mapRef, fitKey]);
+
   if (failed) {
     return (
       <p role="status" className="rounded-2xl bg-grey-100 p-3 text-sm text-grey-700">
@@ -176,7 +187,7 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
   return (
     <div className="flex flex-col gap-1">
       <div className="relative">
-        <div ref={attach} role="region" aria-label="교통 현황 지도" data-speed-lines={speedLines.length} data-facilities={facilities.length} data-nearby={nearby ? "1" : "0"} className={`${heightClass} w-full overflow-hidden rounded-[20px] bg-grey-200`} />
+        <div ref={attach} role="region" aria-label={label} data-speed-lines={speedLines.length} data-facilities={facilities.length} data-nearby={nearby ? "1" : "0"} className={`${heightClass} w-full overflow-hidden rounded-[20px] bg-grey-200`} />
         {home && mapReady && (
           <button
             type="button"

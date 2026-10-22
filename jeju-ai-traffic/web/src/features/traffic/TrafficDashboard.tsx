@@ -560,7 +560,7 @@ function RetryAlert({ text, onRetry }: { text: string; onRetry: () => void }) {
 }
 
 /** 대시보드 카드(TASK-025): 이름·핵심 숫자·한 줄 설명. 누르면 그 항목의 지도 페이지. */
-function DashCard({ title, mark, value, sub, onClick, small = false }: { title: string; mark?: ReactNode; value: ReactNode; sub: string; onClick: () => void; small?: boolean }) {
+function DashCard({ title, mark, value, sub, onClick, small = false, cta = "지도 보기 ›" }: { title: string; mark?: ReactNode; value: ReactNode; sub: string; onClick: () => void; small?: boolean; cta?: string }) {
   return (
     <button type="button" onClick={onClick} className={`flex w-full flex-col gap-1 rounded-[20px] bg-white p-3 text-left shadow-sm ring-1 ring-grey-200 active:bg-grey-50 ${small ? "min-h-20" : "min-h-28"}`}>
       <span className="flex items-center gap-1.5 text-sm font-semibold text-grey-700">
@@ -569,7 +569,7 @@ function DashCard({ title, mark, value, sub, onClick, small = false }: { title: 
       </span>
       <span className="whitespace-nowrap text-[clamp(1rem,5vw,1.5rem)] font-bold tabular-nums text-grey-900">{value}</span>
       <span className="text-xs text-grey-600">{sub}</span>
-      <span className="mt-auto text-xs font-semibold text-brand-700">지도 보기 ›</span>
+      <span className="mt-auto text-xs font-semibold text-brand-700">{cta}</span>
     </button>
   );
 }
@@ -1315,6 +1315,10 @@ export function TrafficDashboard({ view, around = null, onNavigate }: { view: Tr
                   onClick={() => onNavigate("TOUR")}
                   small
                 />
+              </li>
+              <li>
+                {/* 관광 통합 검색(TASK-029 1.(a)): 따로 된 페이지(/search). */}
+                <DashCard title="관광 검색" mark={<span aria-hidden="true">🔍</span>} value="관광지·숙박·맛집" sub="비짓제주·관광공사·카카오" onClick={() => window.location.assign("/search")} small cta="검색하기 ›" />
               </li>
             </ul>
           </section>
