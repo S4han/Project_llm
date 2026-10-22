@@ -22,6 +22,8 @@ test.describe("관광 검색 /search (TASK-029)", () => {
     await page.getByRole("button", { name: "검색", exact: true }).click();
     await expect(page).toHaveURL(/\/search\?q=%EB%AA%A8%EC%9D%98\+%EC%82%AC%EB%9D%BC%EB%B4%89$/);
     const results = page.getByRole("list", { name: "검색 결과" });
+    // 검색 뒤 지도를 키워도 Leaflet 상자 표시(leaflet-container)가 남아 바탕 그림이 깨지지 않는다(TASK-029 점검)
+    await expect(page.getByRole("region", { name: "관광 검색 지도" })).toHaveClass(/leaflet-container/);
     // 비짓제주 "모의 사라봉"과 관광공사 "모의 사라봉 (제주시)"은 이름이 같고 100m 안이라 한 곳
     await expect(results.getByRole("listitem")).toHaveCount(1);
     await expect(results).toContainText("출처 비짓제주·한국관광공사");

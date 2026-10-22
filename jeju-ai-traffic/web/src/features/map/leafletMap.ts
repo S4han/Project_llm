@@ -114,7 +114,11 @@ export function useLeafletMap() {
       setFailed(true);
       return;
     }
+    // 지도 상자 크기가 바뀌면(검색 뒤 지도를 키울 때 등) Leaflet에 알려 바탕 그림을 새 크기로 채운다.
+    const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => map.invalidateSize());
+    resize?.observe(el);
     return () => {
+      resize?.disconnect();
       map.remove();
       mapRef.current = null;
       layerRef.current = null;

@@ -187,7 +187,10 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
   return (
     <div className="flex flex-col gap-1">
       <div className="relative">
-        <div ref={attach} role="region" aria-label={label} data-speed-lines={speedLines.length} data-facilities={facilities.length} data-nearby={nearby ? "1" : "0"} className={`${heightClass} w-full overflow-hidden rounded-[20px] bg-grey-200`} />
+        {/* 높이는 바깥 상자에. 지도 상자의 className이 바뀌면 React가 Leaflet이 붙인 leaflet-container 등을 지워 바탕 그림이 깨진다(TASK-029 점검). */}
+        <div className={`${heightClass} w-full`}>
+          <div ref={attach} role="region" aria-label={label} data-speed-lines={speedLines.length} data-facilities={facilities.length} data-nearby={nearby ? "1" : "0"} className="h-full w-full overflow-hidden rounded-[20px] bg-grey-200" />
+        </div>
         {home && mapReady && (
           <button
             type="button"
