@@ -1,6 +1,6 @@
 // TASK-028 일회성 확인용(범위 변경: "범위 변경: TASK-028 (b) 시험 4건 승인 신청 완료", 시험 호출 4건 이내). 확인 후 삭제한다. main에 넣지 않는다.
 // 제주관광공사 비짓제주 관광정보 오픈 API 숙박(category c3) 목록 1쪽을 부른다.
-// 키는 VISITJEJU_API_KEY(비짓제주에서 따로 받은 키) → DATA_GO_KR_API_KEY 순서로 시험하고, https가 안 되면 http로(합쳐 최대 4건).
+// 1차 시험(2건): 공공데이터포털 키는 "apiKey is invalid" → 비짓제주에서 따로 받은 키(VISITJEJU_API_KEY)로만, https가 안 되면 http로(남은 2건).
 // 건수·항목 이름·표본(앞 2곳)·사진/전화/좌표가 있는 수만 돌려준다. 인스턴스당 1번만 연다. 키 값은 응답에 넣지 않는다.
 // 사용: 미리보기 주소 + /api/visitjeju-probe 를 한 번만 연다.
 let opened = false;
@@ -16,14 +16,14 @@ export async function GET(): Promise<Response> {
   const headers = { "Cache-Control": "no-store", "Content-Type": "application/json; charset=utf-8" };
   if (opened) return Response.json({ stopped: "이 서버에서는 이미 한 번 열었습니다" }, { headers });
   opened = true;
-  const keys = (["VISITJEJU_API_KEY", "DATA_GO_KR_API_KEY"] as const).map((name) => ({ name, key: (process.env[name] ?? "").trim() })).filter((k) => k.key);
+  const keys = (["VISITJEJU_API_KEY"] as const).map((name) => ({ name, key: (process.env[name] ?? "").trim() })).filter((k) => k.key);
   if (!keys.length) return Response.json({ keyPresent: false }, { headers });
   const redact = (s: string) => keys.reduce((acc, k) => acc.split(k.key).join("[KEY]").split(encodeURIComponent(k.key)).join("[KEY]"), s);
   const attempts: Record<string, unknown>[] = [];
   let summary: Record<string, unknown> = {};
   outer: for (const k of keys) {
     for (const scheme of ["https", "http"]) {
-      if (attempts.length >= 4) break outer;
+      if (attempts.length >= 2) break outer;
       const out: Record<string, unknown> = { key: k.name, scheme };
       attempts.push(out);
       try {
