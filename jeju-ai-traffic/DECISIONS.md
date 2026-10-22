@@ -269,3 +269,4 @@
 | 2026-10-22 | TASK-026 | 범위 변경 | (Preview 빌드 실패 캡처: "No more than 12 Serverless Functions … on the Hobby plan") → "범위 변경: TASK-026 함수 통합 (a)" | 진행 중 | 교통 함수 8개(incidents·speeds·links·facilities·enforcement·parking·gas·ev)를 `api/traffic/[kind].ts` 하나로. 주소·응답·보관 동일, 함수 12 → 5(+시험 함수 1). maxDuration 60은 통합 함수에. 개발 서버도 경로 조각 파일을 찾게 |
 | 2026-10-22 | TASK-026 | 시험 호출 결과 | (사용자가 Preview에서 /api/tour-probe 결과 전달) | 진행 중 | 4건(승인 5건): 제주 관광지 194곳, 사진 191곳, 목록 전화 0곳, 좌표 1곳 오타(경도 12.79), 소개정보 usetime·restdate·parking·infocenter 확인. 시험 함수 삭제 |
 | 2026-10-22 | TASK-026 | 결과 보고 | (구현 완료) | 진행 중 → 결과 검토 | 대시보드 관광지 카드, /map/tour 반경 5km·가까운 순, 누르면 이용시간·쉬는날·주차·문의를 불러오는 카드(사진·출처), 서버 목록 하루·CDN 7일·상세 30일, 내부 한도 kto 800. `reports/TASK-026-RESULT.md`. main 미반영 |
+| 2026-10-22 | TASK-026 | 범위 변경 | "주차정보를 관광공사 API 결과 + 해당 관광지 기준 반경 1키로 주차장 정보 포함해서 출력" | 결과 검토 유지 | 관광지 카드에 관광공사 주차 정보와 함께 관광지 기준 반경 1km 주차장(전국주차장정보표준데이터, 이미 받는 자료): 수·무료 수, 가까운 3곳 이름·거리·요금 구분, "주변 주차장 N곳" 칩. 외부 호출 추가 없음 |

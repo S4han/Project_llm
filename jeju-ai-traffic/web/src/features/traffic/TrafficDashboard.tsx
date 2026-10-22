@@ -282,24 +282,57 @@ const TOUR_PARKING_CHIP = { YES: "주차 가능", NO: "주차 불가", UNKNOWN: 
  * 관광지 카드(TASK-026): 머리(관·이름), 대표 사진·출처, 주차 칩, 이용시간·쉬는날·주차(원문)·문의, 주소·자료 안내, 경로 안내.
  * 상세는 누를 때 불러오므로 그동안(detail null)은 "불러오는 중", 실패면 그 안내.
  */
-function tourCard(s: TourRow, detail: TrafficTourDetailResponse | null, failed = false): PopupCard {
+type ParkingRow = TrafficParkingResponse["lots"][number];
+/** 관광지 주변 주차장(TASK-026 범위 변경): 관광지 기준 반경 1km, 카드에는 가까운 3곳. */
+const TOUR_PARKING_RADIUS = 1000;
+const TOUR_PARKING_SHOW = 3;
+/** 주변 주차장 자료 상태: 받은 목록, 또는 받는 중·실패. */
+type TourParkingLots = ParkingRow[] | "loading" | "failed";
+
+/** 관광지 기준 반경 1km 주차장을 가까운 순으로. */
+function parkingAround(lat: number, lng: number, lots: ParkingRow[]): { lot: ParkingRow; meters: number }[] {
+  return lots
+    .map((lot) => ({ lot, meters: distanceMeters({ lat, lng }, { lat: lot[8], lng: lot[9] }) }))
+    .filter((p) => p.meters <= TOUR_PARKING_RADIUS)
+    .sort((a, b) => a.meters - b.meters);
+}
+
+function tourCard(s: TourRow, detail: TrafficTourDetailResponse | null, lots: TourParkingLots, failed = false): PopupCard {
   const [id, name, address, lat, lng, image] = s;
   const lines = (v: string) => (v ? v.split("\n") : ["정보 없음"]);
+  // 관광공사 주차 정보와 함께, 관광지 반경 1km 주차장(전국주차장정보표준데이터)을 보인다.
+  const around = Array.isArray(lots) ? parkingAround(lat, lng, lots) : null;
+  const meters = (m: number) => (m < 1000 ? `${Math.round(m / 10) * 10}m` : `${(m / 1000).toFixed(1)}km`);
+  const aroundRow = {
+    label: "주변 주차장",
+    lines:
+      lots === "loading"
+        ? ["주차장 정보 불러오는 중…"]
+        : lots === "failed" || !around
+          ? ["주차장 정보를 불러오지 못했습니다."]
+          : around.length === 0
+            ? ["반경 1km 안 주차장 없음"]
+            : [
+                `반경 1km ${around.length.toLocaleString("ko-KR")}곳 · 무료 ${around.filter((p) => parkingFeeKind(p.lot[7]) === "FREE").length.toLocaleString("ko-KR")}곳`,
+                ...around.slice(0, TOUR_PARKING_SHOW).map(({ lot, meters: m }) => `${lot[1] || "이름 없는 주차장"} · ${meters(m)} · ${PARKING_FEE_STYLE[parkingFeeKind(lot[7])].label || "요금 정보 없음"}`),
+              ],
+  };
   return {
     badge: { text: FACILITY_STYLE.TOUR.mark, color: FACILITY_STYLE.TOUR.markBg ?? FACILITY_STYLE.TOUR.color },
     kicker: "관광지",
     title: name,
     image: image ? { src: image, alt: name, credit: "사진 한국관광공사" } : undefined,
-    chips: detail ? [TOUR_PARKING_CHIP[tourParking(detail.parking)]] : [],
+    chips: [detail ? TOUR_PARKING_CHIP[tourParking(detail.parking)] : "", around?.length ? `주변 주차장 ${around.length.toLocaleString("ko-KR")}곳` : ""].filter(Boolean),
     rows: detail
       ? [
           { label: "이용시간", lines: lines(detail.usetime) },
           { label: "쉬는날", lines: lines(detail.restdate) },
           { label: "주차", lines: lines(detail.parking) },
+          aroundRow,
           ...(detail.infocenter ? [{ label: "문의", lines: lines(detail.infocenter) }] : []),
         ]
-      : [{ label: "안내", lines: [failed ? "이용시간·주차 정보를 불러오지 못했습니다. 다시 눌러 보세요." : "이용시간·주차 정보 불러오는 중…"] }],
-    footer: [address, `한국관광공사 관광정보${detail?.source === "mock" ? "(모의 데이터)" : ""} · 바뀌었을 수 있으니 방문 전 확인하세요.`].filter(Boolean).join("\n"),
+      : [{ label: "안내", lines: [failed ? "이용시간·주차 정보를 불러오지 못했습니다. 다시 눌러 보세요." : "이용시간·주차 정보 불러오는 중…"] }, aroundRow],
+    footer: [address, `주차는 한국관광공사 관광정보${detail?.source === "mock" ? "(모의 데이터)" : ""}, 주변 주차장은 전국주차장정보표준데이터 · 바뀌었을 수 있으니 방문 전 확인하세요.`].filter(Boolean).join("\n"),
     action: { href: parkingRouteHref({ id, name, address, lat, lng }), label: "현재 위치에서 경로 안내" },
   };
 }
@@ -715,6 +748,8 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
   // 강조할 최저가는 한 곳: 같은 최저가가 여럿이면 가장 가까운 곳(목록이 싼 순·가까운 순이라 맨 앞, TASK-021 2.(a)).
   const lowGasId = gasList[0]?.price != null ? gasList[0].id : null;
   const lowLpgId = lpgList[0]?.price != null ? lpgList[0].id : null;
+  // 관광지 카드의 주변 주차장(TASK-026 범위 변경): 주차장 자료는 화면을 열 때 이미 받는다.
+  const tourLots: TourParkingLots = parking ? parking.lots : parkingProblem ? "failed" : "loading";
   const focusFuel = (kind: "GAS" | "LPG" | "EV" | "TOUR", id: string) => {
     setGasFocus((prev) => ({ id: `${kind}-${id}`, seq: (prev?.seq ?? 0) + 1 }));
     revealMap(mapBox.current);
@@ -803,11 +838,11 @@ export function TrafficDashboard({ view, onNavigate }: { view: TrafficView; onNa
         lat: s[3],
         lng: s[4],
         pin: { mark: FACILITY_STYLE.TOUR.mark, price: s[1], color: FACILITY_STYLE.TOUR.color, low: false, fold: true, dot: true },
-        card: tourCard(s, null),
-        loadCard: () => fetchTrafficTourDetail(s[0]).then((r) => tourCard(s, r.ok ? r.data : null, !r.ok)),
+        card: tourCard(s, null, tourLots),
+        loadCard: () => fetchTrafficTourDetail(s[0]).then((r) => tourCard(s, r.ok ? r.data : null, tourLots, !r.ok)),
       })),
     ],
-    [facilities, facilityTypes, nearEnf, nearPark, parkFreeOnly, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev, nearTour],
+    [facilities, facilityTypes, nearEnf, nearPark, parkFreeOnly, nearGas, lowGasId, nearLpg, lowLpgId, gas, evList, ev, nearTour, tourLots],
   );
   const nearbyOn = NEARBY_KEYS.filter((k) => facilityTypes.has(k));
   const nearbyCount = (k: FacilityKey) => facilityPoints.filter((p) => p.type === k).length;

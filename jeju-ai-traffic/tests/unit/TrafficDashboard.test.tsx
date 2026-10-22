@@ -669,10 +669,35 @@ describe("내 주변 페이지 (TASK-016~024 → TASK-025 /map/enforcement·park
     expect(await screen.findByText("주차 가능")).toBeTruthy();
     expect(screen.getByText("상시 개방")).toBeTruthy();
     expect(screen.getByText("가능 (승용차 30대)")).toBeTruthy();
+    // 관광공사 주차 정보와 함께 관광지(사라봉) 기준 반경 1km 주차장(P1 시청 공영주차장 약 1.6km는 밖 → 없음)
+    expect(screen.getByText("반경 1km 안 주차장 없음")).toBeTruthy();
     const img = document.querySelector(".popup-card-photo img") as HTMLImageElement;
     expect(img.src).toBe("https://tong.visitkorea.or.kr/cms/resource/1/a_image2_1.jpg");
     expect(screen.getByText("사진 한국관광공사")).toBeTruthy();
     expect(screen.getByRole("link", { name: "현재 위치에서 경로 안내" }).getAttribute("href")).toMatch(/^\/route\?to=/);
+  });
+
+  it("관광지 카드: 관광지 기준 반경 1km 주차장(가까운 순 3곳·무료 수·요금 구분)을 관광공사 주차 정보와 함께(TASK-026 범위 변경)", async () => {
+    parkingRespond = () =>
+      Response.json({
+        ...PARKING,
+        lots: [
+          ...PARKING.lots,
+          ["Q1", "신산 공영주차장", "공영", "노외", "제주시", 30, "", "무료", 33.5048, 126.5390],
+          ["Q2", "일도 주차장", "민영", "노외", "제주시", 20, "", "유료 · 기본 30분 1,000원", 33.5060, 126.5400],
+          ["Q3", "먼 주차장", "공영", "노외", "제주시", 10, "", "혼합", 33.5140, 126.5385],
+          ["Q4", "가까운 혼합 주차장", "공영", "노외", "제주시", 10, "", "혼합", 33.5040, 126.5370],
+        ],
+      });
+    stubLocation({ lat: 33.502, lng: 126.536 });
+    openAt("/map/tour");
+    const rows = within(await screen.findByRole("list", { name: "관광지 목록" })).getAllByRole("button");
+    fireEvent.click(rows[0]!); // 신산공원
+    expect(await screen.findByText("주변 주차장 4곳")).toBeTruthy();
+    expect(screen.getByText("반경 1km 4곳 · 무료 1곳")).toBeTruthy();
+    const lines = [...document.querySelectorAll(".popup-card-rows dd")].map((dd) => dd.textContent);
+    expect(lines.some((t) => t?.startsWith("반경 1km 4곳 · 무료 1곳신산 공영주차장 · 60m · 무료가까운 혼합 주차장 · 150m · 일부유료일도 주차장 · 220m · 유료"))).toBe(true);
+    expect(screen.queryByText(/먼 주차장/)).toBeNull();
   });
 
   it("관광지 목록을 못 받으면 안내와 다시 시도", async () => {
