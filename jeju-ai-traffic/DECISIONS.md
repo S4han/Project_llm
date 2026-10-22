@@ -279,3 +279,4 @@
 | 2026-10-22 | TASK-027 | 완료 승인 | "완료 승인: TASK-027" | 결과 검토 → 완료 | Production은 "Main 반영"(2026-10-22)으로 이미 출시 |
 | 2026-10-22 | TASK-028 | 신규 등록·계획 승인 | "관광지 정보에 주변 숙소 검색 기능 추가하고 싶어" → "계획 승인: TASK-028 1. (a) 2. (a) 3. (a) 4. 승인" | — → 진행 중 | 한국관광공사 국문 관광정보 숙박(32), 추가 신청 없음. 예약 기능 없음(관광공사 예약 안내·누리집만). 시험 호출 최대 4건(임시 함수 `api/stay-probe.ts`, main 제외) |
 | 2026-10-22 | TASK-028 | 시험 호출 결과 | (사용자가 Preview에서 /api/stay-probe 결과 전달) | 진행 중(전제 변경, 사용자 결정 대기) | 4건(승인 4건): 관광공사 제주 숙박 **31곳뿐**(게스트하우스 18·관광호텔 6·펜션 3·콘도 2·모텔 1·유스호스텔 1), 사진 12곳, 목록 전화 0. 상세 항목 checkintime·checkouttime·parkinglodging·roomcount·reservationlodging·reservationurl·infocenterlodging, 공통 homepage. 반경 2km로는 대부분 관광지에서 0곳 → 자료 선택 다시 결정 필요. 시험 함수 삭제 |
+| 2026-10-22 | TASK-028 | 범위 변경 | "범위 변경: TASK-028 (b) 시험 4건 승인 신청 완료" | 진행 중 | 숙소 자료를 비짓제주(제주관광공사) 오픈 API로(공공데이터포털 15076361 활용신청 완료). 시험 호출 4건(임시 함수 `api/visitjeju-probe.ts`, main 제외). 키는 VISITJEJU_API_KEY(있으면)·DATA_GO_KR_API_KEY 순서로 시험 |
