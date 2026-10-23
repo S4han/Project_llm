@@ -82,4 +82,24 @@ test.describe("첫 화면 / (TASK-032)", () => {
     expect(nav.width).toBeLessThanOrEqual(700);
     await shot(page, "TASK-032-03-start-wide");
   });
+
+  test("교통 현황 /traffic: 도로 소통 막대·버튼 3개, 한 줄 목록(관광지 카드 없음), 출처 접힘 (TASK-032 범위 변경 2)", async ({ browser }) => {
+    for (const vp of [{ width: 390, height: 844, name: "390" }, { width: 1180, height: 820, name: "wide" }]) {
+      const context = await browser.newContext({ permissions: ["geolocation"], geolocation: { latitude: 33.502, longitude: 126.536, accuracy: 30 }, viewport: { width: vp.width, height: vp.height }, extraHTTPHeaders: uniqueClient() });
+      const page = await context.newPage();
+      await page.route(/tile\.openstreetmap\.org|api\.vworld\.kr\/req\/wmts/, (route) => route.abort());
+      await page.goto("/traffic");
+      await expect(page.getByRole("img", { name: "원활 50% 서행 25% 정체 25%" })).toBeVisible();
+      await expect(page.getByRole("list", { name: "내 주변 카드" }).getByRole("button")).toHaveCount(5);
+      await expect(page.getByRole("list", { name: "그 밖의 정보 카드" }).getByRole("button")).toHaveCount(2);
+      await expect(page.getByRole("button", { name: /^관광지/ })).toHaveCount(0);
+      await expect(page.getByText(/주정차 단속 CCTV 제주시/)).toBeHidden();
+      await expect(page.getByRole("list", { name: "내 주변 카드" }).getByRole("button").first()).toContainText("무료");
+      await noHorizontalScroll(page);
+      await shot(page, `TASK-032-05-traffic-${vp.name}`);
+      await page.getByRole("list", { name: "내 주변 카드" }).getByRole("button", { name: /^주유소/ }).click();
+      await expect(page).toHaveURL(/\/map\/gas$/);
+      await context.close();
+    }
+  });
 });

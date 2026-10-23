@@ -209,27 +209,30 @@ describe("대시보드와 화면 전환 (TASK-025)", () => {
     expect(viewFromPath("/map/nothing")).toBe("start");
   });
 
-  it("대시보드 카드: 도로 소통 3장, 내 위치 기준 주변 5장, 그 밖의 정보 2장, 지도 없음, 경로 추천 링크와 고지", async () => {
+  it("교통 현황: 도로 소통 막대·버튼 3개, 내 위치 기준 주변 5줄, 그 밖의 정보 2줄, 지도 없음, 경로 추천 링크와 고지(TASK-032 범위 변경 2)", async () => {
     stubLocation({ lat: 33.502, lng: 126.536 });
     openAt("/traffic");
     const card = (name: RegExp) => screen.getByRole("button", { name });
     await waitFor(() => expect(card(/^원활/).textContent).toContain("1구간"));
     expect(within(screen.getByRole("list", { name: "도로 소통 카드" })).getAllByRole("button").map((b) => b.textContent)).toEqual([
-      "원활1구간30km/h 이상지도 보기 ›",
-      "서행1구간15~30km/h지도 보기 ›",
-      "정체1구간15km/h 미만지도 보기 ›",
+      "원활 33%1구간",
+      "서행 33%1구간",
+      "정체 33%1구간",
     ]);
     await waitFor(() => expect(screen.getByRole("status", { name: "대시보드 위치 기준" }).textContent).toBe("내 위치 기준(이 기기에서만 사용)"));
     await waitFor(() => expect(card(/^전기차 충전소/).textContent).toContain("1곳"));
     expect(within(screen.getByRole("list", { name: "내 주변 카드" })).getAllByRole("button").map((b) => b.textContent)).toEqual([
-      "주정차 단속2곳반경 1km 안지도 보기 ›",
-      "주차장1곳반경 1km · 무료 0곳지도 보기 ›",
-      "주유소휘발유1,849원경유1,829원반경 3km 최저 · 2곳지도 보기 ›",
-      "LPG 충전소1,178원반경 5km LPG 최저 · 1곳지도 보기 ›",
-      "전기차 충전소1곳반경 1km 충전 가능 · 전체 3곳지도 보기 ›",
+      "주차장반경 1km1곳 · 무료 0›",
+      "주유소반경 3km 최저 · 2곳휘발유 1,849원\n경유 1,829원›",
+      "전기차 충전소반경 1km · 전체 3곳충전 가능 1곳›",
+      "LPG 충전소반경 5km 최저 · 1곳1,178원›",
+      "주정차 단속반경 1km2곳›",
     ]);
     expect(card(/^돌발·통제·공사/).textContent).toContain("5건");
-    await waitFor(() => expect(card(/^관광지(?! 검색)/).textContent).toBe("관광지2곳반경 5km 안지도 보기 ›"));
+    // 관광지 카드는 첫 화면의 "관광지" 버튼과 겹쳐 뺐다(TASK-032 범위 변경 2), 도로 소통은 비율 막대
+    expect(screen.queryByRole("button", { name: /^관광지/ })).toBeNull();
+    expect(screen.getByRole("img", { name: "원활 33% 서행 33% 정체 33%" })).toBeTruthy();
+    expect(screen.getByText("출처 보기").closest("details")?.open).toBe(false);
     expect(card(/^CCTV 등 교통시설물/).textContent).toContain("4곳");
     expect(screen.queryByRole("region", { name: "교통 현황 지도" })).toBeNull();
     expect(screen.getByRole("link", { name: "경로 추천 →" }).getAttribute("href")).toBe("/route");
@@ -241,8 +244,8 @@ describe("대시보드와 화면 전환 (TASK-025)", () => {
     stubLocation(null);
     openAt("/traffic");
     await waitFor(() => expect(screen.getByRole("status", { name: "대시보드 위치 기준" }).textContent).toBe("위치 허용 시 내 주변 · 지금은 제주 전체"));
-    await waitFor(() => expect(screen.getByRole("button", { name: /^주차장/ }).textContent).toBe("주차장2곳제주 전체 · 무료 1곳지도 보기 ›"));
-    expect(screen.getByRole("button", { name: /^주정차 단속/ }).textContent).toBe("주정차 단속2곳제주시 전체지도 보기 ›");
+    await waitFor(() => expect(screen.getByRole("button", { name: /^주차장/ }).textContent).toBe("주차장제주 전체2곳 · 무료 1›"));
+    expect(screen.getByRole("button", { name: /^주정차 단속/ }).textContent).toBe("주정차 단속제주시 전체2곳›");
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -607,7 +610,7 @@ describe("내 주변 페이지 (TASK-016~024 → TASK-025 /map/enforcement·park
     openAt("/map/gas");
     expect(await screen.findByText("오늘 주유소 조회 한도에 도달해 표시할 수 없습니다(10월 22일 00:00 이후 다시 확인).")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "← 교통 현황" }));
-    expect(screen.getByRole("button", { name: /^주유소/ }).textContent).toBe("주유소–불러오지 못했습니다지도 보기 ›");
+    expect(screen.getByRole("button", { name: /^주유소/ }).textContent).toBe("주유소불러오지 못했습니다–›");
   });
 
   it("주유소 자료를 못 받으면 안내와 다시 시도", async () => {

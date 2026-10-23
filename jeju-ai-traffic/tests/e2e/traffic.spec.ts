@@ -21,7 +21,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 실시간 교통 현황");
     await expect(page.getByText(/조회 · 모의 데이터/)).toBeVisible();
     // 모의 구간 속도 4개(원활 2·서행 1·정체 1), 모의 사건 2건
-    await expect(page.getByRole("list", { name: "도로 소통 카드" }).getByRole("button")).toHaveText(["원활2구간30km/h 이상지도 보기 ›", "서행1구간15~30km/h지도 보기 ›", "정체1구간15km/h 미만지도 보기 ›"]);
+    await expect(page.getByRole("list", { name: "도로 소통 카드" }).getByRole("button")).toHaveText(["원활 50%2구간", "서행 25%1구간", "정체 25%1구간"]);
     await expect(page.getByRole("button", { name: /^돌발·통제·공사/ })).toContainText("2건");
     await expect(page.getByRole("region", { name: "교통 현황 지도" })).toHaveCount(0);
 
@@ -190,11 +190,11 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await expect(page.getByRole("status", { name: "대시보드 위치 기준" })).toHaveText("내 위치 기준(이 기기에서만 사용)");
     const cards = page.getByRole("list", { name: "내 주변 카드" }).getByRole("button");
     await expect(cards).toHaveText([
-      "주정차 단속2곳반경 1km 안지도 보기 ›",
-      "주차장2곳반경 1km · 무료 1곳지도 보기 ›",
-      "주유소휘발유1,849원경유1,829원반경 3km 최저 · 3곳지도 보기 ›",
-      "LPG 충전소1,178원반경 5km LPG 최저 · 1곳지도 보기 ›",
-      "전기차 충전소1곳반경 1km 충전 가능 · 전체 3곳지도 보기 ›",
+      "주차장반경 1km2곳 · 무료 1›",
+      "주유소반경 3km 최저 · 3곳휘발유 1,849원\n경유 1,829원›",
+      "전기차 충전소반경 1km · 전체 3곳충전 가능 1곳›",
+      "LPG 충전소반경 5km 최저 · 1곳1,178원›",
+      "주정차 단속반경 1km2곳›",
     ]);
     await cards.filter({ hasText: "주정차 단속" }).click();
     await expect(page).toHaveURL(/\/map\/enforcement$/);
@@ -407,13 +407,9 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await shot(page, "TASK-019-02-card");
   });
 
-  test("관광지(TASK-026): 대시보드 카드 → 반경 5km 지도·가까운 순 목록, 누르면 이용시간·주차 카드", async ({ page }) => {
+  test("관광지(TASK-026): 관광지 지도 페이지(/map/tour, 교통 현황 카드는 TASK-032에서 뺌) → 반경 5km 지도·가까운 순 목록, 누르면 이용시간·주차 카드", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/traffic");
-    const card = page.getByRole("button", { name: /^관광지(?! 검색)/ });
-    await expect(card).toHaveText("관광지2곳반경 5km 안지도 보기 ›");
-    await card.click();
-    await expect(page).toHaveURL(/\/map\/tour$/);
+    await page.goto("/map/tour");
     await expect(page.getByRole("status", { name: "내 위치 주변 조회 범위" })).toContainText("내 위치 반경 5km 안 관광지 2곳");
     const map = page.getByRole("region", { name: "교통 현황 지도" });
     await expect(map.locator(".gas-pin")).toHaveCount(2);

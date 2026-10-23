@@ -559,17 +559,19 @@ function RetryAlert({ text, onRetry }: { text: string; onRetry: () => void }) {
   );
 }
 
-/** 대시보드 카드(TASK-025): 이름·핵심 숫자·한 줄 설명. 누르면 그 항목의 지도 페이지. */
-function DashCard({ title, mark, value, sub, onClick, small = false, cta = "지도 보기 ›" }: { title: string; mark?: ReactNode; value: ReactNode; sub: string; onClick: () => void; small?: boolean; cta?: string }) {
+/** 교통 현황 목록 한 줄(TASK-032 범위 변경 2, 예전 TASK-025 카드): 표시·이름·작은 설명, 오른쪽에 핵심 값(줄바꿈 \n은 두 줄)과 ›. 줄 전체를 누르면 그 항목의 지도 페이지. */
+function DashRow({ mark, title, sub, value, onClick }: { mark?: ReactNode; title: string; sub: string; value: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className={`flex w-full flex-col gap-1 rounded-[20px] bg-white p-3 text-left shadow-sm ring-1 ring-grey-200 active:bg-grey-50 ${small ? "min-h-20" : "min-h-28"}`}>
-      <span className="flex items-center gap-1.5 text-sm font-semibold text-grey-700">
-        {mark}
-        <span className="truncate">{title}</span>
+    <button type="button" onClick={onClick} className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left active:bg-grey-50">
+      {mark}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="font-semibold text-grey-900">{title}</span>
+        <span className="text-xs text-grey-600">{sub}</span>
       </span>
-      <span className="whitespace-nowrap text-[clamp(1rem,5vw,1.5rem)] font-bold tabular-nums text-grey-900">{value}</span>
-      <span className="text-xs text-grey-600">{sub}</span>
-      <span className="mt-auto text-xs font-semibold text-brand-700">{cta}</span>
+      <span className="whitespace-pre-line text-right text-[15px] font-bold leading-snug tabular-nums text-grey-900">{value}</span>
+      <span className="text-grey-400" aria-hidden="true">
+        ›
+      </span>
     </button>
   );
 }
@@ -1188,17 +1190,24 @@ export function TrafficDashboard({ view, around = null, onNavigate }: { view: Ex
       )}
     </div>
   );
+  // 고지: 운전 중 조작 금지 한 줄, 나머지 안내·출처는 펼쳐서 본다(TASK-032 범위 변경 2 3.(a)).
   const footer = (
-    <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
+    <footer className="mt-auto flex flex-col gap-2 border-t border-grey-200 pt-3 text-xs text-grey-500">
       <p className="text-sm font-semibold text-amber-800">운전 중에는 화면을 조작하지 마세요.</p>
-      <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 교통 현황을 열 때 한 번 확인하며(허용한 경우), 이 기기에서 지도 위치와 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
-      <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS · 관광지 한국관광공사(국문 관광정보) · 숙소 비짓제주(제주관광공사)</p>
+      <details>
+        <summary className="cursor-pointer font-semibold text-grey-600">출처 보기</summary>
+        <div className="mt-2 flex flex-col gap-1">
+          <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 교통 현황을 열 때 한 번 확인하며(허용한 경우), 이 기기에서 지도 위치와 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
+          <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS · 관광지 한국관광공사(국문 관광정보) · 숙소 비짓제주(제주관광공사)</p>
+        </div>
+      </details>
     </footer>
   );
   if (view === "home") {
-    // 대시보드(TASK-025 1.(a)): 카드마다 핵심 숫자 한 줄, 누르면 그 항목의 지도 페이지. 내 위치가 있으면 반경 요약, 없으면 제주 전체 수.
+    // 교통 현황(/traffic, TASK-025 → TASK-032 범위 변경 2): 도로 소통은 비율 막대와 버튼 3개, 내 주변·그 밖의 정보는 한 줄 목록.
+    // 줄을 누르면 그 항목의 지도 페이지. 내 위치가 있으면 반경 요약, 없으면 제주 전체 수(계산은 예전 카드와 같다).
     const here = myLocation !== null;
-    const nearbyCard = (k: "ENF" | "PARK" | "GAS" | "LPG" | "EV"): { value: ReactNode; sub: string } => {
+    const nearbyRow = (k: "ENF" | "PARK" | "GAS" | "LPG" | "EV"): { value: string; sub: string } => {
       const loading = { ENF: enforcementLoading, PARK: parkingLoading, GAS: gasLoading, LPG: gasLoading, EV: evLoading }[k];
       const failed = { ENF: enforcementProblem, PARK: parkingProblem, GAS: gasProblem !== null, LPG: gasProblem !== null, EV: evProblem }[k];
       if (loading) return { value: "–", sub: "불러오는 중…" };
@@ -1207,42 +1216,33 @@ export function TrafficDashboard({ view, around = null, onNavigate }: { view: Ex
       const all = `${facilityCounts[k].toLocaleString("ko-KR")}곳`;
       switch (k) {
         case "ENF":
-          return here ? { value: `${nearEnf.length.toLocaleString("ko-KR")}곳`, sub: `반경 ${km} 안` } : { value: all, sub: "제주시 전체" };
+          return here ? { value: `${nearEnf.length.toLocaleString("ko-KR")}곳`, sub: `반경 ${km}` } : { value: all, sub: "제주시 전체" };
         case "PARK": {
           const free = (list: typeof nearPark) => list.filter((l) => parkingFeeKind(l[7]) === "FREE").length.toLocaleString("ko-KR");
-          return here ? { value: `${nearPark.length.toLocaleString("ko-KR")}곳`, sub: `반경 ${km} · 무료 ${free(nearPark)}곳` } : { value: all, sub: `제주 전체 · 무료 ${free(parking?.lots ?? [])}곳` };
+          return here ? { value: `${nearPark.length.toLocaleString("ko-KR")}곳 · 무료 ${free(nearPark)}`, sub: `반경 ${km}` } : { value: `${all} · 무료 ${free(parking?.lots ?? [])}`, sub: "제주 전체" };
         }
         case "GAS":
           // 휘발유·경유 최저가를 나눠 보인다(TASK-025 점검, 사용자 "주유소 카드에 최저가를 휘발유,경유 구분").
           if (!here) return { value: all, sub: "제주 전체" };
-          if (nearGas.length === 0) return { value: "없음", sub: `반경 ${km} 안 주유소` };
-          return {
-            value: (
-              <span className="flex flex-col gap-0.5 text-[clamp(0.95rem,4.6vw,1.25rem)] leading-tight">
-                {([["휘발유", lowGasoline], ["경유", lowDiesel]] as const).map(([fuel, price]) => (
-                  <span key={fuel} className="flex items-baseline gap-1.5">
-                    <span className="w-10 shrink-0 text-xs font-semibold text-grey-600">{fuel}</span>
-                    {price !== null ? won(price) : "정보 없음"}
-                  </span>
-                ))}
-              </span>
-            ),
-            sub: `반경 ${km} 최저 · ${nearGas.length}곳`,
-          };
+          if (nearGas.length === 0) return { value: "없음", sub: `반경 ${km}` };
+          // 휴대폰 폭에서도 왼쪽 글이 줄바꿈되지 않게 두 가격은 오른쪽에 두 줄로.
+          return { value: `휘발유 ${lowGasoline !== null ? won(lowGasoline) : "정보 없음"}\n경유 ${lowDiesel !== null ? won(lowDiesel) : "정보 없음"}`, sub: `반경 ${km} 최저 · ${nearGas.length}곳` };
         case "LPG":
-          return here ? (lowLpg !== null ? { value: won(lowLpg), sub: `반경 ${km} LPG 최저 · ${nearLpg.length}곳` } : { value: "없음", sub: `반경 ${km} 안 LPG 충전소` }) : { value: all, sub: "제주 전체" };
+          return here ? (lowLpg !== null ? { value: won(lowLpg), sub: `반경 ${km} 최저 · ${nearLpg.length}곳` } : { value: "없음", sub: `반경 ${km}` }) : { value: all, sub: "제주 전체" };
         case "EV": {
           const avail = evNear.filter((r) => (evAvail(r.s) ?? 0) > 0).length;
-          return here ? { value: `${avail.toLocaleString("ko-KR")}곳`, sub: `반경 ${km} 충전 가능 · 전체 ${evNear.length}곳` } : { value: all, sub: "제주 전체" };
+          return here ? { value: `충전 가능 ${avail.toLocaleString("ko-KR")}곳`, sub: `반경 ${km} · 전체 ${evNear.length}곳` } : { value: all, sub: "제주 전체" };
         }
       }
     };
     const itsCount = FACILITY_ORDER.filter((t) => !NEARBY_KEYS.includes(t)).reduce((n, t) => n + facilityCounts[t], 0);
-    const speedSub: Record<SpeedStatus, string> = { smooth: "30km/h 이상", slow: "15~30km/h", congested: "15km/h 미만" };
+    const total = speedCounts.reduce((n, [, c]) => n + c, 0);
+    const pct = (c: number) => (total ? Math.round((c / total) * 100) : 0);
+    const dot = (k: FacilityKey) => <span className="inline-block h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: FACILITY_STYLE[k].color, boxShadow: FACILITY_STYLE[k].stroke ? `inset 0 0 0 2px ${FACILITY_STYLE[k].stroke}` : undefined }} aria-hidden="true" />;
     return (
-      <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 bg-grey-100 p-4 md:max-w-5xl">
+      <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 bg-grey-100 p-4 md:max-w-4xl">
         <main className="flex flex-col gap-4">
-          {/* 교통 현황(TASK-032부터 /traffic): 첫 화면은 단순한 시작 화면, 카드 전체는 여기. */}
+          {/* 교통 현황(TASK-032부터 /traffic): 첫 화면은 단순한 시작 화면, 자세한 현황은 여기. */}
           <div className="flex items-center justify-between gap-2">
             <button type="button" onClick={() => onNavigate("start")} className="text-sm font-semibold text-brand-700">
               ← 홈
@@ -1254,78 +1254,69 @@ export function TrafficDashboard({ view, around = null, onNavigate }: { view: Ex
           <h1 className="text-[26px] font-bold tracking-tight text-grey-900">제주 실시간 교통 현황</h1>
           {statusRow}
           {alerts}
-          <section aria-labelledby="dash-speeds" className="flex flex-col gap-2">
+          <section aria-labelledby="dash-speeds" className="flex flex-col gap-3 rounded-[20px] bg-white p-4 shadow-sm ring-1 ring-grey-200">
             <h2 id="dash-speeds" className="font-bold text-grey-900">
               도로 소통
             </h2>
+            {speedLines.length ? (
+              <>
+                <div role="img" aria-label={`원활 ${pct(speedCounts[0]![1])}% 서행 ${pct(speedCounts[1]![1])}% 정체 ${pct(speedCounts[2]![1])}%`} className="flex h-3 w-full overflow-hidden rounded-full bg-grey-100">
+                  {speedCounts.map(([st, n]) => (n > 0 ? <span key={st} className={STATUS_STYLE[st].bar} style={{ width: `${(n / total) * 100}%` }} /> : null))}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-grey-600">{linksProblem || (speedsError && !speeds) ? "도로 소통을 불러오지 못했습니다." : "도로 소통 불러오는 중…"}</p>
+            )}
             <ul aria-label="도로 소통 카드" className="grid grid-cols-3 gap-2">
-              {SPEED_ORDER.map((st) => (
+              {speedCounts.map(([st, n]) => (
                 <li key={st}>
-                  <DashCard
-                    title={STATUS_STYLE[st].label}
-                    mark={<span className={`inline-block h-2 w-4 rounded ${STATUS_STYLE[st].bar}`} aria-hidden="true" />}
-                    value={speedLines.length ? `${speedCounts.find(([k]) => k === st)![1].toLocaleString("ko-KR")}구간` : "–"}
-                    sub={speedLines.length ? speedSub[st] : linksProblem || (speedsError && !speeds) ? "불러오지 못했습니다" : "불러오는 중…"}
-                    onClick={() => onNavigate(st)}
-                  />
+                  <button type="button" onClick={() => onNavigate(st)} className="flex min-h-14 w-full flex-col items-center justify-center rounded-2xl bg-grey-100 p-2 active:bg-grey-200">
+                    <span className="flex items-center gap-1 text-xs font-semibold text-grey-700">
+                      <span className={`inline-block h-1.5 w-3 rounded ${STATUS_STYLE[st].bar}`} aria-hidden="true" />
+                      {STATUS_STYLE[st].label} {speedLines.length ? `${pct(n)}%` : ""}
+                    </span>
+                    <span className="whitespace-nowrap text-[clamp(0.85rem,4vw,1.05rem)] font-bold tabular-nums text-grey-900">{speedLines.length ? `${n.toLocaleString("ko-KR")}구간` : "–"}</span>
+                  </button>
                 </li>
               ))}
             </ul>
             {(speedProblem || speedStale) && <p className="text-xs text-amber-800">{speedProblem ?? "오래된 구간 속도입니다(15분 넘게 갱신되지 않음)."}</p>}
           </section>
-          <section aria-labelledby="dash-nearby" className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-              <h2 id="dash-nearby" className="font-bold text-grey-900">
-                내 주변
+          <div className="flex flex-col gap-4 md:grid md:grid-cols-2 md:items-start">
+            <section aria-labelledby="dash-nearby" className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                <h2 id="dash-nearby" className="font-bold text-grey-900">
+                  내 주변
+                </h2>
+                <p role="status" aria-label="대시보드 위치 기준" className="text-xs text-grey-600">
+                  {here ? "내 위치 기준(이 기기에서만 사용)" : homeChecked ? "위치 허용 시 내 주변 · 지금은 제주 전체" : "현재 위치 확인 중…"}
+                </p>
+              </div>
+              <ul aria-label="내 주변 카드" className="divide-y divide-grey-100 overflow-hidden rounded-[20px] bg-white shadow-sm ring-1 ring-grey-200">
+                {(["PARK", "GAS", "EV", "LPG", "ENF"] as const).map((k) => {
+                  const r = nearbyRow(k);
+                  return (
+                    <li key={k}>
+                      <DashRow mark={dot(k)} title={FACILITY_STYLE[k].short} sub={r.sub} value={r.value} onClick={() => onNavigate(k)} />
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+            <section aria-labelledby="dash-more" className="flex flex-col gap-2">
+              <h2 id="dash-more" className="font-bold text-grey-900">
+                그 밖의 정보
               </h2>
-              <p role="status" aria-label="대시보드 위치 기준" className="text-xs text-grey-600">
-                {here ? "내 위치 기준(이 기기에서만 사용)" : homeChecked ? "위치 허용 시 내 주변 · 지금은 제주 전체" : "현재 위치 확인 중…"}
-              </p>
-            </div>
-            <ul aria-label="내 주변 카드" className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
-              {(["ENF", "PARK", "GAS", "LPG", "EV"] as const).map((k) => {
-                const c = nearbyCard(k);
-                return (
-                  <li key={k}>
-                    <DashCard
-                      title={FACILITY_STYLE[k].short}
-                      mark={<span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: FACILITY_STYLE[k].color, boxShadow: FACILITY_STYLE[k].stroke ? `inset 0 0 0 2px ${FACILITY_STYLE[k].stroke}` : undefined }} aria-hidden="true" />}
-                      value={c.value}
-                      sub={c.sub}
-                      onClick={() => onNavigate(k)}
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-          <section aria-labelledby="dash-more" className="flex flex-col gap-2">
-            <h2 id="dash-more" className="font-bold text-grey-900">
-              그 밖의 정보
-            </h2>
-            <ul aria-label="그 밖의 정보 카드" className="grid grid-cols-2 gap-2 md:grid-cols-3">
-              <li>
-                <DashCard title="돌발·통제·공사" value={state.snapshot ? `${all.length.toLocaleString("ko-KR")}건` : "–"} sub="제주 ITS 감지" onClick={() => onNavigate("incidents")} small />
-              </li>
-              <li>
-                <DashCard title="CCTV 등 교통시설물" value={facilities ? `${itsCount.toLocaleString("ko-KR")}곳` : "–"} sub={facilitiesProblem ? "불러오지 못했습니다" : "VMS·CCTV·웹카메라 등"} onClick={() => onNavigate("facilities")} small />
-              </li>
-              <li>
-                <DashCard
-                  title="관광지"
-                  mark={<span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: FACILITY_STYLE.TOUR.color }} aria-hidden="true" />}
-                  value={tour ? `${(here ? nearTour.length : facilityCounts.TOUR).toLocaleString("ko-KR")}곳` : "–"}
-                  sub={tourLoading ? "불러오는 중…" : tourProblem ? "불러오지 못했습니다" : here ? `반경 ${(NEARBY_RADIUS.TOUR ?? 5000) / 1000}km 안` : "제주 전체"}
-                  onClick={() => onNavigate("TOUR")}
-                  small
-                />
-              </li>
-              <li>
-                {/* 관광지 검색(TASK-029 → TASK-031 관광지 중심): 따로 된 페이지(/search). */}
-                <DashCard title="관광지 검색" mark={<span aria-hidden="true">🔍</span>} value="관광지·주변 정보" sub="운영시간·주차·맛집·숙소" onClick={() => window.location.assign("/search")} small cta="검색하기 ›" />
-              </li>
-            </ul>
-          </section>
+              <ul aria-label="그 밖의 정보 카드" className="divide-y divide-grey-100 overflow-hidden rounded-[20px] bg-white shadow-sm ring-1 ring-grey-200">
+                <li>
+                  <DashRow title="돌발·통제·공사" sub="제주 ITS 감지" value={state.snapshot ? `${all.length.toLocaleString("ko-KR")}건` : "–"} onClick={() => onNavigate("incidents")} />
+                </li>
+                <li>
+                  <DashRow title="CCTV 등 교통시설물" sub={facilitiesProblem ? "불러오지 못했습니다" : "VMS·CCTV·웹카메라 등"} value={facilities ? `${itsCount.toLocaleString("ko-KR")}곳` : "–"} onClick={() => onNavigate("facilities")} />
+                </li>
+              </ul>
+            </section>
+          </div>
         </main>
         {footer}
       </div>
