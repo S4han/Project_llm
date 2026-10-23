@@ -442,11 +442,12 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
       : // 점이 수천 개라 캔버스로, 구간 선 위·사건 점 아래 칸에 그린다.
         L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: style.stroke ? 6 : 5, color: style.stroke ?? "#fff", weight: style.stroke ? 2 : 1.5, fillColor: style.color, fillOpacity: 1 });
     // 카드는 누를 때 만든다. 큰 카드(관광지·숙소)는 지도 폭·높이에 맞춰 넓고 길게, 넘치면 안에서 넘긴다(TASK-026 점검: 위가 잘림).
-    m.bindPopup(() => popupCard(p.cardFn?.() ?? p.card ?? facilityCard(p)), {
-      offset: p.pin ? (p.pin.dot ? [0, -8] : [0, -30]) : undefined,
-      maxWidth: large ? 360 : undefined,
-      maxHeight: large || p.loadCard ? Math.max(260, map.getSize().y - 100) : undefined,
-    }).addTo(layer);
+    // 값이 없는 옵션은 아예 넘기지 않는다. offset: undefined는 Leaflet 기본값을 지워 팝업 위치 계산이 깨진다(TASK-031 점검: 점을 눌러도 카드가 안 열림).
+    const options: L.PopupOptions = {};
+    if (p.pin) options.offset = p.pin.dot ? [0, -8] : [0, -30];
+    if (large) options.maxWidth = 360;
+    if (large || p.loadCard) options.maxHeight = Math.max(260, map.getSize().y - 100);
+    m.bindPopup(() => popupCard(p.cardFn?.() ?? p.card ?? facilityCard(p)), options).addTo(layer);
     // 카드 위(또는 옆)가 지도 밖으로 잘리면 지도를 옮긴다. Leaflet 자동 이동은 열 때 이동 직후의 맞춤을 건너뛰고
     // 목록에서 고를 때의 화면 이동과 겹치므로, 움직임이 끝난 뒤(0.3초) 직접 맞춘다.
     const fitTop = () =>

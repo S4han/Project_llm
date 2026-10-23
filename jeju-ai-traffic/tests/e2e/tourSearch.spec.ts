@@ -89,6 +89,33 @@ test.describe("관광지 검색 /search (TASK-031)", () => {
     await expect(page.getByText("검색 결과가 없습니다.")).toBeVisible();
   });
 
+  test("처음 화면의 관광지 점을 누르면 카드가 열린다(TASK-031 점검: 점을 눌러도 상세가 안 나옴)", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto("/search");
+    await expect(page.getByRole("region", { name: "관광지 검색 지도" })).toHaveAttribute("data-facilities", "3");
+    // 캔버스에 그린 관광지 점(#4f46e5)을 화면 좌표로 찾는다.
+    const dot = await page.evaluate(() => {
+      const canvas = document.querySelector<HTMLCanvasElement>(".leaflet-facilities-pane canvas");
+      const ctx = canvas?.getContext("2d");
+      if (!canvas || !ctx) return null;
+      const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const r = canvas.getBoundingClientRect();
+      for (let y = 0; y < height; y++)
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          if (Math.abs(data[i]! - 0x4f) < 6 && Math.abs(data[i + 1]! - 0x46) < 6 && Math.abs(data[i + 2]! - 0xe5) < 6) return { x: r.left + (x / width) * r.width + 2, y: r.top + (y / height) * r.height + 2 };
+        }
+      return null;
+    });
+    expect(dot).not.toBeNull();
+    await page.mouse.click(dot!.x, dot!.y);
+    const card = page.locator(".leaflet-popup .popup-card-lg");
+    await expect(card).toBeVisible();
+    await expect(card.locator(".popup-card-tile").filter({ hasText: "주변 맛집 2km" })).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   test("위치 허용: 카드에 현재 위치에서 자동차 소요시간, 내 주변 반경 3km", async ({ browser }) => {
     const context = await newClientContext(browser, { permissions: ["geolocation"], geolocation: CITY_HALL, ...MOBILE });
     const page = await context.newPage();
