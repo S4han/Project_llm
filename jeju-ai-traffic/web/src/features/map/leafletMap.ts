@@ -402,8 +402,8 @@ export function facilityCard(p: FacilityPoint): PopupCard {
   };
 }
 
-/** 주유소 가격 표시: 상표 색 바탕에 "SK 1,867", 최저가는 금색 테두리와 "최저". 아래 꼭짓점이 위치. */
-function gasPinIcon(pin: NonNullable<FacilityPoint["pin"]>): L.DivIcon {
+/** 주유소 가격 표시: 상표 색 바탕에 "SK 1,867", 최저가는 금색 테두리와 "최저". 아래 꼭짓점이 위치. 카카오 지도도 같이 쓴다(TASK-033). */
+export function gasPinElement(pin: NonNullable<FacilityPoint["pin"]>): HTMLElement {
   const root = document.createElement("div");
   root.className = `gas-pin${pin.low ? " gas-pin-low" : pin.fold ? " gas-pin-fold" : ""}${pin.dot ? " gas-pin-dot" : ""}`;
   root.style.backgroundColor = pin.color;
@@ -424,7 +424,11 @@ function gasPinIcon(pin: NonNullable<FacilityPoint["pin"]>): L.DivIcon {
     low.textContent = "최저";
     root.append(low);
   }
-  return L.divIcon({ html: root, className: "gas-pin-wrap", iconSize: [0, 0] });
+  return root;
+}
+
+function gasPinIcon(pin: NonNullable<FacilityPoint["pin"]>): L.DivIcon {
+  return L.divIcon({ html: gasPinElement(pin), className: "gas-pin-wrap", iconSize: [0, 0] });
 }
 
 /**

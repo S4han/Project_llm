@@ -122,7 +122,7 @@ export function StartPage({ onNavigate }: { onNavigate: (view: TrafficView) => v
           <summary className="cursor-pointer font-semibold text-grey-600">출처 보기</summary>
           <div className="mt-2 flex flex-col gap-1">
             <p>도로 소통·돌발은 제주 ITS가 감지한 정보이며 모든 도로의 상황을 포함하지 않습니다. 첫 화면에서는 위치를 확인하지 않습니다. 내 주변·지도 페이지에서 확인한 위치는 이 기기에서 지도 표시와 반경 계산에만 쓰고 저장하지 않습니다.</p>
-            <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS · 관광지 한국관광공사·비짓제주(제주관광공사) · 경로 카카오모빌리티</p>
+            <p>지도 © 카카오(쓸 수 없을 때 브이월드(국토교통부)·OpenStreetMap 기여자) · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS · 관광지 한국관광공사·비짓제주(제주관광공사) · 경로 카카오모빌리티</p>
           </div>
         </details>
       </footer>

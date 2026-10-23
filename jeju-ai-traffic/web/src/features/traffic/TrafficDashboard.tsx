@@ -1198,7 +1198,7 @@ export function TrafficDashboard({ view, around = null, onNavigate }: { view: Ex
         <summary className="cursor-pointer font-semibold text-grey-600">출처 보기</summary>
         <div className="mt-2 flex flex-col gap-1">
           <p>제주 ITS가 감지한 지점 정보이며, 발생 시각·상세와 모든 도로의 상황을 포함하지 않습니다. 위치정보는 교통 현황을 열 때 한 번 확인하며(허용한 경우), 이 기기에서 지도 위치와 반경 계산에만 쓰고 서버로 보내거나 저장하지 않습니다.</p>
-          <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자 · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS · 관광지 한국관광공사(국문 관광정보) · 숙소 비짓제주(제주관광공사)</p>
+          <p>지도 © 카카오(쓸 수 없을 때 브이월드(국토교통부)·OpenStreetMap 기여자) · 교통 제주 ITS · 도로 모양 브이월드(국토교통부 교통링크) · 주정차 단속 CCTV 제주시·주차장 전국주차장정보표준데이터(공공데이터포털) · 주유소 제주 ITS(가격 오피넷·한국석유공사) · 전기차 충전소 제주 ITS · 관광지 한국관광공사(국문 관광정보) · 숙소 비짓제주(제주관광공사)</p>
         </div>
       </details>
     </footer>

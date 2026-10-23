@@ -57,7 +57,7 @@ export function App() {
       </main>
       <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
         <p>위치는 경로 조회에만 쓰고 저장하지 않습니다. 예상시간은 참고용입니다.</p>
-        <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자 · 경로 카카오모빌리티 · 교통 제주 ITS · 설명 Cloudflare Workers AI</p>
+        <p>지도 © 카카오(쓸 수 없을 때 브이월드(국토교통부)·OpenStreetMap 기여자) · 경로 카카오모빌리티 · 교통 제주 ITS · 설명 Cloudflare Workers AI</p>
       </footer>
     </div>
   );
