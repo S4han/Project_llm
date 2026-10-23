@@ -1,13 +1,12 @@
-import type { SearchCategory, SearchDetailResponse, SearchFeed, SearchIndexResponse, SearchLiveResponse, SearchPetResponse, SearchRow } from "../../shared/contracts/search.js";
-import { SEARCH_CATEGORIES, SEARCH_NEAR_RADIUS, SEARCH_QUERY_MAX_LENGTH } from "../../shared/contracts/search.js";
-import { isInJeju } from "../../shared/rules/geo.js";
+import type { SearchDetailResponse, SearchFeed, SearchIndexResponse, SearchPetResponse, SearchRow } from "../../shared/contracts/search.js";
+import { SEARCH_CATEGORIES, type SearchCategory } from "../../shared/contracts/search.js";
 import { attachPetPlaces, mergePlaces } from "../../shared/rules/placeMerge.js";
 import { AppError, toErrorResponse } from "./errors.js";
 import { guardedCall } from "./policies/guardedCall.js";
 import { quotaGuard, type QuotaGuard } from "./policies/quota.js";
 import { RateLimiter } from "./policies/rateLimit.js";
 import { TtlCache } from "./policies/ttlCache.js";
-import { createKakaoLiveProvider, createKtoDetail, createKtoFeed, createKtoPetProvider, createMockDetail, createMockFeeds, createMockLiveProvider, createMockPetProvider, createVisitJejuFeed, KAKAO_CODE, type DetailProvider, type FeedProvider, type LiveSearchProvider, type PetProvider, type SearchDetail, type SearchPet } from "./providers/tourSearch.js";
+import { createKtoDetail, createKtoFeed, createKtoPetProvider, createMockDetail, createMockFeeds, createMockPetProvider, createVisitJejuFeed, type DetailProvider, type FeedProvider, type PetProvider, type SearchDetail, type SearchPet } from "./providers/tourSearch.js";
 
 /** 목록은 서버 하루·CDN 7일(TASK-029 2.(a), 숙소·관광지와 같음). 일부 출처가 빠진 목록은 서버·CDN 10분만 두고 다시 받는다. */
 export const SEARCH_CACHE_TTL_MS = 24 * 60 * 60_000;
@@ -27,8 +26,6 @@ interface SearchIndex {
 
 export interface TrafficSearchDeps {
   feeds: FeedProvider[];
-  live: LiveSearchProvider;
-  liveMock: boolean;
   detail: DetailProvider;
   pet: PetProvider;
   cache: TtlCache<SearchIndex>;
@@ -43,16 +40,13 @@ const FEED_CATEGORIES = ["ATTRACTION", "ACCOMMODATION", "RESTAURANT"] as const;
 
 /**
  * 출처 선택: VISITJEJU_API_KEY가 있으면 비짓제주 3묶음, DATA_GO_KR_API_KEY가 있으면 관광공사 3묶음. 둘 다 없으면 모의.
- * 카카오는 장소 검색과 같이 PLACES_PROVIDER=kakao와 KAKAO_REST_API_KEY가 모두 있을 때만 실제 호출.
  * 합칠 때 앞의 출처를 우선한다(비짓제주: 사진·소개·전화가 더 많음).
  */
-export function selectSearchProviders(env: Record<string, string | undefined>): Pick<TrafficSearchDeps, "feeds" | "live" | "liveMock" | "detail" | "pet"> {
+export function selectSearchProviders(env: Record<string, string | undefined>): Pick<TrafficSearchDeps, "feeds" | "detail" | "pet"> {
   const vj = env.VISITJEJU_API_KEY?.trim();
   const kto = env.DATA_GO_KR_API_KEY;
   const feeds = [...(vj ? FEED_CATEGORIES.map((c) => createVisitJejuFeed(vj, c)) : []), ...(kto ? FEED_CATEGORIES.map((c) => createKtoFeed(kto, c)) : [])];
-  const kakao = env.KAKAO_REST_API_KEY;
-  const real = env.PLACES_PROVIDER === "kakao" && kakao;
-  return { feeds: feeds.length ? feeds : createMockFeeds(), live: real ? createKakaoLiveProvider(kakao) : createMockLiveProvider(), liveMock: !real, detail: kto ? createKtoDetail(kto) : createMockDetail(), pet: kto ? createKtoPetProvider(kto) : createMockPetProvider() };
+  return { feeds: feeds.length ? feeds : createMockFeeds(), detail: kto ? createKtoDetail(kto) : createMockDetail(), pet: kto ? createKtoPetProvider(kto) : createMockPetProvider() };
 }
 
 function clientKey(request: Request): string {
@@ -99,8 +93,7 @@ function parseCategory(v: string | null): SearchCategory | "ALL" {
 }
 
 /**
- * GET /api/traffic/search: 비짓제주·관광공사 장소를 합친 목록(검색은 화면에서).
- * ?q=검색어 또는 ?lat=&lng=(내 주변)이 있으면 카카오 로컬 실시간 음식점·카페(카테고리 ALL·RESTAURANT·CAFE만, 저장하지 않음, no-store).
+ * GET /api/traffic/search: 비짓제주·관광공사 장소를 합친 목록(검색·주변 계산은 화면에서). 카카오 실시간 검색은 TASK-031 5.(a)로 뺐다.
  * ?kto=콘텐츠 ID&cat=카테고리면 그 장소의 관광공사 소개정보(운영시간·쉬는날·주차·반려동물, 30일).
  * ?pet=콘텐츠 ID면 관광공사 반려동물 동반여행 상세(동반 유형·동반 가능 동물·필요 사항 등, 30일, TASK-030).
  */
@@ -129,28 +122,8 @@ export async function handleTrafficSearch(request: Request, deps: TrafficSearchD
       const body: SearchDetailResponse = { ...d, builtAt: now().toISOString() };
       return Response.json(body, { headers: { "Cache-Control": `public, max-age=86400, s-maxage=${SEARCH_DETAIL_CDN_SECONDS}, stale-while-revalidate=86400` } });
     }
-    const live = params.has("q") || params.has("lat") || params.has("lng");
-    let liveInput: Parameters<LiveSearchProvider["search"]>[0] | null = null;
-    if (live) {
-      const q = (params.get("q") ?? "").trim();
-      const cat = parseCategory(params.get("cat"));
-      const hasOrigin = params.has("lat") || params.has("lng");
-      const origin = hasOrigin ? { lat: Number(params.get("lat")), lng: Number(params.get("lng")) } : null;
-      if (q.length > SEARCH_QUERY_MAX_LENGTH) throw new AppError("INVALID_INPUT", `검색어를 ${SEARCH_QUERY_MAX_LENGTH}자 이하로 입력하세요.`);
-      if (origin && !isInJeju(origin)) throw new AppError("INVALID_INPUT", "기준 위치가 제주 밖입니다.");
-      if (!q && !origin) throw new AppError("INVALID_INPUT", "검색어나 기준 위치가 필요합니다.");
-      const codes = cat === "ALL" ? ["FD6", "CE7"] : KAKAO_CODE[cat] ? [KAKAO_CODE[cat]!] : [];
-      liveInput = { q, codes, origin, radius: SEARCH_NEAR_RADIUS };
-    }
     const retryAt = deps.limiter.tryAcquire(clientKey(request));
     if (retryAt !== null) throw new AppError("QUOTA_BLOCKED", "검색 요청이 너무 잦습니다. 잠시 후 다시 시도하세요.", new Date(retryAt).toISOString());
-    if (liveInput) {
-      const input = liveInput;
-      // 관광지·숙박만 고르면 카카오를 부르지 않는다.
-      const places = input.codes.length ? await guardedCall(deps.guard, "kakaoLocal", () => deps.live.search(input), { cost: input.q ? 1 : input.codes.length }) : [];
-      const body: SearchLiveResponse = { places, observedAt: now().toISOString(), mock: deps.liveMock };
-      return Response.json(body, { headers: { "Cache-Control": "no-store" } });
-    }
     const index = await deps.cache.getOrLoad("index", () => buildIndex(deps), (v) => (v.missing.length ? SEARCH_PARTIAL_TTL_MS : SEARCH_CACHE_TTL_MS));
     const body: SearchIndexResponse = { places: index.places, missing: index.missing, builtAt: now().toISOString(), mock: index.mock };
     const cdn = index.missing.length ? "public, max-age=300, s-maxage=600" : `public, max-age=3600, s-maxage=${SEARCH_CDN_SECONDS}, stale-while-revalidate=86400`;

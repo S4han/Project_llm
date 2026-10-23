@@ -1317,8 +1317,8 @@ export function TrafficDashboard({ view, around = null, onNavigate }: { view: Tr
                 />
               </li>
               <li>
-                {/* 관광 통합 검색(TASK-029 1.(a)): 따로 된 페이지(/search). */}
-                <DashCard title="관광 검색" mark={<span aria-hidden="true">🔍</span>} value="관광지·숙박·맛집" sub="비짓제주·관광공사·카카오" onClick={() => window.location.assign("/search")} small cta="검색하기 ›" />
+                {/* 관광지 검색(TASK-029 → TASK-031 관광지 중심): 따로 된 페이지(/search). */}
+                <DashCard title="관광지 검색" mark={<span aria-hidden="true">🔍</span>} value="관광지·주변 정보" sub="운영시간·주차·맛집·숙소" onClick={() => window.location.assign("/search")} small cta="검색하기 ›" />
               </li>
             </ul>
           </section>

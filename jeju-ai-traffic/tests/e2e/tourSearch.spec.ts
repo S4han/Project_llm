@@ -1,124 +1,132 @@
 import { expect, test } from "@playwright/test";
 import { newClientContext, shot, uniqueClient } from "./client";
 
-// 관광 통합 검색 페이지(TASK-029). 개발 서버의 /api/traffic/search는 모의 목록(비짓제주·관광공사)과 모의 카카오를 쓴다.
+// 관광지 검색 페이지(TASK-031, 이전 TASK-029·030). 개발 서버의 /api/traffic/search는 모의 목록(비짓제주·관광공사·반려동물 동반여행)을 쓴다.
+// 모의 관광지 3곳: 모의 사라봉(비짓제주·관광공사·관광공사 반려동물), 모의 성산 일출봉(서귀포), 모의 반려 승마장(관광공사 반려동물).
 const CITY_HALL = { latitude: 33.4996, longitude: 126.5312, accuracy: 15 };
+const MOBILE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
 
 test.beforeEach(async ({ page }) => {
   await page.setExtraHTTPHeaders(uniqueClient());
   await page.route(/tile\.openstreetmap\.org|api\.vworld\.kr\/req\/wmts/, (route) => route.abort());
 });
 
-test.describe("관광 검색 /search (TASK-029)", () => {
-  test("대시보드 카드 → 검색 → 같은 장소 합침·출처 표시 → 상세 카드 → 주소에 검색어", async ({ page }) => {
+test.describe("관광지 검색 /search (TASK-031)", () => {
+  test("처음엔 관광지 전체 → 관광지만 검색 → 카드(운영시간·주차·소요시간·반려동물·주변 맛집·숙소) → 주변 맛집·숙소 지도", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: /^관광 검색/ }).click();
+    await page.getByRole("button", { name: /^관광지 검색/ }).click();
     await expect(page).toHaveURL(/\/search$/);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 관광 검색");
-    await expect(page.getByRole("status", { name: "검색 자료 상태" })).toContainText(/비짓제주·한국관광공사 \d+곳\(모의 데이터\)/);
-    await shot(page, "TASK-029-01-start-390");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 관광지 검색");
+    await expect(page.getByRole("status", { name: "검색 자료 상태" })).toContainText("제주 관광지 3곳(모의 데이터)");
+    // 처음 열면 관광지 전체(음식점·숙소는 지도에 없음)
+    const map = page.getByRole("region", { name: "관광지 검색 지도" });
+    await expect(map).toHaveAttribute("data-facilities", "3");
+    await expect(page.getByRole("heading", { name: "지도에 관광지 3곳" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /음식점|카페/ })).toHaveCount(0);
+    await shot(page, "TASK-031-01-start-390");
 
-    await page.getByRole("searchbox", { name: "관광 검색어" }).fill("모의 사라봉");
+    // 관광지만 검색: "모의"는 관광지 3곳(음식점 "모의 고기국수" 등은 나오지 않음)
+    await page.getByRole("searchbox", { name: "관광지 검색어" }).fill("모의");
     await page.getByRole("button", { name: "검색", exact: true }).click();
-    await expect(page).toHaveURL(/\/search\?q=%EB%AA%A8%EC%9D%98\+%EC%82%AC%EB%9D%BC%EB%B4%89$/);
     const results = page.getByRole("list", { name: "검색 결과" });
-    // 검색 뒤 지도를 키워도 Leaflet 상자 표시(leaflet-container)가 남아 바탕 그림이 깨지지 않는다(TASK-029 점검)
-    await expect(page.getByRole("region", { name: "관광 검색 지도" })).toHaveClass(/leaflet-container/);
-    // 비짓제주 "모의 사라봉"과 관광공사 "모의 사라봉 (제주시)"은 이름이 같고 100m 안이라 한 곳
-    await expect(results.getByRole("listitem")).toHaveCount(1);
-    await expect(results).toContainText("출처 비짓제주·한국관광공사·관광공사 반려동물");
-    await expect(results).toContainText("🐾 동반 가능(관광공사)");
+    await expect(results.getByRole("listitem")).toHaveCount(3);
+    await expect(results).not.toContainText("고기국수");
+    await expect(map).toHaveClass(/leaflet-container/);
+
     await results.getByRole("button", { name: /모의 사라봉/ }).click();
     const card = page.locator(".leaflet-popup .popup-card-lg");
-    await expect(card).toContainText("관광지 · 비짓제주·한국관광공사");
-    await expect(card).toContainText("064-000-0020");
-    // 범위 변경: 관광공사 소개정보를 카드를 열 때 받아 이용시간·주차·반려동물 칸에
-    await expect(card.locator(".popup-card-tile").filter({ hasText: "이용시간" })).toContainText("상시 개방");
-    await expect(card.locator(".popup-card-tile").filter({ hasText: "주차" })).toContainText("가능");
-    // TASK-030: 관광공사 반려동물 동반여행 상세가 먼저(동반 유형·필요한 것)
-    await expect(card.locator(".popup-card-tile").filter({ hasText: "반려동물" })).toContainText("전구역 동반가능");
-    await expect(card).toContainText("목줄 착용");
-    await expect(card).toContainText("관광지 · 비짓제주·한국관광공사·관광공사 반려동물");
-    await shot(page, "TASK-030-01-pet-card-390");
-    await expect(card).toContainText("연중무휴");
-    await expect(card.getByRole("link", { name: "비짓제주에서 자세히 보기 ↗" })).toHaveAttribute("href", "https://www.visitjeju.net/kr/detail/view?contentsid=MOCK-V1");
-    await expect(card.getByRole("link", { name: "카카오맵 길찾기 ↗" })).toHaveAttribute("href", /^https:\/\/map\.kakao\.com\/link\/to\//);
-    await expect(card.getByRole("link", { name: "현재 위치에서 경로 안내" })).toHaveAttribute("href", /^\/route\?to=/);
-    // 큰 카드 위가 지도 밖으로 잘리지 않는다(지도를 내려 맞춘 뒤)
-    await expect.poll(async () => ((await card.boundingBox())?.y ?? 0) - ((await page.getByRole("region", { name: "관광 검색 지도" }).boundingBox())?.y ?? 0)).toBeGreaterThanOrEqual(0);
-    await shot(page, "TASK-029-02-card-390");
+    const tile = (label: string) => card.locator(".popup-card-tile").filter({ hasText: label });
+    await expect(tile("이용시간")).toContainText("상시 개방");
+    await expect(tile("주차")).toContainText("가능");
+    // 위치 권한이 없는 브라우저: 소요시간은 위치 허용 시 표시
+    await expect(tile("현재 위치에서")).toContainText("위치 허용 시 표시");
+    await expect(tile("반려동물")).toContainText("전구역 동반가능");
+    await expect(tile("주변 맛집 2km")).toContainText("2곳");
+    await expect(tile("주변 숙소 2km")).toContainText("1곳");
+    await expect(card).toContainText("모의 신산 호텔");
+    // 지도 가장자리 관광지를 목록에서 골라도 큰 카드는 지도 안에 들어온다(TASK-031 점검: 왼쪽 잘림)
+    await expect
+      .poll(async () => {
+        const c = await card.boundingBox();
+        const m = await map.boundingBox();
+        return c && m ? Math.min(c.x - m.x, m.x + m.width - (c.x + c.width), c.y - m.y) : -1;
+      })
+      .toBeGreaterThanOrEqual(0);
+    await shot(page, "TASK-031-02-card-390");
 
-    // 새로 고쳐도 검색어가 남는다. 카테고리 카페: 비짓제주 카페 + 카카오 실시간 카페
-    await page.goto("/search?q=%EB%AA%A8%EC%9D%98&cat=CAFE");
-    await expect(page.getByRole("searchbox", { name: "관광 검색어" })).toHaveValue("모의");
-    await expect(page.getByRole("button", { name: /카페/, pressed: true })).toBeVisible();
-    await expect(results.getByRole("listitem")).toHaveCount(2);
-    await expect(results).toContainText("모의 바다 카페");
-    await expect(results).toContainText("모의 시청 커피");
-    await expect(results).toContainText("출처 카카오");
-    // 목록 표시: 비짓제주 태그로 주차장·반려동물
-    await expect(results.getByRole("button", { name: /모의 바다 카페/ })).toContainText("P 주차장");
-    await expect(results.getByRole("button", { name: /모의 바다 카페/ })).toContainText("🐾 동반 가능");
-    // 카카오에만 있는 곳: 운영시간·주차·반려동물 모두 정보 없음, 상세 링크 안내
-    await results.getByRole("button", { name: /모의 시청 커피/ }).click();
-    const kakaoCard = page.locator(".leaflet-popup .popup-card-lg");
-    await expect(kakaoCard.locator(".popup-card-tile").filter({ hasText: "영업시간" })).toContainText("정보 없음");
-    await expect(kakaoCard).toContainText("운영시간은 한국관광공사 자료가 있는 곳만 나옵니다");
-    // 주차 정보가 없으면 반경 1km 주차장(표준데이터 모의 2곳: 유료 1·무료 1)
-    const nearTile = kakaoCard.locator(".popup-card-tile").filter({ hasText: "주변 주차장 1km" });
-    await expect(nearTile).toContainText("2곳");
-    await expect(nearTile).toContainText("무료 1 · 유료 1");
-    await expect(kakaoCard).toContainText("모의 시청 공영주차장");
-    await shot(page, "TASK-029-05-kakao-card-390");
-    // 반려동물 동반 거르기: 표시가 있는 곳만, 주소에 pet=1
+    // 주변 맛집 지도에 보기 → 관광지·맛집 2곳, 주소에 남고 숙소로 바꾸기, 관광지로 돌아오기
+    await tile("주변 맛집 2km").click();
+    await expect(page).toHaveURL(/around=visitJeju%3AMOCK-V1&show=food/);
+    await expect(page.getByRole("heading", { name: /모의 사라봉 주변 맛집 · 반경 2km 2곳/ })).toBeVisible();
+    const aroundList = page.getByRole("list", { name: "주변 목록" });
+    await expect(aroundList).toContainText("모의 바다 카페");
+    await expect(aroundList).toContainText("모의 고기국수");
+    await expect(map).toHaveAttribute("data-facilities", "3");
+    await expect(map).toHaveAttribute("data-nearby", "1");
+    await aroundList.getByRole("button", { name: /모의 고기국수/ }).click();
+    await expect(page.locator(".leaflet-popup .popup-card-lg .popup-card-tile").filter({ hasText: "모의 사라봉에서" })).toContainText("km");
+    await shot(page, "TASK-031-03-around-food-390");
+    await page.getByRole("button", { name: "주변 숙소", exact: true }).click();
+    await expect(page.getByRole("heading", { name: /모의 사라봉 주변 숙소 · 반경 2km 1곳/ })).toBeVisible();
+    await expect(page).toHaveURL(/show=stay/);
+    await page.getByRole("button", { name: "← 관광지로" }).click();
+    await expect(page).toHaveURL(/\/search\?q=%EB%AA%A8%EC%9D%98$/);
+    await expect(results.getByRole("listitem")).toHaveCount(3);
+
+    // 반려동물 거르기: 관광공사 반려동물 동반여행·비짓제주 태그가 있는 관광지만
     await page.getByRole("button", { name: "🐾 반려동물 동반" }).click();
     await expect(page).toHaveURL(/pet=1/);
-    await expect(results.getByRole("listitem")).toHaveCount(1);
-    await expect(results).toContainText("모의 바다 카페");
-    await page.getByRole("button", { name: "🐾 반려동물 동반", pressed: true }).click();
     await expect(results.getByRole("listitem")).toHaveCount(2);
-    // 음식점: 비짓제주 "모의 고기국수"와 카카오 "모의 고기국수"(30m 안)는 한 곳
-    await page.getByRole("button", { name: /음식점/ }).click();
-    await expect(page).toHaveURL(/cat=RESTAURANT/);
-    await expect(results.getByRole("button", { name: /모의 고기국수/ })).toHaveCount(1);
-    await expect(results.getByRole("button", { name: /모의 고기국수/ })).toContainText("출처 비짓제주·카카오");
-    await expect(results).toContainText("모의 흑돼지");
-    await page.getByRole("button", { name: /^전체/ }).click();
-    await expect(page).toHaveURL(/\/search\?q=%EB%AA%A8%EC%9D%98$/);
-    await page.getByRole("searchbox", { name: "관광 검색어" }).fill("없는 장소 이름");
+    await expect(results).toContainText("모의 반려 승마장");
+    // 검색 지우고 전체 보기: 반려동물 거르기만 남아 관광지 2곳
+    await page.getByRole("button", { name: "검색 지우고 전체 보기" }).click();
+    await expect(page.getByRole("heading", { name: "지도에 반려동물 동반 관광지 2곳" })).toBeVisible();
+    await expect(map).toHaveAttribute("data-facilities", "2");
+
+    await page.getByRole("button", { name: "🐾 반려동물 동반", pressed: true }).click();
+    await page.getByRole("searchbox", { name: "관광지 검색어" }).fill("없는 장소 이름");
     await page.getByRole("button", { name: "검색", exact: true }).click();
     await expect(page.getByText("검색 결과가 없습니다.")).toBeVisible();
   });
 
-  test("내 주변: 위치 허용이면 반경 3km 가까운 순과 거리, 거부면 지역 고르기", async ({ browser }) => {
-    const context = await newClientContext(browser, { permissions: ["geolocation"], geolocation: CITY_HALL, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+  test("위치 허용: 카드에 현재 위치에서 자동차 소요시간, 내 주변 반경 3km", async ({ browser }) => {
+    const context = await newClientContext(browser, { permissions: ["geolocation"], geolocation: CITY_HALL, ...MOBILE });
     const page = await context.newPage();
     await page.route(/tile\.openstreetmap\.org|api\.vworld\.kr\/req\/wmts/, (route) => route.abort());
-    await page.goto("/search");
+    await page.goto("/search?q=%EB%AA%A8%EC%9D%98%20%EC%82%AC%EB%9D%BC%EB%B4%89");
+    const results = page.getByRole("list", { name: "검색 결과" });
+    // 한 곳만 찾으면 확대 15로 맞춰 이름이 보인다(많이 확대하면 이름, TASK-031 1.(a))
+    await expect(page.locator(".map-label").filter({ hasText: "모의 사라봉" })).toBeVisible();
+    await results.getByRole("button", { name: /모의 사라봉/ }).click();
+    const travel = page.locator(".leaflet-popup .popup-card-lg .popup-card-tile").filter({ hasText: "현재 위치에서" });
+    await expect(travel).toContainText("약");
+    await expect(travel).toContainText("모의 경로");
+    await shot(page, "TASK-031-04-travel-390");
+
+    await page.getByRole("button", { name: "검색 지우고 전체 보기" }).click();
     await page.getByRole("button", { name: "내 주변" }).click();
     await expect(page.getByRole("button", { name: "내 주변 ✓" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /검색 결과/ })).toContainText("내 위치 반경 3km");
-    const results = page.getByRole("list", { name: "검색 결과" });
+    await expect(page.getByRole("heading", { name: /관광지 \d+곳/ })).toContainText("내 위치 반경 3km");
     // 서귀포(모의 성산 일출봉)는 반경 밖
     await expect(results).not.toContainText("모의 성산 일출봉");
-    await expect(results.getByRole("listitem").first()).toContainText(/\d+m/);
-    await expect(results).toContainText("모의 시청 커피");
-    await expect(page.getByRole("region", { name: "관광 검색 지도" })).toHaveAttribute("data-nearby", "1");
-    await shot(page, "TASK-029-03-near-390");
+    await expect(results.getByRole("listitem").first()).toContainText(/\d+(m|\.\dkm)/);
+    await expect(page.getByRole("region", { name: "관광지 검색 지도" })).toHaveAttribute("data-nearby", "1");
     await context.close();
+  });
 
+  test("위치 거부: 내 주변 → 이유와 지역 고르기", async ({ browser }) => {
     const denied = await newClientContext(browser, { permissions: [] });
-    const p2 = await denied.newPage();
-    await p2.route(/tile\.openstreetmap\.org|api\.vworld\.kr\/req\/wmts/, (route) => route.abort());
-    await p2.addInitScript(() => {
+    const page = await denied.newPage();
+    await page.route(/tile\.openstreetmap\.org|api\.vworld\.kr\/req\/wmts/, (route) => route.abort());
+    await page.addInitScript(() => {
       Object.defineProperty(navigator, "geolocation", { value: { getCurrentPosition: (_ok: unknown, err: (e: { code: number }) => void) => err({ code: 1 }) } });
     });
-    await p2.goto("/search");
-    await p2.getByRole("button", { name: "내 주변" }).click();
-    await expect(p2.getByRole("alert").filter({ hasText: "위치 권한이 꺼져 있습니다" })).toBeVisible();
-    await p2.getByRole("group", { name: "지역 고르기" }).getByRole("button", { name: "제주시내" }).click();
-    await expect(p2.getByRole("heading", { name: /검색 결과/ })).toContainText("제주시내 반경 3km");
-    await expect(p2.getByRole("list", { name: "검색 결과" })).toContainText("모의 사라봉");
+    await page.goto("/search");
+    await page.getByRole("button", { name: "내 주변" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "위치 권한이 꺼져 있습니다" })).toBeVisible();
+    await page.getByRole("group", { name: "지역 고르기" }).getByRole("button", { name: "제주시내" }).click();
+    await expect(page.getByRole("heading", { name: /관광지 \d+곳/ })).toContainText("제주시내 반경 3km");
+    await expect(page.getByRole("list", { name: "검색 결과" })).toContainText("모의 사라봉");
     await denied.close();
   });
 
@@ -126,9 +134,9 @@ test.describe("관광 검색 /search (TASK-029)", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/search?q=%EB%AA%A8%EC%9D%98");
     await expect(page.getByRole("list", { name: "검색 결과" }).getByRole("listitem").first()).toBeVisible();
-    const map = await page.getByRole("region", { name: "관광 검색 지도" }).boundingBox();
+    const map = await page.getByRole("region", { name: "관광지 검색 지도" }).boundingBox();
     const list = await page.getByRole("list", { name: "검색 결과" }).boundingBox();
     expect(map && list && map.x < list.x).toBe(true);
-    await shot(page, "TASK-029-04-wide");
+    await shot(page, "TASK-031-05-wide");
   });
 });

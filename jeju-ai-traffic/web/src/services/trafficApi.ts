@@ -1,6 +1,6 @@
 import type { ApiError, ApiErrorBody } from "../../../shared/contracts/common";
 import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse, TrafficStayResponse, TrafficTourDetailResponse, TrafficTourResponse } from "../../../shared/contracts/traffic";
-import type { SearchDetailResponse, SearchIndexResponse, SearchLiveResponse, SearchPetResponse } from "../../../shared/contracts/search";
+import type { SearchDetailResponse, SearchIndexResponse, SearchPetResponse } from "../../../shared/contracts/search";
 
 export type TrafficIncidentsResult = { ok: true; data: TrafficIncidentsResponse } | { ok: false; error: ApiError };
 
@@ -99,20 +99,6 @@ export function fetchTrafficTourDetail(id: string): Promise<Result<TrafficTourDe
 /** GET /api/traffic/search(TASK-029): 관광 통합 검색 목록(비짓제주·관광공사, 서버 하루·CDN 7일). 검색 페이지를 열 때 한 번. */
 export function fetchSearchIndex(signal?: AbortSignal): Promise<Result<SearchIndexResponse>> {
   return getJson<SearchIndexResponse>("/api/traffic/search", (b) => "places" in b && "missing" in b, signal);
-}
-
-/**
- * GET /api/traffic/search?q=&cat=&lat=&lng=(TASK-029): 카카오 로컬 실시간 음식점·카페. 결과는 화면에만 쓰고 저장하지 않는다.
- * 기준 위치는 소수 셋째 자리(약 100m)로 줄여 보낸다.
- */
-export function fetchSearchLive(input: { q: string; cat: string; origin: { lat: number; lng: number } | null }, signal?: AbortSignal): Promise<Result<SearchLiveResponse>> {
-  const p = new URLSearchParams({ cat: input.cat });
-  if (input.q) p.set("q", input.q);
-  if (input.origin) {
-    p.set("lat", input.origin.lat.toFixed(3));
-    p.set("lng", input.origin.lng.toFixed(3));
-  }
-  return getJson<SearchLiveResponse>(`/api/traffic/search?${p}`, (b) => "places" in b && "observedAt" in b, signal);
 }
 
 const searchDetails = new Map<string, Promise<Result<SearchDetailResponse>>>();

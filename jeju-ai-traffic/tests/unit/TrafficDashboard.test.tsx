@@ -228,7 +228,7 @@ describe("대시보드와 화면 전환 (TASK-025)", () => {
       "전기차 충전소1곳반경 1km 충전 가능 · 전체 3곳지도 보기 ›",
     ]);
     expect(card(/^돌발·통제·공사/).textContent).toContain("5건");
-    await waitFor(() => expect(card(/^관광지/).textContent).toBe("관광지2곳반경 5km 안지도 보기 ›"));
+    await waitFor(() => expect(card(/^관광지(?! 검색)/).textContent).toBe("관광지2곳반경 5km 안지도 보기 ›"));
     expect(card(/^CCTV 등 교통시설물/).textContent).toContain("4곳");
     expect(screen.queryByRole("region", { name: "교통 현황 지도" })).toBeNull();
     expect(screen.getByRole("link", { name: "경로 추천 →" }).getAttribute("href")).toBe("/route");

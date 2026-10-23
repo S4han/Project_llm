@@ -38,13 +38,15 @@ interface Props {
   fitKey?: string | null;
   /** 지도 영역의 읽기 이름. */
   label?: string;
+  /** 이 확대 수준 이상이면 화면 안 시설물(최대 250곳)에 이름을 붙인다(관광 검색 관광지 점, TASK-031). */
+  labelZoom?: number | null;
 }
 
 const NO_IDS: string[] = [];
 const NO_FACILITIES: FacilityPoint[] = [];
 
 /** 제주 전체 교통 사건 지도(TASK-012). */
-export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null, facilities = NO_FACILITIES, nearby = null, openFacility = null, home = null, fitKey = null, label = "교통 현황 지도" }: Props) {
+export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedObservedAt = null, highlightIds = NO_IDS, heightClass = "h-80", overlay = null, facilities = NO_FACILITIES, nearby = null, openFacility = null, home = null, fitKey = null, label = "교통 현황 지도", labelZoom = null }: Props) {
   const { attach, mapRef, layerRef, mapReady, failed, tilesFailed } = useLeafletMap();
   const speedLayer = useRef<L.LayerGroup | null>(null);
   const polylines = useRef<L.Polyline[]>([]);
@@ -60,6 +62,38 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
     facilityMarkers.current = addFacilityMarkers(map, facilityLayer.current, facilities);
   }, [mapReady, mapRef, facilities]);
 
+  // 이름 표시: 많이 확대했을 때만 화면 안 시설물 이름을 붙인다. 움직일 때마다 다시 그린다(글자는 textContent로만).
+  const labelLayer = useRef<L.LayerGroup | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    if (!labelLayer.current || !map.hasLayer(labelLayer.current)) labelLayer.current = L.layerGroup().addTo(map);
+    const layer = labelLayer.current;
+    const draw = () => {
+      layer.clearLayers();
+      // 화면을 아직 맞추기 전(확대 수준 없음)에는 범위를 물을 수 없다. 맞춘 뒤 moveend로 다시 그린다.
+      const zoom = map.getZoom() as number | undefined;
+      if (labelZoom === null || zoom === undefined || zoom < labelZoom) return;
+      const bounds = map.getBounds();
+      let n = 0;
+      for (const p of facilities) {
+        if (n >= 250) break;
+        if (!p.name || !bounds.contains([p.lat, p.lng])) continue;
+        const el = document.createElement("span");
+        el.className = "map-label";
+        el.textContent = p.name;
+        L.marker([p.lat, p.lng], { icon: L.divIcon({ html: el, className: "map-label-wrap", iconSize: [0, 0] }), interactive: false, keyboard: false }).addTo(layer);
+        n += 1;
+      }
+    };
+    draw();
+    map.on("moveend", draw);
+    return () => {
+      map.off("moveend", draw);
+      layer.clearLayers();
+    };
+  }, [mapReady, mapRef, facilities, labelZoom]);
+
   // 목록에서 고른 시설물: 그 자리로 옮기고(확대 15 이상) 카드를 연다.
   const openId = openFacility?.id;
   const openSeq = openFacility?.seq;
@@ -67,7 +101,10 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
     const map = mapRef.current;
     const marker = openId ? facilityMarkers.current.get(openId) : undefined;
     if (!mapReady || !map || !marker) return;
-    map.setView(marker.getLatLng(), Math.max(map.getZoom(), 15));
+    // 움직임 없이 바로 옮긴 뒤 카드를 연다. 다른 이동(검색 결과 맞추기 등)이 진행 중이거나 확대하는 중에 카드를 열면
+    // 카드 자동 이동이 확대를 멈춰 멀리 본 채로 남는다(TASK-031 점검).
+    map.stop();
+    map.setView(marker.getLatLng(), Math.max(map.getZoom(), 15), { animate: false });
     marker.openPopup();
   }, [mapReady, mapRef, openId, openSeq]);
 

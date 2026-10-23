@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_BUDGETS, MemoryQuotaStore, QuotaGuard } from "../../api/_lib/policies/quota";
 import { RateLimiter } from "../../api/_lib/policies/rateLimit";
 import { TtlCache } from "../../api/_lib/policies/ttlCache";
-import { cleanTags, createKakaoLiveProvider, createKtoDetail, createKtoFeed, createKtoPetProvider, createMockDetail, createMockFeeds, createMockLiveProvider, createMockPetProvider, createVisitJejuFeed, normalizeKakaoSearch, normalizeKtoIntro, normalizeKtoPage, normalizeKtoPet, normalizeKtoPetPage, normalizeVisitJejuPage, petCategory, petTag, type FeedProvider } from "../../api/_lib/providers/tourSearch";
+import { cleanTags, createKtoDetail, createKtoFeed, createKtoPetProvider, createMockDetail, createMockFeeds, createMockPetProvider, createVisitJejuFeed, normalizeKtoIntro, normalizeKtoPage, normalizeKtoPet, normalizeKtoPetPage, normalizeVisitJejuPage, petCategory, petTag, type FeedProvider } from "../../api/_lib/providers/tourSearch";
 import { handleTrafficSearch, SEARCH_PARTIAL_TTL_MS, selectSearchProviders, type TrafficSearchDeps } from "../../api/_lib/trafficSearch";
-import type { SearchDetailResponse, SearchIndexResponse, SearchLiveResponse, SearchPetResponse, SearchRow } from "../../shared/contracts/search";
+import type { SearchDetailResponse, SearchIndexResponse, SearchPetResponse, SearchRow } from "../../shared/contracts/search";
 import { attachPetPlaces, mergePlaces, normalizePlaceName } from "../../shared/rules/placeMerge";
 import { matchScore, searchPlaces } from "../../shared/rules/placeSearch";
 
@@ -27,7 +27,6 @@ const VJ_ITEM = {
 const vjPage = (items: unknown[], pageCount = 1) => ({ result: "200", totalCount: items.length, pageCount, items });
 const KTO_ITEM = { addr1: "제주특별자치도 제주시 구좌읍 세화14길 3", addr2: "", cat3: "A05020900", contentid: "2850913", firstimage: "http://tong.visitkorea.or.kr/cms/resource/05/2850905_image2_1.jpg", cpyrhtDivCd: "Type3", mapx: "126.8606961680", mapy: "33.5205279098", tel: "", title: "가는곶 세화", lclsSystm2: "FD05" };
 const ktoPage = (item: unknown, totalCount = 1) => ({ response: { header: { resultCode: "0000", resultMsg: "OK" }, body: { totalCount, items: { item } } } });
-const KAKAO_DOC = { address_name: "제주특별자치도 제주시 이도이동 1771-5", category_group_code: "CE7", category_name: "음식점 > 카페 > 커피전문점", id: "1219335616", phone: "", place_name: "레드버튼 제주시청점", road_address_name: "제주특별자치도 제주시 광양10길 10", x: "126.529033277888", y: "33.4992448369791" };
 
 const row = (id: string, cat: SearchRow[1], name: string, lat: number, lng: number, source: SearchRow[10][number][0], extra: Partial<{ phone: string; photo: string; intro: string; address: string }> = {}): SearchRow => [
   `${source}:${id}`,
@@ -106,25 +105,6 @@ describe("관광 통합 검색 출처 어댑터 (TASK-029)", () => {
     expect(rows[0]?.[1]).toBe("ACCOMMODATION");
   });
 
-  it("카카오: 음식점·카페만, 제주 밖 제외, 분류 이름을 특징으로", () => {
-    expect(normalizeKakaoSearch({ documents: [KAKAO_DOC, { ...KAKAO_DOC, id: "2", category_group_code: "AT4" }, { ...KAKAO_DOC, id: "3", address_name: "서울특별시 중구", y: "37.5" }] })).toEqual([
-      ["kakaoLocal:1219335616", "CAFE", "레드버튼 제주시청점", "제주특별자치도 제주시 광양10길 10", 33.4992448369791, 126.529033277888, "", "", "", "카페,커피전문점", [["kakaoLocal", "1219335616"]], false, ""],
-    ]);
-  });
-
-  it("카카오 공급자: 검색어는 키워드 1건(분류 하나면 그 분류만), 내 주변은 분류마다 카테고리 검색(3km·거리순)", async () => {
-    const urls: URL[] = [];
-    const live = createKakaoLiveProvider("k", (async (u: URL) => (urls.push(u), Response.json({ documents: [KAKAO_DOC] }))) as unknown as typeof fetch);
-    await live.search({ q: "카페", codes: ["CE7"], origin: null, radius: 3000 });
-    expect(urls[0]?.pathname).toBe("/v2/local/search/keyword.json");
-    expect(urls[0]?.searchParams.get("category_group_code")).toBe("CE7");
-    expect(urls[0]?.searchParams.get("rect")).toBeTruthy();
-    await live.search({ q: "", codes: ["FD6", "CE7"], origin: { lat: 33.5, lng: 126.53 }, radius: 3000 });
-    expect(urls.slice(1).map((u) => [u.pathname, u.searchParams.get("category_group_code"), u.searchParams.get("radius"), u.searchParams.get("sort")])).toEqual([
-      ["/v2/local/search/category.json", "FD6", "3000", "distance"],
-      ["/v2/local/search/category.json", "CE7", "3000", "distance"],
-    ]);
-  });
 });
 
 describe("관광공사 반려동물 동반여행 (TASK-030)", () => {
@@ -189,10 +169,10 @@ describe("같은 장소 합치기·검색 (TASK-029 3.(a))", () => {
     // 원본은 바꾸지 않는다
     expect(vj[10]).toHaveLength(1);
     // 같은 이름이 100m 안에 둘 → 애매해서 따로
-    const twins = mergePlaces([[row("A", "RESTAURANT", "국수집", 33.5, 126.53, "visitJeju"), row("B", "RESTAURANT", "국수집", 33.5003, 126.53, "visitJeju")], [row("C", "CAFE", "국수집", 33.5001, 126.53, "kakaoLocal")]]);
+    const twins = mergePlaces([[row("A", "RESTAURANT", "국수집", 33.5, 126.53, "visitJeju"), row("B", "RESTAURANT", "국수집", 33.5003, 126.53, "visitJeju")], [row("C", "CAFE", "국수집", 33.5001, 126.53, "kto")]]);
     expect(twins).toHaveLength(3);
     // 음식점과 카페는 같은 묶음으로 비교, 한쪽이 카페면 카페
-    const cafe = mergePlaces([[row("A", "RESTAURANT", "바다 카페", 33.5, 126.53, "visitJeju")], [row("C", "CAFE", "바다카페", 33.5004, 126.5302, "kakaoLocal")]]);
+    const cafe = mergePlaces([[row("A", "RESTAURANT", "바다 카페", 33.5, 126.53, "visitJeju")], [row("C", "CAFE", "바다카페", 33.5004, 126.5302, "kto")]]);
     expect(cafe).toHaveLength(1);
     expect(cafe[0]![1]).toBe("CAFE");
     // 주차·반려동물 태그는 합친 쪽 어느 하나에 있으면 남긴다
@@ -202,7 +182,7 @@ describe("같은 장소 합치기·검색 (TASK-029 3.(a))", () => {
     b[12] = "YES";
     expect(mergePlaces([[a], [b]])[0]!.slice(11)).toEqual([true, "YES"]);
     // 같은 출처의 다른 번호는 합치지 않는다, 같은 출처·같은 번호는 한 번만
-    expect(mergePlaces([[row("A", "CAFE", "카페", 33.5, 126.53, "kakaoLocal"), row("B", "CAFE", "카페", 33.5, 126.53, "kakaoLocal"), row("A", "CAFE", "카페", 33.5, 126.53, "kakaoLocal")]])).toHaveLength(2);
+    expect(mergePlaces([[row("A", "CAFE", "카페", 33.5, 126.53, "kto"), row("B", "CAFE", "카페", 33.5, 126.53, "kto"), row("A", "CAFE", "카페", 33.5, 126.53, "kto")]])).toHaveLength(2);
   });
 
   it("검색: 이름 같음 > 시작 > 포함 > 주소·특징, 카테고리 거르기, 위치만이면 3km 안 가까운 순", () => {
@@ -221,8 +201,6 @@ describe("같은 장소 합치기·검색 (TASK-029 3.(a))", () => {
 function deps(over: Partial<TrafficSearchDeps> = {}): TrafficSearchDeps {
   return {
     feeds: createMockFeeds(),
-    live: createMockLiveProvider(),
-    liveMock: true,
     detail: createMockDetail(),
     pet: createMockPetProvider(),
     cache: new TtlCache(24 * 60 * 60_000),
@@ -271,23 +249,6 @@ describe("GET /api/traffic/search (TASK-029)", () => {
     expect(allDown.status).toBe(503);
   });
 
-  it("실시간: 음식점·카페만 카카오(no-store), 관광지·숙박은 부르지 않음, 입력 검사", async () => {
-    const live = createMockLiveProvider();
-    const d = deps({ live });
-    const res = await get(d, "?q=%EA%B3%A0%EA%B8%B0&cat=ALL");
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
-    expect(((await res.json()) as SearchLiveResponse).places.map((p) => p[0])).toEqual(["kakaoLocal:MOCK-L2"]);
-    const att = (await (await get(d, "?q=a&cat=ATTRACTION")).json()) as SearchLiveResponse;
-    expect(att.places).toEqual([]);
-    expect(live.calls).toBe(1);
-    expect((await get(d, "?lat=33.5&lng=126.53&cat=CAFE")).status).toBe(200);
-    expect(live.calls).toBe(2);
-    expect((await get(d, "?lat=37.5&lng=127.5")).status).toBe(400);
-    expect((await get(d, "?q=")).status).toBe(400);
-    expect((await get(d, `?q=${"가".repeat(41)}`)).status).toBe(400);
-    expect((await get(d, "?q=a&cat=BAR")).status).toBe(400);
-  });
-
   it("소개정보(범위 변경): ?kto=&cat=, 30일 보관, 카페·음식점은 같은 보관본, 입력 검사", async () => {
     const detail = createMockDetail();
     const d = deps({ detail });
@@ -319,12 +280,10 @@ describe("GET /api/traffic/search (TASK-029)", () => {
     expect(((await (await get(broken)).json()) as SearchIndexResponse).missing).toEqual([{ source: "ktoPet" }]);
   });
 
-  it("공급자 선택: 키 있는 출처만, 없으면 모의. 카카오는 PLACES_PROVIDER=kakao와 키가 모두 있을 때만", () => {
+  it("공급자 선택: 키 있는 출처만, 없으면 모의", () => {
     expect(selectSearchProviders({}).feeds.every((f) => f.mock)).toBe(true);
     const vj = selectSearchProviders({ VISITJEJU_API_KEY: "a" });
     expect(vj.feeds.map((f) => `${f.feed.source}:${f.feed.category}`)).toEqual(["visitJeju:ATTRACTION", "visitJeju:ACCOMMODATION", "visitJeju:RESTAURANT"]);
     expect(selectSearchProviders({ VISITJEJU_API_KEY: "a", DATA_GO_KR_API_KEY: "b" }).feeds).toHaveLength(6);
-    expect(selectSearchProviders({ KAKAO_REST_API_KEY: "k" }).liveMock).toBe(true);
-    expect(selectSearchProviders({ KAKAO_REST_API_KEY: "k", PLACES_PROVIDER: "kakao" }).liveMock).toBe(false);
   });
 });

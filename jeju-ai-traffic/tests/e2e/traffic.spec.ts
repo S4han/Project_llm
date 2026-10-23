@@ -408,7 +408,7 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
   test("관광지(TASK-026): 대시보드 카드 → 반경 5km 지도·가까운 순 목록, 누르면 이용시간·주차 카드", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
-    const card = page.getByRole("button", { name: /^관광지/ });
+    const card = page.getByRole("button", { name: /^관광지(?! 검색)/ });
     await expect(card).toHaveText("관광지2곳반경 5km 안지도 보기 ›");
     await card.click();
     await expect(page).toHaveURL(/\/map\/tour$/);

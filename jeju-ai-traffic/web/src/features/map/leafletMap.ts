@@ -373,6 +373,10 @@ export interface FacilityPoint {
   card?: PopupCard;
   /** 있으면 팝업을 열 때 불러와 카드를 바꾼다(관광지 이용시간·주차, TASK-026). 그동안은 card를 보인다. */
   loadCard?: () => Promise<PopupCard>;
+  /** 있으면 card 대신 팝업을 열 때 만든다(관광지 1,400곳을 미리 만들지 않기 위해, TASK-031). */
+  cardFn?: () => PopupCard;
+  /** 큰 카드(size lg)인지. cardFn을 쓰면 미리 알 수 없어 따로 준다. */
+  large?: boolean;
   /**
    * 있으면 점 대신 상표 색 가격 표시(주유소, TASK-018). low면 최저가 강조. fold면 멀리 볼 때 작은 점으로 접는다(TASK-021).
    * dot이면 평소에는 표시 글자(mark)만 든 색 동그라미, 아주 크게 확대했을 때만 글자를 함께(주차장, TASK-024). top이면 다른 표시보다 위에.
@@ -431,50 +435,52 @@ export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: Faci
   const renderer = canvasSupported() ? L.canvas({ pane: "facilities", padding: 0.5, tolerance: 6 }) : L.svg({ pane: "facilities" });
   for (const p of points) {
     const style = FACILITY_STYLE[p.type];
-    if (p.pin) {
-      // 주유소: 반경 안 수십 곳이라 DOM 표시로 그린다. 글자는 고정 상표 표시와 숫자뿐(원천 이름은 카드에서만 textContent로).
-      const m = L.marker([p.lat, p.lng], { icon: gasPinIcon(p.pin), keyboard: false, title: p.name, zIndexOffset: p.pin.low ? 1000 : p.type === "TOUR" ? 800 : p.pin.top ? 500 : 0 })
-        // 큰 카드(관광지·숙소)는 지도 폭·높이에 맞춰 넓고 길게, 넘치면 안에서 넘긴다(TASK-026 점검: 위가 잘림).
-        .bindPopup(() => popupCard(p.card ?? facilityCard(p)), {
-          offset: p.pin.dot ? [0, -8] : [0, -30],
-          maxWidth: p.card?.size === "lg" ? 360 : undefined,
-          maxHeight: p.card?.size === "lg" || p.loadCard ? Math.max(260, map.getSize().y - 100) : undefined,
-        })
-        .addTo(layer);
-      // 카드 위가 지도 밖으로 잘리면 지도를 내린다. Leaflet 자동 이동은 열 때 이동 직후의 맞춤을 건너뛰고
-      // 목록에서 고를 때의 화면 이동과 겹치므로, 움직임이 끝난 뒤(0.3초) 직접 맞춘다.
-      const fitTop = () =>
-        setTimeout(() => {
-          const el = m.isPopupOpen() ? m.getPopup()?.getElement() : undefined;
-          if (!el) return;
-          const top = el.getBoundingClientRect().top - map.getContainer().getBoundingClientRect().top;
-          if (top < 10) map.panBy([0, top - 10]);
-        }, 300);
-      if (p.card?.size === "lg") {
-        // 큰 카드가 열려 있는 동안은 지도 위 버튼(확대·제주 전체)을 감춰 카드를 가리지 않게 한다.
-        m.on("popupopen", () => {
-          map.getContainer().classList.add("popup-lg-open");
-          fitTop();
-        });
-        m.on("popupclose", () => map.getContainer().classList.remove("popup-lg-open"));
-      }
-      const load = p.loadCard;
-      if (load) {
-        m.on("popupopen", () =>
-          void load().then((card) => {
-            if (!m.isPopupOpen()) return;
-            m.setPopupContent(popupCard(card));
-            fitTop();
-          }),
-        );
-      }
-      byId.set(p.id, m);
-      continue;
+    const large = p.large ?? p.card?.size === "lg";
+    const m: L.Marker | L.CircleMarker = p.pin
+      ? // 주유소: 반경 안 수십 곳이라 DOM 표시로 그린다. 글자는 고정 상표 표시와 숫자뿐(원천 이름은 카드에서만 textContent로).
+        L.marker([p.lat, p.lng], { icon: gasPinIcon(p.pin), keyboard: false, title: p.name, zIndexOffset: p.pin.low ? 1000 : p.type === "TOUR" ? 800 : p.pin.top ? 500 : 0 })
+      : // 점이 수천 개라 캔버스로, 구간 선 위·사건 점 아래 칸에 그린다.
+        L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: style.stroke ? 6 : 5, color: style.stroke ?? "#fff", weight: style.stroke ? 2 : 1.5, fillColor: style.color, fillOpacity: 1 });
+    // 카드는 누를 때 만든다. 큰 카드(관광지·숙소)는 지도 폭·높이에 맞춰 넓고 길게, 넘치면 안에서 넘긴다(TASK-026 점검: 위가 잘림).
+    m.bindPopup(() => popupCard(p.cardFn?.() ?? p.card ?? facilityCard(p)), {
+      offset: p.pin ? (p.pin.dot ? [0, -8] : [0, -30]) : undefined,
+      maxWidth: large ? 360 : undefined,
+      maxHeight: large || p.loadCard ? Math.max(260, map.getSize().y - 100) : undefined,
+    }).addTo(layer);
+    // 카드 위(또는 옆)가 지도 밖으로 잘리면 지도를 옮긴다. Leaflet 자동 이동은 열 때 이동 직후의 맞춤을 건너뛰고
+    // 목록에서 고를 때의 화면 이동과 겹치므로, 움직임이 끝난 뒤(0.3초) 직접 맞춘다.
+    const fitTop = () =>
+      setTimeout(() => {
+        const el = m.isPopupOpen() ? m.getPopup()?.getElement() : undefined;
+        if (!el) return;
+        const box = map.getContainer().getBoundingClientRect();
+        const r = el.getBoundingClientRect();
+        const top = r.top - box.top;
+        // 왼쪽·오른쪽도 잘리면 맞춘다(관광 검색: 지도 가장자리 관광지를 목록에서 고를 때, TASK-031 점검).
+        const left = r.left - box.left;
+        const right = box.right - r.right;
+        const dx = left < 10 ? left - 10 : right < 10 ? 10 - right : 0;
+        const dy = top < 10 ? top - 10 : 0;
+        if (dx || dy) map.panBy([dx, dy]);
+      }, 300);
+    if (large) {
+      // 큰 카드가 열려 있는 동안은 지도 위 버튼(확대·제주 전체)을 감춰 카드를 가리지 않게 한다.
+      m.on("popupopen", () => {
+        map.getContainer().classList.add("popup-lg-open");
+        fitTop();
+      });
+      m.on("popupclose", () => map.getContainer().classList.remove("popup-lg-open"));
     }
-    const m = L.circleMarker([p.lat, p.lng], { renderer, pane: "facilities", radius: style.stroke ? 6 : 5, color: style.stroke ?? "#fff", weight: style.stroke ? 2 : 1.5, fillColor: style.color, fillOpacity: 1 })
-      // 카드는 누를 때 만든다(점이 수천 개).
-      .bindPopup(() => popupCard(p.card ?? facilityCard(p)))
-      .addTo(layer);
+    const load = p.loadCard;
+    if (load) {
+      m.on("popupopen", () =>
+        void load().then((card) => {
+          if (!m.isPopupOpen()) return;
+          m.setPopupContent(popupCard(card));
+          fitTop();
+        }),
+      );
+    }
     byId.set(p.id, m);
   }
   return byId;

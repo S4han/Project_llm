@@ -229,3 +229,11 @@ body {
   inset: -10px;
   border-radius: 9999px;
 }
+
+/* 관광 검색 관광지 이름(TASK-031): 많이 확대했을 때 점 오른쪽에. 누를 수 없고 점을 가리지 않는다. */
+.map-label-wrap {
+  pointer-events: none;
+}
+.map-label {
+  @apply absolute left-2 top-[-9px] whitespace-nowrap rounded-md bg-white/90 px-1.5 text-[11px] font-semibold leading-[18px] text-grey-800 shadow-sm;
+}

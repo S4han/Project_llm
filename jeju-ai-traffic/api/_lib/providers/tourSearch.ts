@@ -1,5 +1,5 @@
 import type { FeedCategory, PetTag, SearchCategory, SearchDetailResponse, SearchFeed, SearchPetResponse, SearchRow } from "../../../shared/contracts/search.js";
-import { isInJeju, isJejuAddress, JEJU_BOUNDS } from "../../../shared/rules/geo.js";
+import { isInJeju } from "../../../shared/rules/geo.js";
 import { ProviderError } from "../errors.js";
 import { serviceKeyParam } from "./jejuCityEnforcement.js";
 import { imageUrl, ktoItems, plainText } from "./ktoTour.js";
@@ -8,7 +8,7 @@ import { stayPhoto } from "./visitJejuStay.js";
 /**
  * 관광 통합 검색(TASK-029)의 출처 어댑터. 출처마다 따로 실패하고(장애 격리) 같은 모양(SearchRow)으로 바꾼다.
  * TASK-029 시험: 비짓제주 관광지 c1 1,298곳(13쪽)·숙박 c3 916곳(10쪽)·음식점 c4 1,841곳(19쪽),
- * 한국관광공사 제주 음식점(39) 394곳, 카카오 로컬 카페(CE7) 정상.
+ * 한국관광공사 제주 음식점(39) 394곳. 카카오 실시간 검색은 TASK-031에서 뺐다.
  */
 const TIMEOUT_MS = 20_000;
 const INTRO_MAX = 120;
@@ -319,78 +319,6 @@ export function createMockPetProvider(): PetProvider & { calls: number } {
   };
 }
 
-// ── 카카오 로컬(실시간, 저장하지 않음) ─────────────────────
-const KAKAO_GROUP: Partial<Record<string, SearchCategory>> = { FD6: "RESTAURANT", CE7: "CAFE", AT4: "ATTRACTION", AD5: "ACCOMMODATION" };
-export const KAKAO_CODE: Partial<Record<SearchCategory, string>> = { RESTAURANT: "FD6", CAFE: "CE7" };
-
-/** 카카오 키워드·카테고리 검색 응답 → 음식점·카페(그 밖의 분류와 제주 밖은 버림). */
-export function normalizeKakaoSearch(body: unknown): SearchRow[] {
-  const documents = (body as { documents?: unknown } | null)?.documents;
-  if (!Array.isArray(documents)) throw new ProviderError("unavailable", "kakaoLocal: documents 없음");
-  const rows: SearchRow[] = [];
-  for (const d of documents as Record<string, unknown>[]) {
-    const id = text(d.id);
-    const name = text(d.place_name);
-    const lat = Number.parseFloat(text(d.y));
-    const lng = Number.parseFloat(text(d.x));
-    const address = text(d.road_address_name) || text(d.address_name);
-    const cat = KAKAO_GROUP[text(d.category_group_code)];
-    if (!id || !name || (cat !== "RESTAURANT" && cat !== "CAFE") || !isInJeju({ lat, lng }) || !isJejuAddress(text(d.address_name))) continue;
-    const kind = text(d.category_name).split(">").map((s) => s.trim()).filter(Boolean).slice(1).join(",");
-    rows.push([`kakaoLocal:${id}`, cat, name, address, lat, lng, text(d.phone), "", "", kind, [["kakaoLocal", id]], false, ""]);
-  }
-  return rows;
-}
-
-export interface LiveSearchProvider {
-  /** 검색어(있으면 키워드 검색) 또는 기준 위치(카테고리 검색, 반경 3km). codes는 FD6·CE7 가운데 부를 것. 호출 수 = codes 수(검색어면 1). */
-  search(input: { q: string; codes: string[]; origin: { lat: number; lng: number } | null; radius: number }): Promise<SearchRow[]>;
-}
-
-export function createKakaoLiveProvider(apiKey: string, fetchImpl: typeof fetch = fetch): LiveSearchProvider {
-  const get = async (url: URL) => {
-    let res: Response;
-    try {
-      res = await fetchImpl(url, { headers: { Authorization: `KakaoAK ${apiKey}` }, signal: AbortSignal.timeout(5000) });
-    } catch {
-      throw new ProviderError("unavailable", "kakaoLocal 연결 실패");
-    }
-    if (res.status === 429) throw new ProviderError("rate_limited", "kakaoLocal 429");
-    if (!res.ok) throw new ProviderError("unavailable", `kakaoLocal ${res.status}`);
-    return normalizeKakaoSearch(await res.json());
-  };
-  const rect = [JEJU_BOUNDS.minLng, JEJU_BOUNDS.minLat, JEJU_BOUNDS.maxLng, JEJU_BOUNDS.maxLat].join(",");
-  return {
-    async search({ q, codes, origin, radius }) {
-      if (q) {
-        const url = new URL("https://dapi.kakao.com/v2/local/search/keyword.json");
-        url.searchParams.set("query", q);
-        url.searchParams.set("size", "15");
-        if (codes.length === 1) url.searchParams.set("category_group_code", codes[0]!);
-        if (origin) {
-          url.searchParams.set("x", String(origin.lng));
-          url.searchParams.set("y", String(origin.lat));
-        } else url.searchParams.set("rect", rect);
-        return get(url);
-      }
-      if (!origin) return [];
-      const lists = await Promise.all(
-        codes.map((code) => {
-          const url = new URL("https://dapi.kakao.com/v2/local/search/category.json");
-          url.searchParams.set("category_group_code", code);
-          url.searchParams.set("x", String(origin.lng));
-          url.searchParams.set("y", String(origin.lat));
-          url.searchParams.set("radius", String(radius));
-          url.searchParams.set("sort", "distance");
-          url.searchParams.set("size", "15");
-          return get(url);
-        }),
-      );
-      return lists.flat();
-    },
-  };
-}
-
 // ── 개발용 모의 ───────────────────────────────────────────
 /** 모의 장소(실제 장소가 아니다). 비짓제주·관광공사에 같은 "모의 사라봉"이 있어 합치기를 확인할 수 있다. */
 export function createMockFeeds(): FeedProvider[] {
@@ -413,19 +341,4 @@ export function createMockFeeds(): FeedProvider[] {
   return (["visitJeju", "kto"] as const).flatMap((source) =>
     (["ATTRACTION", "ACCOMMODATION", "RESTAURANT"] as const).map((category) => ({ feed: { source, category }, mock: true, fetch: async () => (source === "visitJeju" ? vj : kto)[category] })),
   );
-}
-
-export function createMockLiveProvider(): LiveSearchProvider & { calls: number } {
-  const rows: SearchRow[] = [
-    ["kakaoLocal:MOCK-L1", "CAFE", "모의 시청 커피", "제주시 모의동 70", 33.4995, 126.5315, "064-000-0070", "", "", "카페,커피전문점", [["kakaoLocal", "MOCK-L1"]], false, ""],
-    ["kakaoLocal:MOCK-L2", "RESTAURANT", "모의 고기국수", "제주시 모의동 50", 33.5006, 126.5307, "064-000-0050", "", "", "한식,국수", [["kakaoLocal", "MOCK-L2"]], false, ""],
-  ];
-  return {
-    calls: 0,
-    async search({ q, codes }) {
-      this.calls += 1;
-      const want = new Set<SearchCategory>(codes.map((c) => (c === "CE7" ? "CAFE" : "RESTAURANT")));
-      return rows.filter((r) => want.has(r[1]) && (!q || r[2].includes(q) || r[9].includes(q)));
-    },
-  };
 }

@@ -5,9 +5,9 @@ export type SearchCategory = "ATTRACTION" | "ACCOMMODATION" | "RESTAURANT" | "CA
 export const SEARCH_CATEGORIES: SearchCategory[] = ["ATTRACTION", "ACCOMMODATION", "RESTAURANT", "CAFE"];
 export const SEARCH_CATEGORY_LABEL: Record<SearchCategory, string> = { ATTRACTION: "관광지", ACCOMMODATION: "숙박", RESTAURANT: "음식점", CAFE: "카페" };
 
-/** 출처: 비짓제주(제주관광공사)·한국관광공사·카카오 로컬·한국관광공사 반려동물 동반여행(TASK-030). */
-export type SearchSource = "visitJeju" | "kto" | "kakaoLocal" | "ktoPet";
-export const SEARCH_SOURCE_LABEL: Record<SearchSource, string> = { visitJeju: "비짓제주", kto: "한국관광공사", kakaoLocal: "카카오", ktoPet: "관광공사 반려동물" };
+/** 출처: 비짓제주(제주관광공사)·한국관광공사·한국관광공사 반려동물 동반여행(TASK-030). 카카오 실시간은 TASK-031에서 뺐다. */
+export type SearchSource = "visitJeju" | "kto" | "ktoPet";
+export const SEARCH_SOURCE_LABEL: Record<SearchSource, string> = { visitJeju: "비짓제주", kto: "한국관광공사", ktoPet: "관광공사 반려동물" };
 
 /** 출처 하나의 원천 번호. 같은 장소로 합친 곳은 여러 개(참고 PRD sourceRefs). */
 export type SearchSourceRef = [SearchSource, string];
@@ -25,7 +25,7 @@ export type SearchRow = [string, SearchCategory, string, string, number, number,
 /** 하루 한 번 서버가 모으는 출처의 묶음 하나(예: 비짓제주 음식점). 반려동물 동반여행 목록은 카테고리가 섞여 있어 category가 없다. */
 export type FeedCategory = Exclude<SearchCategory, "CAFE">;
 export interface SearchFeed {
-  source: Exclude<SearchSource, "kakaoLocal">;
+  source: SearchSource;
   category?: FeedCategory;
 }
 
@@ -34,13 +34,6 @@ export interface SearchIndexResponse {
   places: SearchRow[];
   missing: SearchFeed[];
   builtAt: IsoDateTime;
-  mock: boolean;
-}
-
-/** GET /api/traffic/search?q=…|lat=&lng= 응답: 카카오 로컬 실시간 음식점·카페(저장하지 않음, TASK-029 2.(a)). */
-export interface SearchLiveResponse {
-  places: SearchRow[];
-  observedAt: IsoDateTime;
   mock: boolean;
 }
 
