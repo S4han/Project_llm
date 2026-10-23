@@ -578,7 +578,7 @@ function DashCard({ title, mark, value, sub, onClick, small = false, cta = "지�
  * 제주 ITS 실시간 교통 현황(TASK-012). 화면이 켜져 있을 때만 1분마다 다시 조회한다.
  * view가 home이면 지도 없는 대시보드 카드, 그 밖이면 그 항목만 지도에 보이는 페이지(TASK-025). 화면을 바꿔도 받은 자료와 위치는 그대로 둔다.
  */
-export function TrafficDashboard({ view, around = null, onNavigate }: { view: TrafficView; around?: Around | null; onNavigate: (view: TrafficView, around?: Around | null) => void }) {
+export function TrafficDashboard({ view, around = null, onNavigate }: { view: Exclude<TrafficView, "start" | "nearby">; around?: Around | null; onNavigate: (view: TrafficView, around?: Around | null) => void }) {
   const [state, setState] = useState<DashboardState>({ snapshot: null, problem: null, loading: true });
   const [speeds, setSpeeds] = useState<TrafficSpeedsResponse | null>(null);
   const [links, setLinks] = useState<TrafficLinksResponse["links"] | null>(null);
@@ -1242,12 +1242,16 @@ export function TrafficDashboard({ view, around = null, onNavigate }: { view: Tr
     return (
       <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-4 bg-grey-100 p-4 md:max-w-5xl">
         <main className="flex flex-col gap-4">
+          {/* 교통 현황(TASK-032부터 /traffic): 첫 화면은 단순한 시작 화면, 카드 전체는 여기. */}
           <div className="flex items-center justify-between gap-2">
-            <h1 className="text-[26px] font-bold tracking-tight text-grey-900">제주 실시간 교통 현황</h1>
+            <button type="button" onClick={() => onNavigate("start")} className="text-sm font-semibold text-brand-700">
+              ← 홈
+            </button>
             <a href="/route" className="shrink-0 text-sm font-semibold text-brand-700">
               경로 추천 →
             </a>
           </div>
+          <h1 className="text-[26px] font-bold tracking-tight text-grey-900">제주 실시간 교통 현황</h1>
           {statusRow}
           {alerts}
           <section aria-labelledby="dash-speeds" className="flex flex-col gap-2">
@@ -1328,7 +1332,7 @@ export function TrafficDashboard({ view, around = null, onNavigate }: { view: Tr
     );
   }
 
-  // 항목별 지도 페이지(TASK-025 2.(a)): 위에 "← 대시보드"·제목, 지도에는 그 항목만, 아래(넓은 화면은 오른쪽)에 그 항목의 목록.
+  // 항목별 지도 페이지(TASK-025 2.(a)): 위에 "← 교통 현황"(TASK-032 전에는 "← 대시보드")·제목, 지도에는 그 항목만, 아래(넓은 화면은 오른쪽)에 그 항목의 목록.
   const nearbyView = isNearbyView(view) ? view : null;
   const nearbyNote: Record<"ENF" | "PARK" | "GAS" | "LPG" | "EV" | "TOUR", string> = {
     ENF: `제주시 자료(공공데이터포털)로 서귀포시는 없고, 위치·운영 시간만 있습니다${enforcement?.source === "mock" ? "(모의 데이터)" : ""}.`,
@@ -1348,7 +1352,7 @@ export function TrafficDashboard({ view, around = null, onNavigate }: { view: Tr
       <main className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[auto_auto_auto_auto_auto_auto_1fr]">
         <div className={`flex items-center gap-2 ${PANEL}`}>
           <button type="button" onClick={() => onNavigate("home")} className="min-h-12 shrink-0 rounded-2xl bg-white px-3 font-semibold text-grey-700">
-            ← 대시보드
+            ← 교통 현황
           </button>
           <h1 className="min-w-0 truncate text-[22px] font-bold tracking-tight text-grey-900">{VIEW_TITLE[view]}</h1>
         </div>

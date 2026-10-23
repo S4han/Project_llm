@@ -427,12 +427,26 @@ function gasPinIcon(pin: NonNullable<FacilityPoint["pin"]>): L.DivIcon {
   return L.divIcon({ html: root, className: "gas-pin-wrap", iconSize: [0, 0] });
 }
 
+/**
+ * 시설물 점을 그리는 캔버스는 지도마다 하나만 만들어 다시 쓴다. 점을 다시 그릴 때마다 새로 만들면
+ * 빈 캔버스가 칸에 쌓여 메모리를 쓰고 움직일 때마다 함께 다시 그려진다(TASK-032 점검).
+ */
+const facilityRenderers = new WeakMap<L.Map, L.Renderer>();
+function facilityRenderer(map: L.Map): L.Renderer {
+  let r = facilityRenderers.get(map);
+  if (!r) {
+    r = canvasSupported() ? L.canvas({ pane: "facilities", padding: 0.5, tolerance: 6 }) : L.svg({ pane: "facilities" });
+    facilityRenderers.set(map, r);
+  }
+  return r;
+}
+
 /** 교통시설물 점(유형별 색). 수백~수천 개라 캔버스로, 구간 선 위·사건 점 아래 칸에 그린다. 누르면 카드 팝업. */
 /** 점을 그리고 ID → 표시를 돌려준다(목록에서 고른 주유소의 카드를 여는 데 쓴다, TASK-018). */
 export function addFacilityMarkers(map: L.Map, layer: L.LayerGroup, points: FacilityPoint[]): Map<string, L.Marker | L.CircleMarker> {
   const byId = new Map<string, L.Marker | L.CircleMarker>();
   if (!map.getPane("facilities")) map.createPane("facilities").style.zIndex = "380";
-  const renderer = canvasSupported() ? L.canvas({ pane: "facilities", padding: 0.5, tolerance: 6 }) : L.svg({ pane: "facilities" });
+  const renderer = facilityRenderer(map);
   for (const p of points) {
     const style = FACILITY_STYLE[p.type];
     const large = p.large ?? p.card?.size === "lg";

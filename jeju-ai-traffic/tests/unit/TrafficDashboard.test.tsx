@@ -191,8 +191,8 @@ function stubLocation(at: { lat: number; lng: number } | null) {
 
 const counts = () => within(screen.getByRole("list", { name: "종류별 건수" })).getAllByRole("button").map((b) => b.textContent);
 
-/** 주소를 정하고 교통 현황을 연다(TASK-025: 대시보드 /, 항목별 지도 /map/…). */
-function openAt(path = "/") {
+/** 주소를 정하고 교통 현황을 연다(TASK-025: 대시보드, TASK-032부터 /traffic, 항목별 지도 /map/…). */
+function openAt(path = "/traffic") {
   window.history.pushState(null, "", path);
   return render(<TrafficApp />);
 }
@@ -200,17 +200,18 @@ const map = () => screen.getByRole("region", { name: "교통 현황 지도" });
 const status = () => screen.getByRole("status", { name: "내 위치 주변 조회 범위" });
 
 describe("대시보드와 화면 전환 (TASK-025)", () => {
-  it("주소 → 화면: /·/traffic·모르는 주소는 대시보드", () => {
-    expect(viewFromPath("/")).toBe("home");
+  it("주소 → 화면: /는 첫 화면, /traffic은 교통 현황 카드, /nearby는 내 주변 고르기, 모르는 주소는 첫 화면(TASK-032)", () => {
+    expect(viewFromPath("/")).toBe("start");
     expect(viewFromPath("/traffic")).toBe("home");
+    expect(viewFromPath("/nearby/")).toBe("nearby");
     expect(viewFromPath("/map/parking")).toBe("PARK");
     expect(viewFromPath("/map/congested/")).toBe("congested");
-    expect(viewFromPath("/map/nothing")).toBe("home");
+    expect(viewFromPath("/map/nothing")).toBe("start");
   });
 
   it("대시보드 카드: 도로 소통 3장, 내 위치 기준 주변 5장, 그 밖의 정보 2장, 지도 없음, 경로 추천 링크와 고지", async () => {
     stubLocation({ lat: 33.502, lng: 126.536 });
-    openAt("/");
+    openAt("/traffic");
     const card = (name: RegExp) => screen.getByRole("button", { name });
     await waitFor(() => expect(card(/^원활/).textContent).toContain("1구간"));
     expect(within(screen.getByRole("list", { name: "도로 소통 카드" })).getAllByRole("button").map((b) => b.textContent)).toEqual([
@@ -238,24 +239,24 @@ describe("대시보드와 화면 전환 (TASK-025)", () => {
 
   it("위치를 허용하지 않으면 경고 없이 제주 전체 수", async () => {
     stubLocation(null);
-    openAt("/");
+    openAt("/traffic");
     await waitFor(() => expect(screen.getByRole("status", { name: "대시보드 위치 기준" }).textContent).toBe("위치 허용 시 내 주변 · 지금은 제주 전체"));
     await waitFor(() => expect(screen.getByRole("button", { name: /^주차장/ }).textContent).toBe("주차장2곳제주 전체 · 무료 1곳지도 보기 ›"));
     expect(screen.getByRole("button", { name: /^주정차 단속/ }).textContent).toBe("주정차 단속2곳제주시 전체지도 보기 ›");
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("카드를 누르면 주소가 바뀌고 그 항목 지도 페이지, '← 대시보드'·뒤로 가기로 돌아오며 위치는 한 번만 묻는다", async () => {
+  it("카드를 누르면 주소가 바뀌고 그 항목 지도 페이지, '← 교통 현황'·뒤로 가기로 돌아오며 위치는 한 번만 묻는다", async () => {
     const ask = stubLocation({ lat: 33.502, lng: 126.536 });
-    openAt("/");
+    openAt("/traffic");
     await waitFor(() => expect(screen.getByRole("button", { name: /^주차장/ }).textContent).toContain("1곳"));
     fireEvent.click(screen.getByRole("button", { name: /^주차장/ }));
     expect(window.location.pathname).toBe("/map/parking");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("주차장");
     expect(await screen.findByText("내 위치 반경 1km 안 주차장 1곳(무료 0곳)")).toBeTruthy();
     expect(map().getAttribute("data-facilities")).toBe("1");
-    fireEvent.click(screen.getByRole("button", { name: "← 대시보드" }));
-    expect(window.location.pathname).toBe("/");
+    fireEvent.click(screen.getByRole("button", { name: "← 교통 현황" }));
+    expect(window.location.pathname).toBe("/traffic");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("제주 실시간 교통 현황");
     // 뒤로 가기(popstate)
     act(() => {
@@ -605,7 +606,7 @@ describe("내 주변 페이지 (TASK-016~024 → TASK-025 /map/enforcement·park
     gasRespond = () => Response.json({ error: { code: "QUOTA_BLOCKED", message: "x", retryAfter: "2026-10-21T15:00:00.000Z" } }, { status: 429 });
     openAt("/map/gas");
     expect(await screen.findByText("오늘 주유소 조회 한도에 도달해 표시할 수 없습니다(10월 22일 00:00 이후 다시 확인).")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "← 대시보드" }));
+    fireEvent.click(screen.getByRole("button", { name: "← 교통 현황" }));
     expect(screen.getByRole("button", { name: /^주유소/ }).textContent).toBe("주유소–불러오지 못했습니다지도 보기 ›");
   });
 

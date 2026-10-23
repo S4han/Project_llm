@@ -9,8 +9,8 @@ import "./index.css";
 const root = document.getElementById("root");
 if (!root) throw new Error("#root 요소가 없습니다.");
 
-// 첫 화면(/)은 교통 현황 대시보드 카드, /map/…은 항목별 지도 페이지(TASK-025), /route는 경로 추천, /search는 관광 검색(TASK-029).
-// 이미 공유된 /traffic 주소도 대시보드를 연다. Vercel은 vercel.json rewrites로 같은 index.html을 준다.
+// 첫 화면(/)은 단순한 시작 화면(TASK-032), /traffic은 교통 현황 카드, /nearby는 내 주변 고르기, /map/…은 항목별 지도 페이지(TASK-025),
+// /route는 경로 추천, /search는 관광지 검색(TASK-029·031). Vercel은 vercel.json rewrites로 같은 index.html을 준다.
 const ROUTE_PATH = "/route";
 const SEARCH_PATH = "/search";
 const path = window.location.pathname.replace(/\/+$/, "");

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { NearbyPicker, StartPage } from "../home/StartPage";
 import { TrafficDashboard } from "./TrafficDashboard";
 import { aroundFromLocation, pathOf, viewFromPath, type Around, type TrafficView } from "./views";
 
@@ -21,5 +22,8 @@ export function TrafficApp() {
     setAt({ view, around: view === "TOUR" ? around : null });
     window.scrollTo(0, 0);
   }, []);
+  // 첫 화면(/)과 내 주변 고르기(/nearby)는 가벼운 화면(TASK-032). 교통 현황(/traffic)과 지도 페이지는 대시보드가 맡는다.
+  if (at.view === "start") return <StartPage onNavigate={navigate} />;
+  if (at.view === "nearby") return <NearbyPicker onNavigate={navigate} />;
   return <TrafficDashboard view={at.view} around={at.around} onNavigate={navigate} />;
 }

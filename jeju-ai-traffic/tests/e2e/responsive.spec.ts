@@ -24,8 +24,8 @@ for (const vp of WIDTHS) {
   test.describe(`${vp.name} ${vp.width}px`, () => {
     test.use({ viewport: { width: vp.width, height: vp.height } });
 
-    test("교통 현황: 대시보드 카드와 지도 페이지 배치, 가로 스크롤 없음 (TASK-025)", async ({ page }) => {
-      await page.goto("/");
+    test("교통 현황: 대시보드 카드와 지도 페이지 배치, 가로 스크롤 없음 (TASK-025, TASK-032부터 /traffic)", async ({ page }) => {
+      await page.goto("/traffic");
       const speedCards = page.getByRole("list", { name: "도로 소통 카드" }).getByRole("button");
       await expect(speedCards.first()).toContainText("2구간");
       await expect(page.getByRole("list", { name: "내 주변 카드" }).getByRole("button")).toHaveCount(5);

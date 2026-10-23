@@ -12,6 +12,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/nearby",
+      "destination": "/index.html"
+    },
+    {
       "source": "/route",
       "destination": "/index.html"
     },

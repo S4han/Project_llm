@@ -31,7 +31,7 @@ export function App() {
         <div className="flex items-center justify-between gap-2 md:col-start-1">
           <h1 className="text-[26px] font-bold tracking-tight text-grey-900">제주 AI 교통 경로 추천</h1>
           <a href="/" className="shrink-0 text-sm font-semibold text-brand-700">
-            ← 교통 현황
+            ← 홈
           </a>
         </div>
         <div className="md:col-start-1">

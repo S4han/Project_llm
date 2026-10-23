@@ -7,15 +7,16 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모의 사건)", () => {
-  test("대시보드 → 경로 화면 링크, 카드 → 항목별 지도 페이지 → 대시보드·뒤로 가기 (TASK-025)", async ({ page }) => {
-    // 첫 화면이 대시보드. 경로 추천으로 갔다가 돌아온다. 예전 /traffic 주소도 대시보드.
-    await page.goto("/");
+  test("교통 현황 → 경로 화면 링크, 카드 → 항목별 지도 페이지 → 교통 현황·뒤로 가기 (TASK-025, TASK-032부터 /traffic)", async ({ page }) => {
+    // 교통 현황은 /traffic(TASK-032). 경로 추천으로 갔다가 "← 홈"으로 첫 화면에 돌아온다.
+    await page.goto("/traffic");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 실시간 교통 현황");
     await page.getByRole("link", { name: "경로 추천 →" }).click();
     await expect(page).toHaveURL(/\/route$/);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 AI 교통 경로 추천");
-    await page.getByRole("link", { name: "← 교통 현황" }).click();
+    await page.getByRole("link", { name: "← 홈" }).click();
     await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 교통·관광");
     await page.goto("/traffic");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 실시간 교통 현황");
     await expect(page.getByText(/조회 · 모의 데이터/)).toBeVisible();
@@ -58,9 +59,9 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await expect(map.locator("path.incident-marker")).toHaveCount(1);
     await expect(page.getByText(/번째 지점 표시 중|지점 표시 중/)).toHaveCount(0);
 
-    // ← 대시보드 버튼
-    await page.getByRole("button", { name: "← 대시보드" }).click();
-    await expect(page).toHaveURL(/\/$/);
+    // ← 교통 현황 버튼
+    await page.getByRole("button", { name: "← 교통 현황" }).click();
+    await expect(page).toHaveURL(/\/traffic$/);
     await expect(page.getByRole("list", { name: "도로 소통 카드" })).toBeVisible();
   });
 
@@ -68,8 +69,9 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await page.goto("/map/congested");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("도로 소통 · 정체");
     await expect(page.getByRole("region", { name: "교통 현황 지도" })).toHaveAttribute("data-speed-lines", "1");
+    // 모르는 주소는 첫 화면(TASK-032)
     await page.goto("/map/nothing");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 실시간 교통 현황");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 교통·관광");
   });
 
   test("조회 한도면 정보 미확보 안내 (응답 대체)", async ({ page }) => {
@@ -104,7 +106,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
       route.fulfill({ json: { status: "ok", observedAt: new Date().toISOString(), speeds: Object.fromEntries(ids.map((id, i) => [id, [i % 3 === 0 ? 10 : i % 3 === 1 ? 20 : 40, 60]])), source: "jejuIts", retryAfter: null } }),
     );
     await page.setViewportSize({ width: 360, height: 780 });
-    await page.goto("/");
+    await page.goto("/traffic");
     // 대시보드 카드와 지도 페이지 상태 칸 모두 한 줄
     const card = page.getByRole("button", { name: /^원활/ });
     await expect(card).toContainText("3,968구간");
@@ -135,7 +137,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
   });
 
   test("교통시설물: 기본 꺼짐, 유형을 누르면 지도에 표시 (TASK-013, 개발 서버 모의)", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/traffic");
     await page.getByRole("button", { name: /^CCTV 등 교통시설물/ }).click();
     await expect(page).toHaveURL(/\/map\/facilities$/);
     const list = page.getByRole("list", { name: "교통시설물 유형" });
@@ -152,7 +154,7 @@ test.describe("교통 현황 대시보드 /traffic (TASK-012, 개발 서버 모�
     await expect(map).toHaveAttribute("data-facilities", "2");
   });
   test("정체·서행 카드를 누르면 실시간 정체구간 목록, 누르면 지도 강조 (TASK-015, 개발 서버 모의)", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/traffic");
     await page.getByRole("button", { name: /^정체/ }).click();
     const speedCards = page.getByRole("list", { name: "구간 소통 건수" }).getByRole("button");
     await expect(speedCards).toHaveText(["원활2", "서행1", "정체1"]);
@@ -184,7 +186,7 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
 
   test("대시보드 내 주변 카드는 내 위치 기준 요약, 주정차 단속 페이지는 반경 1km 안만·원과 내 위치 (TASK-016·025)", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/");
+    await page.goto("/traffic");
     await expect(page.getByRole("status", { name: "대시보드 위치 기준" })).toHaveText("내 위치 기준(이 기기에서만 사용)");
     const cards = page.getByRole("list", { name: "내 주변 카드" }).getByRole("button");
     await expect(cards).toHaveText([
@@ -265,7 +267,7 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
     await expect(free.locator("strong")).toBeVisible();
     expect((await free.boundingBox())!.width).toBeGreaterThan(40);
     // 크게 확대해 원 밖 표시가 화면 밖으로 나가 있으니, 반경 원 전체 보기로 되돌린다(대시보드에 갔다가 다시 열기)
-    await page.getByRole("button", { name: "← 대시보드" }).click();
+    await page.getByRole("button", { name: "← 교통 현황" }).click();
     await page.getByRole("button", { name: /^주차장/ }).click();
     await expect(map).not.toHaveClass(/map-near/);
     if (process.env.SCREENSHOTS === "TASK-022") await map.screenshot({ path: "reports/screenshots/TASK-022-01-parking-fee.png" });
@@ -407,7 +409,7 @@ test.describe("내 위치 반경: 주정차 단속·주차장·주유소·LPG·�
 
   test("관광지(TASK-026): 대시보드 카드 → 반경 5km 지도·가까운 순 목록, 누르면 이용시간·주차 카드", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/");
+    await page.goto("/traffic");
     const card = page.getByRole("button", { name: /^관광지(?! 검색)/ });
     await expect(card).toHaveText("관광지2곳반경 5km 안지도 보기 ›");
     await card.click();

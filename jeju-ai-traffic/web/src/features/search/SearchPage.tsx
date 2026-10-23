@@ -278,7 +278,7 @@ export function SearchPage() {
       <main className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           <a href="/" className="text-sm font-semibold text-brand-700">
-            ← 대시보드
+            ← 홈
           </a>
           <a href="/route" className="text-sm font-semibold text-brand-700">
             경로 추천 →

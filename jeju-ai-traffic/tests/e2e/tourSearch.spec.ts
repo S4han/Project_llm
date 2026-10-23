@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
 test.describe("관광지 검색 /search (TASK-031)", () => {
   test("처음엔 관광지 전체 → 관광지만 검색 → 카드(운영시간·주차·소요시간·반려동물·주변 맛집·숙소) → 주변 맛집·숙소 지도", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: /^관광지 검색/ }).click();
+    await page.getByRole("button", { name: /^관광지\s*검색·주변 정보/ }).click();
     await expect(page).toHaveURL(/\/search$/);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("제주 관광지 검색");
     await expect(page.getByRole("status", { name: "검색 자료 상태" })).toContainText("제주 관광지 3곳(모의 데이터)");
@@ -95,7 +95,8 @@ test.describe("관광지 검색 /search (TASK-031)", () => {
     await page.goto("/search");
     await expect(page.getByRole("region", { name: "관광지 검색 지도" })).toHaveAttribute("data-facilities", "3");
     // 캔버스에 그린 관광지 점(#4f46e5)을 화면 좌표로 찾는다.
-    const dot = await page.evaluate(() => {
+    // 점은 다음 화면 갱신 때 캔버스에 그려지므로 보일 때까지 기다린다.
+    const findDot = () => page.evaluate(() => {
       const canvas = document.querySelector<HTMLCanvasElement>(".leaflet-facilities-pane canvas");
       const ctx = canvas?.getContext("2d");
       if (!canvas || !ctx) return null;
@@ -108,7 +109,10 @@ test.describe("관광지 검색 /search (TASK-031)", () => {
         }
       return null;
     });
-    expect(dot).not.toBeNull();
+    await expect.poll(findDot).not.toBeNull();
+    // 다시 그려도 캔버스는 하나(TASK-032 점검: 빈 캔버스가 쌓이던 문제)
+    await expect(page.locator(".leaflet-facilities-pane canvas")).toHaveCount(1);
+    const dot = await findDot();
     await page.mouse.click(dot!.x, dot!.y);
     const card = page.locator(".leaflet-popup .popup-card-lg");
     await expect(card).toBeVisible();
