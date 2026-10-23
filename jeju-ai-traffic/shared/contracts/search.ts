@@ -5,9 +5,9 @@ export type SearchCategory = "ATTRACTION" | "ACCOMMODATION" | "RESTAURANT" | "CA
 export const SEARCH_CATEGORIES: SearchCategory[] = ["ATTRACTION", "ACCOMMODATION", "RESTAURANT", "CAFE"];
 export const SEARCH_CATEGORY_LABEL: Record<SearchCategory, string> = { ATTRACTION: "관광지", ACCOMMODATION: "숙박", RESTAURANT: "음식점", CAFE: "카페" };
 
-/** 출처: 비짓제주(제주관광공사)·한국관광공사·카카오 로컬. */
-export type SearchSource = "visitJeju" | "kto" | "kakaoLocal";
-export const SEARCH_SOURCE_LABEL: Record<SearchSource, string> = { visitJeju: "비짓제주", kto: "한국관광공사", kakaoLocal: "카카오" };
+/** 출처: 비짓제주(제주관광공사)·한국관광공사·카카오 로컬·한국관광공사 반려동물 동반여행(TASK-030). */
+export type SearchSource = "visitJeju" | "kto" | "kakaoLocal" | "ktoPet";
+export const SEARCH_SOURCE_LABEL: Record<SearchSource, string> = { visitJeju: "비짓제주", kto: "한국관광공사", kakaoLocal: "카카오", ktoPet: "관광공사 반려동물" };
 
 /** 출처 하나의 원천 번호. 같은 장소로 합친 곳은 여러 개(참고 PRD sourceRefs). */
 export type SearchSourceRef = [SearchSource, string];
@@ -22,10 +22,11 @@ export type PetTag = "YES" | "NO" | "";
  */
 export type SearchRow = [string, SearchCategory, string, string, number, number, string, string, string, string, SearchSourceRef[], boolean, PetTag];
 
-/** 하루 한 번 서버가 모으는 출처의 묶음 하나(예: 비짓제주 음식점). */
+/** 하루 한 번 서버가 모으는 출처의 묶음 하나(예: 비짓제주 음식점). 반려동물 동반여행 목록은 카테고리가 섞여 있어 category가 없다. */
+export type FeedCategory = Exclude<SearchCategory, "CAFE">;
 export interface SearchFeed {
   source: Exclude<SearchSource, "kakaoLocal">;
-  category: Exclude<SearchCategory, "CAFE">;
+  category?: FeedCategory;
 }
 
 /** GET /api/traffic/search 응답: 비짓제주·한국관광공사 장소를 합친 목록. missing은 이번에 못 받은 묶음(부분 결과). */
@@ -60,6 +61,34 @@ export interface SearchDetailResponse {
   info: string;
   builtAt: IsoDateTime;
   source: "kto" | "mock";
+}
+
+/**
+ * GET /api/traffic/search?pet=콘텐츠 ID 응답(TASK-030 2.(a)): 한국관광공사 반려동물 동반여행 상세(detailPetTour2).
+ * 원천 글자에서 HTML을 걷어 낸 값(없으면 ""). 등록되지 않은 장소면 모두 "".
+ */
+export interface SearchPetResponse {
+  id: string;
+  /** 동반 유형(예: "전구역 동반가능") acmpyTypeCd */
+  type: string;
+  /** 동반 가능 동물(예: "전 견종 동반 가능") acmpyPsblCpam */
+  animals: string;
+  /** 동반 시 필요 사항(예: "목줄 착용") acmpyNeedMtr */
+  need: string;
+  /** 기타 동반 정보 etcAcmpyInfo */
+  etc: string;
+  /** 관련 구비 시설 relaPosesFclty */
+  facilities: string;
+  /** 관련 비치 품목 relaFrnshPrdlst */
+  furnish: string;
+  /** 관련 대여 품목 relaRntlPrdlst */
+  rental: string;
+  /** 관련 구매 품목 relaPurcPrdlst */
+  purchase: string;
+  /** 관련 사고 대비 사항 relaAcdntRiskMtr */
+  risk: string;
+  builtAt: IsoDateTime;
+  source: "ktoPet" | "mock";
 }
 
 export const SEARCH_QUERY_MAX_LENGTH = 40;

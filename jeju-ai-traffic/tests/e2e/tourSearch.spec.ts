@@ -26,7 +26,8 @@ test.describe("관광 검색 /search (TASK-029)", () => {
     await expect(page.getByRole("region", { name: "관광 검색 지도" })).toHaveClass(/leaflet-container/);
     // 비짓제주 "모의 사라봉"과 관광공사 "모의 사라봉 (제주시)"은 이름이 같고 100m 안이라 한 곳
     await expect(results.getByRole("listitem")).toHaveCount(1);
-    await expect(results).toContainText("출처 비짓제주·한국관광공사");
+    await expect(results).toContainText("출처 비짓제주·한국관광공사·관광공사 반려동물");
+    await expect(results).toContainText("🐾 동반 가능(관광공사)");
     await results.getByRole("button", { name: /모의 사라봉/ }).click();
     const card = page.locator(".leaflet-popup .popup-card-lg");
     await expect(card).toContainText("관광지 · 비짓제주·한국관광공사");
@@ -34,7 +35,11 @@ test.describe("관광 검색 /search (TASK-029)", () => {
     // 범위 변경: 관광공사 소개정보를 카드를 열 때 받아 이용시간·주차·반려동물 칸에
     await expect(card.locator(".popup-card-tile").filter({ hasText: "이용시간" })).toContainText("상시 개방");
     await expect(card.locator(".popup-card-tile").filter({ hasText: "주차" })).toContainText("가능");
-    await expect(card.locator(".popup-card-tile").filter({ hasText: "반려동물" })).toContainText("동반 가능");
+    // TASK-030: 관광공사 반려동물 동반여행 상세가 먼저(동반 유형·필요한 것)
+    await expect(card.locator(".popup-card-tile").filter({ hasText: "반려동물" })).toContainText("전구역 동반가능");
+    await expect(card).toContainText("목줄 착용");
+    await expect(card).toContainText("관광지 · 비짓제주·한국관광공사·관광공사 반려동물");
+    await shot(page, "TASK-030-01-pet-card-390");
     await expect(card).toContainText("연중무휴");
     await expect(card.getByRole("link", { name: "비짓제주에서 자세히 보기 ↗" })).toHaveAttribute("href", "https://www.visitjeju.net/kr/detail/view?contentsid=MOCK-V1");
     await expect(card.getByRole("link", { name: "카카오맵 길찾기 ↗" })).toHaveAttribute("href", /^https:\/\/map\.kakao\.com\/link\/to\//);

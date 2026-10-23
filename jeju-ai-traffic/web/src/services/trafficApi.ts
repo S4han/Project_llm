@@ -1,6 +1,6 @@
 import type { ApiError, ApiErrorBody } from "../../../shared/contracts/common";
 import type { TrafficEnforcementResponse, TrafficEvResponse, TrafficFacilitiesResponse, TrafficGasResponse, TrafficParkingResponse, TrafficIncidentsResponse, TrafficLinksResponse, TrafficSpeedsResponse, TrafficStayResponse, TrafficTourDetailResponse, TrafficTourResponse } from "../../../shared/contracts/traffic";
-import type { SearchDetailResponse, SearchIndexResponse, SearchLiveResponse } from "../../../shared/contracts/search";
+import type { SearchDetailResponse, SearchIndexResponse, SearchLiveResponse, SearchPetResponse } from "../../../shared/contracts/search";
 
 export type TrafficIncidentsResult = { ok: true; data: TrafficIncidentsResponse } | { ok: false; error: ApiError };
 
@@ -126,5 +126,18 @@ export function fetchSearchDetail(id: string, cat: string): Promise<Result<Searc
     return r;
   });
   searchDetails.set(key, p);
+  return p;
+}
+
+const searchPets = new Map<string, Promise<Result<SearchPetResponse>>>();
+/** GET /api/traffic/search?pet=(TASK-030): 관광공사 반려동물 동반여행 상세. 카드를 열 때만, 이 화면에서는 한 번만(실패는 다시 받음). */
+export function fetchSearchPet(id: string): Promise<Result<SearchPetResponse>> {
+  const hit = searchPets.get(id);
+  if (hit) return hit;
+  const p = getJson<SearchPetResponse>(`/api/traffic/search?pet=${encodeURIComponent(id)}`, (b) => "animals" in b && "need" in b).then((r) => {
+    if (!r.ok) searchPets.delete(id);
+    return r;
+  });
+  searchPets.set(id, p);
   return p;
 }

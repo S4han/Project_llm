@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_BUDGETS, MemoryQuotaStore, QuotaGuard } from "../../api/_lib/policies/quota";
 import { RateLimiter } from "../../api/_lib/policies/rateLimit";
 import { TtlCache } from "../../api/_lib/policies/ttlCache";
-import { cleanTags, createKakaoLiveProvider, createKtoDetail, createKtoFeed, createMockDetail, createMockFeeds, createMockLiveProvider, createVisitJejuFeed, normalizeKakaoSearch, normalizeKtoIntro, normalizeKtoPage, normalizeVisitJejuPage, petTag, type FeedProvider } from "../../api/_lib/providers/tourSearch";
+import { cleanTags, createKakaoLiveProvider, createKtoDetail, createKtoFeed, createKtoPetProvider, createMockDetail, createMockFeeds, createMockLiveProvider, createMockPetProvider, createVisitJejuFeed, normalizeKakaoSearch, normalizeKtoIntro, normalizeKtoPage, normalizeKtoPet, normalizeKtoPetPage, normalizeVisitJejuPage, petCategory, petTag, type FeedProvider } from "../../api/_lib/providers/tourSearch";
 import { handleTrafficSearch, SEARCH_PARTIAL_TTL_MS, selectSearchProviders, type TrafficSearchDeps } from "../../api/_lib/trafficSearch";
-import type { SearchDetailResponse, SearchIndexResponse, SearchLiveResponse, SearchRow } from "../../shared/contracts/search";
-import { mergePlaces, normalizePlaceName } from "../../shared/rules/placeMerge";
+import type { SearchDetailResponse, SearchIndexResponse, SearchLiveResponse, SearchPetResponse, SearchRow } from "../../shared/contracts/search";
+import { attachPetPlaces, mergePlaces, normalizePlaceName } from "../../shared/rules/placeMerge";
 import { matchScore, searchPlaces } from "../../shared/rules/placeSearch";
 
 const NOW = new Date("2026-10-22T23:00:00.000Z");
@@ -127,6 +127,49 @@ describe("관광 통합 검색 출처 어댑터 (TASK-029)", () => {
   });
 });
 
+describe("관광공사 반려동물 동반여행 (TASK-030)", () => {
+  // TASK-030 시험 응답 표본(갑선이오름)
+  const PET_ITEM = { addr1: "제주특별자치도 서귀포시 표선면 가시리", addr2: "", cat3: "A01010400", contentid: "1887866", contenttypeid: "12", firstimage: "http://tong.visitkorea.or.kr/cms/resource/45/3523545_image2_1.jpg", cpyrhtDivCd: "Type3", mapx: "126.7818122232", mapy: "33.3608276172", tel: "", title: "갑선이오름", lclsSystm2: "NA01" };
+  const PET_DETAIL = { contentid: "1887866", relaAcdntRiskMtr: "", acmpyTypeCd: "전구역 동반가능", relaPosesFclty: "", relaFrnshPrdlst: "", etcAcmpyInfo: "- 길이 협소한 편\n- 맹견의 경우, 입마개 착용 필수", relaPurcPrdlst: "", acmpyPsblCpam: "전 견종 동반 가능", relaRntlPrdlst: "", acmpyNeedMtr: "목줄 착용" };
+
+  it("목록: 출처 ktoPet·반려동물 YES, 관광 타입으로 카테고리(숙박 32, 음식점 39, 그 밖 관광지)", () => {
+    expect(normalizeKtoPetPage(ktoPage([PET_ITEM]))).toEqual([["ktoPet:1887866", "ATTRACTION", "갑선이오름", "제주특별자치도 서귀포시 표선면 가시리", 33.3608276172, 126.7818122232, "", "https://tong.visitkorea.or.kr/cms/resource/45/3523545_image2_1.jpg", "", "", [["ktoPet", "1887866"]], false, "YES"]]);
+    expect([petCategory("32", "", ""), petCategory("28", "", ""), petCategory("14", "", ""), petCategory("39", "A05020900", ""), petCategory("39", "A05020100", "FD01")]).toEqual(["ACCOMMODATION", "ATTRACTION", "ATTRACTION", "CAFE", "RESTAURANT"]);
+  });
+
+  it("상세: 항목 이름 그대로, 등록되지 않은 번호는 모두 빈 값", async () => {
+    expect(normalizeKtoPet("1887866", ktoPage(PET_DETAIL))).toEqual({ id: "1887866", type: "전구역 동반가능", animals: "전 견종 동반 가능", need: "목줄 착용", etc: "- 길이 협소한 편\n- 맹견의 경우, 입마개 착용 필수", facilities: "", furnish: "", rental: "", purchase: "", risk: "", source: "ktoPet" });
+    const empty = { response: { header: { resultCode: "0000", resultMsg: "OK" }, body: { totalCount: 0, items: "" } } };
+    expect(normalizeKtoPet("2850913", empty).type).toBe("");
+    const urls: string[] = [];
+    const provider = createKtoPetProvider("k", (async (u: string) => (urls.push(u), Response.json(ktoPage([PET_ITEM])))) as unknown as typeof fetch);
+    await provider.fetchList();
+    await provider.fetchPet("1887866");
+    expect(urls[0]).toContain("/KorPetTourService2/areaBasedList2?");
+    expect(urls[0]).toContain("areaCode=39");
+    expect(urls[1]).toContain("/KorPetTourService2/detailPetTour2?");
+    expect(urls[1]).toContain("contentId=1887866");
+  });
+
+  it("붙이기: 같은 관광공사 번호 → 그 장소에, 없으면 이름 같고 100m 안 하나뿐 → 그 장소에, 없으면 새 장소", () => {
+    const kto = row("1887866", "ATTRACTION", "갑선이오름", 33.36, 126.78, "kto");
+    const vj = row("V9", "ACCOMMODATION", "숲속 펜션", 33.4, 126.5, "visitJeju", { phone: "064-9" });
+    const places = [kto, vj];
+    const pets: SearchRow[] = [
+      [...row("1887866", "ATTRACTION", "갑선이 오름(다른 이름)", 33.3608, 126.7818, "ktoPet")],
+      [...row("P2", "ACCOMMODATION", "숲속펜션", 33.4003, 126.5, "ktoPet", { phone: "064-0" })],
+      [...row("P3", "ATTRACTION", "새 장소", 33.45, 126.6, "ktoPet")],
+    ];
+    attachPetPlaces(places, pets);
+    expect(places).toHaveLength(3);
+    expect(places[0]![10]).toEqual([["kto", "1887866"], ["ktoPet", "1887866"]]);
+    expect(places[0]![12]).toBe("YES");
+    expect(places[1]![10]).toEqual([["visitJeju", "V9"], ["ktoPet", "P2"]]);
+    expect(places[1]![6]).toBe("064-9");
+    expect(places[2]![0]).toBe("ktoPet:P3");
+  });
+});
+
 describe("같은 장소 합치기·검색 (TASK-029 3.(a))", () => {
   it("이름 정리: 괄호 설명·띄어쓰기·문장부호 제거", () => {
     expect(normalizePlaceName("성산 일출봉 (UNESCO 세계자연유산)")).toBe("성산일출봉");
@@ -181,8 +224,10 @@ function deps(over: Partial<TrafficSearchDeps> = {}): TrafficSearchDeps {
     live: createMockLiveProvider(),
     liveMock: true,
     detail: createMockDetail(),
+    pet: createMockPetProvider(),
     cache: new TtlCache(24 * 60 * 60_000),
     detailCache: new TtlCache(30 * 24 * 60 * 60_000),
+    petCache: new TtlCache(30 * 24 * 60 * 60_000),
     guard: new QuotaGuard(new MemoryQuotaStore(), DEFAULT_BUDGETS, () => NOW),
     limiter: new RateLimiter(100, 60_000),
     now: () => NOW,
@@ -204,7 +249,7 @@ describe("GET /api/traffic/search (TASK-029)", () => {
     expect(body.missing).toEqual([]);
     const sarabong = body.places.filter((p) => p[2].startsWith("모의 사라봉"));
     expect(sarabong).toHaveLength(1);
-    expect(sarabong[0]![10]).toEqual([["visitJeju", "MOCK-V1"], ["kto", "MOCK-K1"]]);
+    expect(sarabong[0]![10]).toEqual([["visitJeju", "MOCK-V1"], ["kto", "MOCK-K1"], ["ktoPet", "MOCK-K1"]]);
     await get(d);
     expect(calls).toBe(6);
   });
@@ -222,7 +267,7 @@ describe("GET /api/traffic/search (TASK-029)", () => {
     clock += SEARCH_PARTIAL_TTL_MS + 1;
     await get(d);
     expect(calls).toBe(12);
-    const allDown = await get(deps({ feeds: createMockFeeds().map((f) => ({ ...f, fetch: async () => Promise.reject(new Error("down")) })) }));
+    const allDown = await get(deps({ feeds: createMockFeeds().map((f) => ({ ...f, fetch: async () => Promise.reject(new Error("down")) })), pet: { fetchList: async () => Promise.reject(new Error("down")), fetchPet: createMockPetProvider().fetchPet } }));
     expect(allDown.status).toBe(503);
   });
 
@@ -254,6 +299,24 @@ describe("GET /api/traffic/search (TASK-029)", () => {
     expect(detail.calls).toBe(1);
     expect((await get(d, "?kto=abc&cat=CAFE")).status).toBe(400);
     expect((await get(d, "?kto=123")).status).toBe(400);
+  });
+
+  it("반려동물(TASK-030): 목록에 붙이고(모의 사라봉 출처 3곳, 모의 승마장 추가), ?pet= 상세 30일, 목록 실패는 부분 결과", async () => {
+    const pet = createMockPetProvider();
+    const d = deps({ pet });
+    const body = (await (await get(d)).json()) as SearchIndexResponse;
+    const sarabong = body.places.find((p) => p[2].startsWith("모의 사라봉"));
+    expect(sarabong?.[10]).toEqual([["visitJeju", "MOCK-V1"], ["kto", "MOCK-K1"], ["ktoPet", "MOCK-K1"]]);
+    expect(sarabong?.[12]).toBe("YES");
+    expect(body.places.some((p) => p[0] === "ktoPet:MOCK-K9")).toBe(true);
+    const res = await get(d, "?pet=MOCK-K1");
+    expect(res.headers.get("Cache-Control")).toContain("s-maxage=2592000");
+    expect((await res.json()) as SearchPetResponse).toMatchObject({ type: "전구역 동반가능", need: "목줄 착용", source: "mock" });
+    await get(d, "?pet=MOCK-K1");
+    expect(pet.calls).toBe(2);
+    expect((await get(d, "?pet=x")).status).toBe(400);
+    const broken = deps({ pet: { fetchList: async () => Promise.reject(new Error("down")), fetchPet: pet.fetchPet } });
+    expect(((await (await get(broken)).json()) as SearchIndexResponse).missing).toEqual([{ source: "ktoPet" }]);
   });
 
   it("공급자 선택: 키 있는 출처만, 없으면 모의. 카카오는 PLACES_PROVIDER=kakao와 키가 모두 있을 때만", () => {

@@ -4,10 +4,10 @@ import { SEARCH_CATEGORY_LABEL, SEARCH_NEAR_RADIUS, SEARCH_QUERY_MAX_LENGTH, typ
 import { mergePlaces } from "../../../../shared/rules/placeMerge";
 import { searchPlaces, type SearchHit } from "../../../../shared/rules/placeSearch";
 import { getCurrentLocation } from "../../services/geolocation";
-import { fetchSearchDetail, fetchSearchIndex, fetchSearchLive, fetchTrafficParking } from "../../services/trafficApi";
+import { fetchSearchDetail, fetchSearchIndex, fetchSearchLive, fetchSearchPet, fetchTrafficParking } from "../../services/trafficApi";
 import type { FacilityPoint } from "../map/leafletMap";
 import { IncidentMap } from "../traffic/IncidentMap";
-import { AREAS, CATEGORY_STYLE, CHIPS, chipLabel, distText, feedLabel, ktoId, PAGE, placeCard, sourceNames, SUGGESTIONS, type Cat, type Origin, type ParkingLots } from "./searchCards";
+import { AREAS, CATEGORY_STYLE, CHIPS, chipLabel, distText, feedLabel, ktoId, PAGE, petId, placeCard, sourceNames, SUGGESTIONS, type Cat, type Origin, type ParkingLots } from "./searchCards";
 
 function readUrl(): { q: string; cat: Cat; pet: boolean } {
   const p = new URLSearchParams(window.location.search);
@@ -118,11 +118,17 @@ export function SearchPage() {
         pin: { mark: CATEGORY_STYLE[place[1]].mark, price: null, color: CATEGORY_STYLE[place[1]].color, low: false, dot: true, top: true },
         // 관광공사 자료가 있으면 카드를 열 때 운영시간·주차·반려동물을 받는다(범위 변경 2026-10-23).
         ...(() => {
+          // 관광공사 반려동물 동반여행에 등록된 곳은 반려동물 상세도 함께(TASK-030).
           const kto = ktoId(place);
-          if (!kto) return { card: placeCard(place, meters, at, origin?.name ?? null, null, lots) };
+          const pid = petId(place);
+          const name = origin?.name ?? null;
+          if (!kto && !pid) return { card: placeCard(place, meters, at, name, null, lots) };
           return {
-            card: placeCard(place, meters, at, origin?.name ?? null, "loading", lots),
-            loadCard: () => fetchSearchDetail(kto, place[1]).then((r) => placeCard(place, meters, at, origin?.name ?? null, r.ok ? r.data : "failed", lots)),
+            card: placeCard(place, meters, at, name, kto ? "loading" : null, lots, pid ? "loading" : null),
+            loadCard: () =>
+              Promise.all([kto ? fetchSearchDetail(kto, place[1]) : null, pid ? fetchSearchPet(pid) : null]).then(([d, p]) =>
+                placeCard(place, meters, at, name, d ? (d.ok ? d.data : "failed") : null, lots, p ? (p.ok ? p.data : "failed") : null),
+              ),
           };
         })(),
       })),
@@ -344,7 +350,7 @@ export function SearchPage() {
                           <span className="truncate text-sm text-grey-600">{place[3] || "주소 정보 없음"}</span>
                           <span className="flex flex-wrap items-center gap-1.5 text-xs text-grey-500">
                             {place[11] && <span className="rounded-md bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-800">P 주차장</span>}
-                            {place[12] === "YES" && <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-800">🐾 동반 가능</span>}
+                            {place[12] === "YES" && <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-800">🐾 동반 가능{petId(place) ? "(관광공사)" : ""}</span>}
                             <span>출처 {sourceNames(place)}</span>
                           </span>
                         </span>
@@ -364,7 +370,7 @@ export function SearchPage() {
       </main>
       <footer className="mt-auto flex flex-col gap-1 border-t border-grey-200 pt-3 text-xs text-grey-500">
         <p>관광지·숙박·음식점 비짓제주(제주관광공사)·한국관광공사 국문 관광정보, 음식점·카페 카카오 로컬(실시간, 저장하지 않음). 이름이 같고 100m 안인 곳만 한 장소로 합칩니다.</p>
-        <p>운영시간·주차·반려동물은 한국관광공사 상세(카드를 열 때)와 비짓제주 태그에 있는 곳만 나옵니다. "정보 없음"은 없다는 뜻이 아닙니다.</p>
+        <p>운영시간·주차·반려동물은 한국관광공사 상세(카드를 열 때)·한국관광공사 반려동물 동반여행·비짓제주 태그에 있는 곳만 나옵니다. "정보 없음"은 없다는 뜻이 아닙니다.</p>
         <p>위치는 "내 주변"을 누를 때만 확인하고 저장하지 않습니다. 카카오 검색에는 약 100m 단위로 줄인 위치만 보냅니다.</p>
         <p>지도 © 브이월드(국토교통부)·OpenStreetMap 기여자</p>
       </footer>

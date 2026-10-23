@@ -48,3 +48,29 @@ export function mergePlaces(lists: SearchRow[][]): SearchRow[] {
   }
   return out;
 }
+
+/**
+ * 반려동물 동반 장소(TASK-030 1.(a))를 검색 목록에 붙인다. 같은 관광공사 번호가 있으면 그 장소에,
+ * 없으면 이름(정리 후)이 같고 같은 묶음·100m 안 후보가 하나뿐인 장소에 출처(ktoPet)를 더하고 반려동물을 "YES"로.
+ * 맞는 곳이 없으면 새 장소로 더한다. places는 그 자리에서 바꾼다(mergePlaces가 만든 사본).
+ */
+export function attachPetPlaces(places: SearchRow[], pets: SearchRow[]): SearchRow[] {
+  for (const pet of pets) {
+    const id = pet[10][0]?.[1] ?? "";
+    let target = places.find((p) => p[10].some(([s, v]) => s === "kto" && v === id));
+    if (!target) {
+      const key = normalizePlaceName(pet[2]);
+      const near = key ? places.filter((p) => normalizePlaceName(p[2]) === key && group(p[1]) === group(pet[1]) && distanceMeters({ lat: p[4], lng: p[5] }, { lat: pet[4], lng: pet[5] }) <= SAME_SPOT_METERS) : [];
+      target = near.length === 1 ? near[0] : undefined;
+    }
+    if (!target) {
+      places.push([...pet]);
+      continue;
+    }
+    if (target[10].some(([s]) => s === "ktoPet")) continue;
+    target[10] = [...target[10], ...pet[10]];
+    target[12] = "YES";
+    for (const i of [3, 6, 7] as const) if (!target[i]) target[i] = pet[i];
+  }
+  return places;
+}

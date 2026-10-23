@@ -1,4 +1,4 @@
-import type { PetTag, SearchCategory, SearchDetailResponse, SearchFeed, SearchRow } from "../../../shared/contracts/search.js";
+import type { FeedCategory, PetTag, SearchCategory, SearchDetailResponse, SearchFeed, SearchPetResponse, SearchRow } from "../../../shared/contracts/search.js";
 import { isInJeju, isJejuAddress, JEJU_BOUNDS } from "../../../shared/rules/geo.js";
 import { ProviderError } from "../errors.js";
 import { serviceKeyParam } from "./jejuCityEnforcement.js";
@@ -51,12 +51,12 @@ export interface FeedProvider {
 
 // ── 비짓제주 ──────────────────────────────────────────────
 const VJ_BASE = "https://api.visitjeju.net/vsjApi/contents/searchList";
-const VJ_CODE: Record<SearchFeed["category"], string> = { ATTRACTION: "c1", ACCOMMODATION: "c3", RESTAURANT: "c4" };
+const VJ_CODE: Record<FeedCategory, string> = { ATTRACTION: "c1", ACCOMMODATION: "c3", RESTAURANT: "c4" };
 const VJ_MAX_PAGES = 25;
 const VJ_PARALLEL = 4;
 
 /** 비짓제주 목록 한 쪽 → 장소. 요청한 분류가 아니거나 좌표가 제주 밖이면 버린다. */
-export function normalizeVisitJejuPage(body: unknown, category: SearchFeed["category"]): { rows: SearchRow[]; pageCount: number } {
+export function normalizeVisitJejuPage(body: unknown, category: FeedCategory): { rows: SearchRow[]; pageCount: number } {
   const b = body as { result?: unknown; pageCount?: unknown; items?: unknown } | null;
   const code = text(b?.result);
   if (code !== "200") throw new ProviderError(code === "429" ? "rate_limited" : "unavailable", `비짓제주 응답 오류 ${code || "형식"}`);
@@ -76,7 +76,7 @@ export function normalizeVisitJejuPage(body: unknown, category: SearchFeed["cate
   return { rows, pageCount: Number(b?.pageCount) || 1 };
 }
 
-export function createVisitJejuFeed(apiKey: string, category: SearchFeed["category"], fetchImpl: typeof fetch = fetch): FeedProvider {
+export function createVisitJejuFeed(apiKey: string, category: FeedCategory, fetchImpl: typeof fetch = fetch): FeedProvider {
   const page = async (n: number) => {
     let res: Response;
     try {
@@ -111,11 +111,11 @@ export function createVisitJejuFeed(apiKey: string, category: SearchFeed["catego
 
 // ── 한국관광공사 ──────────────────────────────────────────
 const KTO_BASE = "https://apis.data.go.kr/B551011/KorService2/areaBasedList2";
-const KTO_TYPE: Record<SearchFeed["category"], string> = { ATTRACTION: "12", ACCOMMODATION: "32", RESTAURANT: "39" };
+const KTO_TYPE: Record<FeedCategory, string> = { ATTRACTION: "12", ACCOMMODATION: "32", RESTAURANT: "39" };
 const KTO_PAGE_SIZE = 1000;
 
 /** 관광공사 지역기반 목록 → 장소. 음식점(39) 가운데 분류가 카페·찻집(cat3 A05020900, 신분류 FD05)이면 카페. */
-export function normalizeKtoPage(body: unknown, category: SearchFeed["category"]): { rows: SearchRow[]; totalCount: number } {
+export function normalizeKtoPage(body: unknown, category: FeedCategory): { rows: SearchRow[]; totalCount: number } {
   const b = body as { response?: { header?: { resultCode?: unknown }; body?: { totalCount?: unknown; items?: { item?: unknown } | string } } } | null;
   const code = text(b?.response?.header?.resultCode);
   if (code !== "0000") throw new ProviderError(code === "22" ? "rate_limited" : "unavailable", `관광정보 응답 오류 ${code || "형식"}`);
@@ -137,7 +137,7 @@ export function normalizeKtoPage(body: unknown, category: SearchFeed["category"]
   return { rows, totalCount: Number(b?.response?.body?.totalCount) || list.length };
 }
 
-export function createKtoFeed(apiKey: string, category: SearchFeed["category"], fetchImpl: typeof fetch = fetch): FeedProvider {
+export function createKtoFeed(apiKey: string, category: FeedCategory, fetchImpl: typeof fetch = fetch): FeedProvider {
   return {
     feed: { source: "kto", category },
     async fetch(reserve) {
@@ -228,6 +228,97 @@ export function createMockDetail(): DetailProvider & { calls: number } {
   };
 }
 
+// ── 한국관광공사 반려동물 동반여행(TASK-030) ─────────────────
+/**
+ * End Point https://apis.data.go.kr/B551011/KorPetTourService2(사용자 캡처). TASK-030 시험: 제주(areaCode 39) 17곳
+ * (관광지 12 11곳·문화시설 14 1곳·레포츠 28 3곳·숙박 32 2곳), 목록 항목은 국문 관광정보와 같고 번호도 같은 체계로 보인다.
+ * 등록되지 않은 번호로 상세를 부르면 빈 목록(오류 아님).
+ */
+const PET_BASE = "https://apis.data.go.kr/B551011/KorPetTourService2";
+/** 관광 타입 → 검색 카테고리. 숙박 32, 음식점 39, 그 밖(관광지·문화시설·레포츠·축제·코스·쇼핑)은 관광지. */
+export function petCategory(contentTypeId: string, cat3: string, lcls2: string): SearchCategory {
+  if (contentTypeId === "32") return "ACCOMMODATION";
+  if (contentTypeId === "39") return cat3 === "A05020900" || lcls2 === "FD05" ? "CAFE" : "RESTAURANT";
+  return "ATTRACTION";
+}
+
+/** 반려동물 동반 장소 목록 → 장소(출처 ktoPet, 반려동물 "YES"). */
+export function normalizeKtoPetPage(body: unknown): SearchRow[] {
+  const rows: SearchRow[] = [];
+  for (const i of ktoItems(body).list) {
+    const id = text(i.contentid);
+    const name = plainText(i.title);
+    const lat = Number(i.mapy);
+    const lng = Number(i.mapx);
+    if (!id || !name || !isInJeju({ lat, lng })) continue;
+    const cp = text(i.cpyrhtDivCd);
+    const photo = cp === "Type1" || cp === "Type3" ? imageUrl(i.firstimage) : "";
+    rows.push([`ktoPet:${id}`, petCategory(text(i.contenttypeid), text(i.cat3), text(i.lclsSystm2)), name, [text(i.addr1), text(i.addr2)].filter(Boolean).join(" "), lat, lng, text(i.tel), photo, "", "", [["ktoPet", id]], false, "YES"]);
+  }
+  return rows;
+}
+
+export type SearchPet = Omit<SearchPetResponse, "builtAt">;
+
+/** 반려동물 상세 → 동반 유형·동반 가능 동물·필요 사항 등. 등록되지 않았으면 모두 "". */
+export function normalizeKtoPet(id: string, body: unknown): SearchPet {
+  const i = ktoItems(body).list[0] ?? {};
+  const t = (k: string) => plainText(i[k]);
+  return { id, type: t("acmpyTypeCd"), animals: t("acmpyPsblCpam"), need: t("acmpyNeedMtr"), etc: t("etcAcmpyInfo"), facilities: t("relaPosesFclty"), furnish: t("relaFrnshPrdlst"), rental: t("relaRntlPrdlst"), purchase: t("relaPurcPrdlst"), risk: t("relaAcdntRiskMtr"), source: "ktoPet" };
+}
+
+export interface PetProvider {
+  fetchList(): Promise<SearchRow[]>;
+  fetchPet(id: string): Promise<SearchPet>;
+}
+
+export function createKtoPetProvider(apiKey: string, fetchImpl: typeof fetch = fetch): PetProvider {
+  const get = async (op: string, params: string) => {
+    let res: Response;
+    try {
+      res = await fetchImpl(`${PET_BASE}/${op}?serviceKey=${serviceKeyParam(apiKey)}&MobileOS=ETC&MobileApp=JejuTraffic&_type=json&${params}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    } catch {
+      throw new ProviderError("unavailable", "반려동물 동반여행 연결 실패");
+    }
+    if (res.status === 429) throw new ProviderError("rate_limited", "반려동물 동반여행 한도");
+    if (!res.ok) throw new ProviderError("unavailable", `반려동물 동반여행 HTTP ${res.status}`);
+    try {
+      return await res.json();
+    } catch {
+      throw new ProviderError("unavailable", "반려동물 동반여행 응답 형식");
+    }
+  };
+  return {
+    // 제주 17곳(시험)이라 한 쪽(1,000곳)이면 된다.
+    fetchList: async () => normalizeKtoPetPage(await get("areaBasedList2", "areaCode=39&numOfRows=1000&pageNo=1&arrange=A")),
+    fetchPet: async (id) => normalizeKtoPet(id, await get("detailPetTour2", `contentId=${encodeURIComponent(id)}`)),
+  };
+}
+
+/** 모의 반려동물 동반 장소: 모의 사라봉(관광공사 MOCK-K1과 같은 번호) + 목록에 없는 모의 승마장. 실제 정보가 아니다. */
+export function createMockPetProvider(): PetProvider & { calls: number } {
+  const rows: SearchRow[] = [
+    ["ktoPet:MOCK-K1", "ATTRACTION", "모의 사라봉", "제주시 모의동 20-1", 33.5139, 126.545, "", "", "", "", [["ktoPet", "MOCK-K1"]], false, "YES"],
+    ["ktoPet:MOCK-K9", "ATTRACTION", "모의 반려 승마장", "제주시 모의동 90", 33.4955, 126.5205, "064-000-0090", "", "", "", [["ktoPet", "MOCK-K9"]], false, "YES"],
+  ];
+  const pets: Record<string, Omit<SearchPet, "id" | "source">> = {
+    "MOCK-K1": { type: "전구역 동반가능", animals: "전 견종 동반 가능", need: "목줄 착용", etc: "- 배변봉투 지참", facilities: "", furnish: "", rental: "", purchase: "", risk: "" },
+    "MOCK-K9": { type: "일부구역 동반가능", animals: "소형견", need: "목줄·입마개", etc: "", facilities: "반려견 놀이터", furnish: "배변봉투", rental: "", purchase: "", risk: "" },
+  };
+  const empty = { type: "", animals: "", need: "", etc: "", facilities: "", furnish: "", rental: "", purchase: "", risk: "" };
+  return {
+    calls: 0,
+    async fetchList() {
+      this.calls += 1;
+      return rows.map((r) => [...r] as SearchRow);
+    },
+    async fetchPet(id) {
+      this.calls += 1;
+      return { id, ...(pets[id] ?? empty), source: "mock" as const };
+    },
+  };
+}
+
 // ── 카카오 로컬(실시간, 저장하지 않음) ─────────────────────
 const KAKAO_GROUP: Partial<Record<string, SearchCategory>> = { FD6: "RESTAURANT", CE7: "CAFE", AT4: "ATTRACTION", AD5: "ACCOMMODATION" };
 export const KAKAO_CODE: Partial<Record<SearchCategory, string>> = { RESTAURANT: "FD6", CAFE: "CE7" };
@@ -303,7 +394,7 @@ export function createKakaoLiveProvider(apiKey: string, fetchImpl: typeof fetch 
 // ── 개발용 모의 ───────────────────────────────────────────
 /** 모의 장소(실제 장소가 아니다). 비짓제주·관광공사에 같은 "모의 사라봉"이 있어 합치기를 확인할 수 있다. */
 export function createMockFeeds(): FeedProvider[] {
-  const vj: Record<SearchFeed["category"], SearchRow[]> = {
+  const vj: Record<FeedCategory, SearchRow[]> = {
     ATTRACTION: [
       ["visitJeju:MOCK-V1", "ATTRACTION", "모의 사라봉", "제주시 모의동 20", 33.5136, 126.5446, "064-000-0020", "", "모의 오름 산책길", "오름,산책", [["visitJeju", "MOCK-V1"]], true, ""],
       ["visitJeju:MOCK-V2", "ATTRACTION", "모의 성산 일출봉", "서귀포시 모의동 40", 33.4585, 126.9425, "", "", "모의 해돋이 명소", "자연경관,해돋이", [["visitJeju", "MOCK-V2"]], false, ""],
@@ -314,7 +405,7 @@ export function createMockFeeds(): FeedProvider[] {
       ["visitJeju:MOCK-V5", "CAFE", "모의 바다 카페", "제주시 모의동 51", 33.5165, 126.5255, "", "", "모의 바다 앞 카페", "카페,오션뷰,애견동반", [["visitJeju", "MOCK-V5"]], true, "YES"],
     ],
   };
-  const kto: Record<SearchFeed["category"], SearchRow[]> = {
+  const kto: Record<FeedCategory, SearchRow[]> = {
     ATTRACTION: [["kto:MOCK-K1", "ATTRACTION", "모의 사라봉 (제주시)", "제주시 모의동 20-1", 33.5139, 126.545, "", "", "", "", [["kto", "MOCK-K1"]], false, ""]],
     ACCOMMODATION: [],
     RESTAURANT: [["kto:MOCK-K2", "RESTAURANT", "모의 흑돼지", "제주시 모의동 60", 33.4985, 126.5285, "064-000-0060", "", "", "", [["kto", "MOCK-K2"]], false, ""]],

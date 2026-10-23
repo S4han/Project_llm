@@ -1,5 +1,5 @@
 import type { Coordinate } from "../../../../shared/contracts/route";
-import { SEARCH_CATEGORIES, SEARCH_CATEGORY_LABEL, SEARCH_SOURCE_LABEL, type SearchCategory, type SearchDetailResponse, type SearchIndexResponse, type SearchRow } from "../../../../shared/contracts/search";
+import { SEARCH_CATEGORIES, SEARCH_CATEGORY_LABEL, SEARCH_SOURCE_LABEL, type SearchCategory, type SearchDetailResponse, type SearchIndexResponse, type SearchPetResponse, type SearchRow } from "../../../../shared/contracts/search";
 import type { TrafficParkingResponse } from "../../../../shared/contracts/traffic";
 import { distanceMeters } from "../../../../shared/rules/geo";
 import { PARKING_FEE_STYLE, parkingFeeKind, tourParking } from "../traffic/facilityStyle";
@@ -37,7 +37,7 @@ export const SUGGESTIONS = ["성산일출봉", "흑돼지", "오션뷰", "올레
 
 export type Origin = { kind: "me" | "area"; name: string; at: Coordinate };
 export const distText = (m: number) => (m < 1000 ? `${Math.round(m / 10) * 10}m` : `${(m / 1000).toFixed(1)}km`);
-export const feedLabel = (f: SearchIndexResponse["missing"][number]) => `${SEARCH_SOURCE_LABEL[f.source]} ${SEARCH_CATEGORY_LABEL[f.category]}`;
+export const feedLabel = (f: SearchIndexResponse["missing"][number]) => (f.category ? `${SEARCH_SOURCE_LABEL[f.source]} ${SEARCH_CATEGORY_LABEL[f.category]}` : `${SEARCH_SOURCE_LABEL[f.source]} 목록`);
 
 /** 출처 사이트 링크(새 창). 한국관광공사는 공개 상세 주소에 쓸 번호가 목록에 없어 링크 없이 이름만 보인다. */
 export function sourceLinks(row: SearchRow): { href: string; label: string }[] {
@@ -80,6 +80,11 @@ export function parkingNear(lat: number, lng: number, lots: TrafficParkingRespon
     .sort((a, b) => a.meters - b.meters);
 }
 
+/** 관광공사 반려동물 동반여행 상세 상태(TASK-030): 등록되지 않은 곳이면 null. */
+export type PetState = SearchPetResponse | "loading" | "failed" | null;
+/** 관광공사 반려동물 동반여행에 등록된 곳이면 그 번호. */
+export const petId = (row: SearchRow) => row[10].find(([s]) => s === "ktoPet")?.[1] ?? null;
+
 /** 관광공사 자료가 있으면 그 번호(합친 곳 포함). 소개정보(운영시간·주차·반려동물)는 이 번호로 받는다. */
 export const ktoId = (row: SearchRow) => row[10].find(([s]) => s === "kto")?.[1] ?? null;
 
@@ -96,7 +101,7 @@ export function petFromText(v: string): Tile["tone"] {
  * 범위 변경(2026-10-23): 큰 칸에 운영시간·주차·반려동물. 관광공사 자료가 있으면 소개정보로, 없으면 비짓제주 태그로, 그것도 없으면 "정보 없음".
  * 버튼은 이 서비스의 경로 안내, 아래 링크는 출처 사이트와 카카오맵 길찾기(새 창).
  */
-export function placeCard(row: SearchRow, meters: number | null, at: { listBuiltAt: string | null; liveAt: string | null }, originName: string | null, detail: DetailState = null, lots: ParkingLots = "failed"): PopupCard {
+export function placeCard(row: SearchRow, meters: number | null, at: { listBuiltAt: string | null; liveAt: string | null }, originName: string | null, detail: DetailState = null, lots: ParkingLots = "failed", petInfo: PetState = null): PopupCard {
   const [id, cat, name, address, lat, lng, phone, photo, intro, tags, refs, parkingTag, petTagValue] = row;
   const st = CATEGORY_STYLE[cat];
   const live = refs.some(([s]) => s === "kakaoLocal");
@@ -128,7 +133,15 @@ export function placeCard(row: SearchRow, meters: number | null, at: { listBuilt
   const nearRows = near?.length
     ? [{ label: "가까운 주차장", lines: near.slice(0, 3).map(({ lot, meters: m }) => `${lot[1] || "이름 없는 주차장"} · ${distText(m)} · ${PARKING_FEE_STYLE[parkingFeeKind(lot[7])].label || "요금 정보 없음"}`) }]
     : [];
-  const pet: Tile = d?.pet
+  // 관광공사 반려동물 동반여행(TASK-030 2.(a))이 있으면 그것이 먼저.
+  const p = typeof petInfo === "object" && petInfo !== null && petInfo.type ? petInfo : null;
+  const pet: Tile = p
+    ? { label: "반려동물", value: short(p.type, 14), sub: "관광공사 반려동물", tone: petFromText(p.type) }
+    : petInfo === "loading"
+      ? { label: "반려동물", value: "확인 중…", tone: "neutral" }
+      : petId(row)
+        ? { label: "반려동물", value: "동반 가능", sub: "관광공사 반려동물", tone: "good" }
+        : d?.pet
     ? { label: "반려동물", value: petFromText(d.pet) === "good" ? "동반 가능" : petFromText(d.pet) === "bad" ? "동반 불가" : short(d.pet, 14), sub: "한국관광공사", tone: petFromText(d.pet) }
     : petTagValue
       ? { label: "반려동물", value: petTagValue === "YES" ? "동반 가능" : "동반 불가", sub: "비짓제주 태그", tone: petTagValue === "YES" ? "good" : "bad" }
@@ -148,7 +161,20 @@ export function placeCard(row: SearchRow, meters: number | null, at: { listBuilt
       ...(d?.rest ? [{ label: "쉬는날", lines: lines(d.rest) }] : []),
       ...(d?.parking ? [{ label: "주차 안내", lines: lines(d.parking) }] : []),
       ...nearRows,
-      ...(d?.pet ? [{ label: "반려동물", lines: lines(d.pet) }] : []),
+      ...(d?.pet && !p ? [{ label: "반려동물", lines: lines(d.pet) }] : []),
+      ...(p
+        ? [
+            { label: "동반 유형", lines: lines(p.type) },
+            ...(p.animals ? [{ label: "동반 가능 동물", lines: lines(p.animals) }] : []),
+            ...(p.need ? [{ label: "필요한 것", lines: lines(p.need) }] : []),
+            ...(p.facilities ? [{ label: "구비 시설", lines: lines(p.facilities) }] : []),
+            ...(p.furnish ? [{ label: "비치 물품", lines: lines(p.furnish) }] : []),
+            ...(p.rental ? [{ label: "대여 물품", lines: lines(p.rental) }] : []),
+            ...(p.purchase ? [{ label: "구매 물품", lines: lines(p.purchase) }] : []),
+            ...(p.risk ? [{ label: "사고 대비", lines: lines(p.risk) }] : []),
+            ...(p.etc ? [{ label: "반려동물 안내", lines: lines(p.etc) }] : []),
+          ]
+        : []),
       { label: "전화", lines: [phone || "정보 없음"] },
       ...(d?.info ? [{ label: "문의", lines: lines(d.info) }] : []),
       { label: "주소", lines: [address || "정보 없음"] },
@@ -158,6 +184,7 @@ export function placeCard(row: SearchRow, meters: number | null, at: { listBuilt
       `출처 ${sourceNames(row)}${times ? ` · ${times} 기준` : ""} · 바뀌었을 수 있으니 방문 전 확인하세요. 예약·요금 정보는 없습니다.`,
       near ? "주변 주차장은 전국주차장정보표준데이터(직선 거리 1km, 실시간 남은 칸 없음)입니다." : "",
       detail === null ? "운영시간은 한국관광공사 자료가 있는 곳만 나옵니다. 아래 링크의 상세에서 확인하세요." : "",
+      petInfo === "failed" ? "반려동물 동반 정보를 불러오지 못했습니다. 다시 눌러 보세요." : "",
       detail === "failed" ? "운영시간·주차 정보를 불러오지 못했습니다. 다시 눌러 보세요." : "",
     ]
       .filter(Boolean)

@@ -28,6 +28,7 @@ describe("승인된 기본 예산", () => {
       dataGoKr: { dailyLimit: 500 },
       kto: { dailyLimit: 800 },
       visitJeju: { dailyLimit: 200 },
+      ktoPet: { dailyLimit: 500 },
       ai: { dailyLimit: 200 },
     });
   });

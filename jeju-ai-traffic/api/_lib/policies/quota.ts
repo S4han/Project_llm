@@ -25,6 +25,8 @@ export const DEFAULT_BUDGETS: Record<ProviderId, ProviderBudget> = {
   kto: { dailyLimit: 800 },
   // 비짓제주 숙박 목록(100곳씩 약 10쪽, TASK-028)과 관광 검색 목록(관광지·숙박·음식점 약 42쪽, TASK-029). 둘 다 서버 하루·CDN 7일 보관이라 평소에는 하루 수십 건.
   visitJeju: { dailyLimit: 200 },
+  // 한국관광공사 반려동물 동반여행(기능별 공급자 한도 1,000건/일의 절반, TASK-030 3.(a)). 목록 하루 1건 + 카드를 열 때 상세(30일 보관).
+  ktoPet: { dailyLimit: 500 },
 };
 
 /**
