@@ -9,7 +9,7 @@ import type { RouteMapProps } from "./LeafletRouteMap";
 import { STATUS_STYLE } from "./trafficStyle";
 
 /** 경로 지도(AC-007-01~03) 카카오 지도 판(TASK-033). 선택 경로는 구간 혼잡 색으로 굵게, 대체 경로는 회색 가는 선(누르면 고름). */
-export function KakaoRouteMap({ kakao: k, onFail, routes, selectedId, incidents, onSelect, focus = null }: RouteMapProps & { kakao: KakaoMaps; onFail: () => void }) {
+export function KakaoRouteMap({ kakao: k, onFail, routes, selectedId, incidents, onSelect, focus = null }: RouteMapProps & { kakao: KakaoMaps; onFail: (reason: string) => void }) {
   const { attach, map, popupRef } = useKakaoMap(k, onFail);
 
   useEffect(() => {

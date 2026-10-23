@@ -5,7 +5,7 @@ import { KAKAO_TILE_TIMEOUT_MS, KakaoPopup, syncKakaoFarClass } from "./kakaoMap
 /**
  * 카카오 지도를 만드는 콜백 ref(TASK-033). 바탕 그림이 정해진 시간 안에 한 번도 그려지지 않거나 지도를 만들지 못하면 onFail(→ Leaflet).
  */
-export function useKakaoMap(k: KakaoMaps, onFail: () => void) {
+export function useKakaoMap(k: KakaoMaps, onFail: (reason: string) => void) {
   const [map, setMap] = useState<KMap | null>(null);
   const popupRef = useRef<KakaoPopup | null>(null);
   const failRef = useRef(onFail);
@@ -19,13 +19,13 @@ export function useKakaoMap(k: KakaoMaps, onFail: () => void) {
       try {
         m = new k.Map(el, { center: new k.LatLng(33.38, 126.55), level: 10 });
       } catch {
-        failRef.current();
+        failRef.current("지도를 만들지 못함");
         return;
       }
       let loaded = false;
       const onTiles = () => (loaded = true);
       k.event.addListener(m, "tilesloaded", onTiles);
-      const timer = setTimeout(() => !loaded && failRef.current(), KAKAO_TILE_TIMEOUT_MS);
+      const timer = setTimeout(() => !loaded && failRef.current("바탕 그림을 받지 못함(한도·도메인 확인)"), KAKAO_TILE_TIMEOUT_MS);
       const onZoom = () => syncKakaoFarClass(m, el);
       k.event.addListener(m, "zoom_changed", onZoom);
       syncKakaoFarClass(m, el);

@@ -1,4 +1,5 @@
 import { useKakaoMaps } from "../map/kakaoMap";
+import { KakaoFallbackNote } from "../map/KakaoFallbackNote";
 import type { IncidentMapProps } from "./incidentMapProps";
 import { KakaoIncidentMap } from "./KakaoIncidentMap";
 import { LeafletIncidentMap } from "./LeafletIncidentMap";
@@ -18,5 +19,10 @@ export function IncidentMap(props: IncidentMapProps) {
       </div>
     );
   if (kakao) return <KakaoIncidentMap {...props} kakao={kakao} onFail={fallback} />;
-  return <LeafletIncidentMap {...props} />;
+  return (
+    <div className="flex flex-col gap-1">
+      <LeafletIncidentMap {...props} />
+      <KakaoFallbackNote />
+    </div>
+  );
 }

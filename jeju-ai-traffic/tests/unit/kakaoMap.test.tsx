@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RouteOption } from "../../shared/contracts/route";
 import type { TrafficIncident } from "../../shared/contracts/traffic";
 import { levelOf, speedLineDrawer, zoomOf } from "../../web/src/features/map/kakaoMap";
-import { loadKakaoMaps, resetKakaoForTest } from "../../web/src/features/map/kakaoSdk";
+import { kakaoFailReason, loadKakaoMaps, resetKakaoForTest } from "../../web/src/features/map/kakaoSdk";
 import type { FacilityPoint, SpeedLine } from "../../web/src/features/map/leafletMap";
 import { RouteMap } from "../../web/src/features/routes/RouteMap";
 import { IncidentMap } from "../../web/src/features/traffic/IncidentMap";
@@ -68,6 +68,7 @@ describe("카카오 지도 SDK 받기 (TASK-033 2.(a))", () => {
     const silent = loadKakaoMaps(1000);
     vi.advanceTimersByTime(1000);
     await expect(silent).resolves.toBeNull();
+    expect(kakaoFailReason()).toContain("SDK 준비 응답 없음");
   });
 });
 
@@ -170,6 +171,7 @@ describe("카카오 교통·관광 지도 (TASK-033)", () => {
     act(() => vi.advanceTimersByTime(12_000));
     expect(screen.getByRole("region", { name: "다시 지도" }).dataset.mapEngine).toBeUndefined();
     expect(screen.getByRole("region", { name: "다시 지도" }).classList.contains("leaflet-container")).toBe(true);
+    expect(screen.getByText(/카카오 지도를 쓸 수 없어 브이월드 지도로 보여 줍니다 · 바탕 그림을 받지 못함/)).toBeTruthy();
   });
 
   it("바탕 그림이 그려지면(tilesloaded) 카카오 지도를 그대로 둔다", async () => {

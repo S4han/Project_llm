@@ -43,7 +43,7 @@ export function KakaoIncidentMap({
   fitKey = null,
   label = "교통 현황 지도",
   labelZoom = null,
-}: IncidentMapProps & { kakao: KakaoMaps; onFail: () => void }) {
+}: IncidentMapProps & { kakao: KakaoMaps; onFail: (reason: string) => void }) {
   const { attach, map, popupRef } = useKakaoMap(k, onFail);
   const highlightKey = highlightIds.join(",");
   const clickAt = useRef<KLatLng | null>(null);

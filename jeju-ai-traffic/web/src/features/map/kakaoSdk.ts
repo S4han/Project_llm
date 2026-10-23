@@ -97,6 +97,13 @@ let pending: Promise<KakaoMaps | null> | null = null;
 let ready: KakaoMaps | null | undefined;
 /** 지도를 만든 뒤 바탕 그림을 받지 못했다(한도 초과 등). 이 화면에서는 다시 시도하지 않고 Leaflet으로 그린다. */
 let dead = false;
+/** 키가 있는데 카카오 지도를 못 쓴 까닭(지도 아래 한 줄 안내, 확인용). */
+let failReason: string | null = null;
+
+/** 키가 있는데 Leaflet으로 바꾼 까닭. 키가 없거나 아직 모르면 null. */
+export function kakaoFailReason(): string | null {
+  return kakaoMapKey() ? failReason : null;
+}
 
 export function kakaoMapKey(): string {
   return (import.meta.env.VITE_KAKAO_MAP_KEY ?? "").trim();
@@ -109,8 +116,9 @@ export function kakaoMapsNow(): KakaoMaps | null | undefined {
 }
 
 /** 카카오 지도를 쓸 수 없다고 표시한다(바탕 그림 실패 등). */
-export function markKakaoDead(): void {
+export function markKakaoDead(reason: string): void {
   dead = true;
+  failReason = reason;
 }
 
 /** SDK를 한 번만 받는다(autoload=false 후 kakao.maps.load). 실패·시간 초과는 null. */
@@ -120,21 +128,22 @@ export function loadKakaoMaps(timeoutMs = KAKAO_LOAD_TIMEOUT_MS): Promise<KakaoM
   if (pending) return pending;
   pending = new Promise<KakaoMaps | null>((resolve) => {
     let settled = false;
-    const done = (v: KakaoMaps | null) => {
+    const done = (v: KakaoMaps | null, reason = "") => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       ready = v;
+      if (!v) failReason = reason;
       resolve(v);
     };
-    const timer = setTimeout(() => done(null), timeoutMs);
+    const timer = setTimeout(() => done(null, window.kakao?.maps ? "SDK 준비 응답 없음(도메인 등록·카카오맵 사용 설정 확인)" : "SDK를 시간 안에 받지 못함"), timeoutMs);
     const start = () => {
       const maps = window.kakao?.maps;
-      if (!maps?.load) return done(null);
+      if (!maps?.load) return done(null, "SDK 응답이 지도 SDK가 아님(키·도메인 확인)");
       try {
-        maps.load(() => done(window.kakao?.maps ?? null));
+        maps.load(() => done(window.kakao?.maps ?? null, "SDK 준비 실패"));
       } catch {
-        done(null);
+        done(null, "SDK 준비 중 오류");
       }
     };
     if (window.kakao?.maps?.load) return start();
@@ -142,7 +151,7 @@ export function loadKakaoMaps(timeoutMs = KAKAO_LOAD_TIMEOUT_MS): Promise<KakaoM
     script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(key)}&autoload=false`;
     script.async = true;
     script.onload = start;
-    script.onerror = () => done(null);
+    script.onerror = () => done(null, "SDK를 받지 못함(네트워크·차단)");
     document.head.append(script);
   });
   return pending;
@@ -153,4 +162,5 @@ export function resetKakaoForTest(): void {
   pending = null;
   ready = undefined;
   dead = false;
+  failReason = null;
 }

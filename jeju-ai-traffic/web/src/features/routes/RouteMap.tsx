@@ -1,4 +1,5 @@
 import { useKakaoMaps } from "../map/kakaoMap";
+import { KakaoFallbackNote } from "../map/KakaoFallbackNote";
 import { KakaoRouteMap } from "./KakaoRouteMap";
 import { LeafletRouteMap, type RouteMapProps } from "./LeafletRouteMap";
 
@@ -12,5 +13,10 @@ export function RouteMap(props: RouteMapProps) {
       </div>
     );
   if (kakao) return <KakaoRouteMap {...props} kakao={kakao} onFail={fallback} />;
-  return <LeafletRouteMap {...props} />;
+  return (
+    <div className="flex flex-col gap-1">
+      <LeafletRouteMap {...props} />
+      <KakaoFallbackNote />
+    </div>
+  );
 }

@@ -19,7 +19,7 @@ export const KAKAO_TILE_TIMEOUT_MS = 12_000;
  * 지도 엔진 고르기(2.(a)): 키가 있고 SDK가 준비되면 카카오(값), 키가 없거나 실패하면 null(Leaflet), 받는 중이면 undefined.
  * fallback()은 카카오 지도를 만든 뒤 쓸 수 없다고 판단했을 때 부른다(이 화면에서는 다시 시도하지 않는다).
  */
-export function useKakaoMaps(): { kakao: KakaoMaps | null | undefined; fallback: () => void } {
+export function useKakaoMaps(): { kakao: KakaoMaps | null | undefined; fallback: (reason: string) => void } {
   const [kakao, setKakao] = useState<KakaoMaps | null | undefined>(() => kakaoMapsNow());
   useEffect(() => {
     if (kakao !== undefined) return;
@@ -31,8 +31,8 @@ export function useKakaoMaps(): { kakao: KakaoMaps | null | undefined; fallback:
   }, [kakao]);
   return {
     kakao,
-    fallback: () => {
-      markKakaoDead();
+    fallback: (reason: string) => {
+      markKakaoDead(reason);
       setKakao(null);
     },
   };
