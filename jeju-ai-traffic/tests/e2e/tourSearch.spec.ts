@@ -72,6 +72,27 @@ test.describe("관광지 검색 /search (TASK-031)", () => {
     await page.getByRole("button", { name: "← 관광지로" }).click();
     await expect(page).toHaveURL(/\/search\?q=%EB%AA%A8%EC%9D%98$/);
     await expect(results.getByRole("listitem")).toHaveCount(3);
+    // 돌아오면 그 관광지 카드가 다시 열린다(TASK-032 범위 변경)
+    // (주변 화면에서 연 카드가 사라지는 동안 잠시 두 장이 있을 수 있어 제목으로 고른다)
+    const back = page.locator(".leaflet-popup .popup-card-lg").filter({ has: page.locator(".popup-card-title", { hasText: "모의 사라봉" }) });
+    await expect(back).toBeVisible();
+    await expect(back.locator(".popup-card-tile").filter({ hasText: "이용시간" })).toContainText("상시 개방");
+    await expect
+      .poll(async () => {
+        const c = await back.boundingBox();
+        const m = await map.boundingBox();
+        return c && m ? Math.min(c.x - m.x, m.x + m.width - (c.x + c.width), c.y - m.y) : -1;
+      })
+      .toBeGreaterThanOrEqual(0);
+    await shot(page, "TASK-032-04-back-to-card-390");
+    // 뒤로 가기로 돌아와도 카드가 열린다
+    await back.locator(".popup-card-tile").filter({ hasText: "주변 맛집 2km" }).click();
+    await expect(page).toHaveURL(/show=food/);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/search\?q=%EB%AA%A8%EC%9D%98$/);
+    // (앞서 연 같은 카드가 사라지는 중일 수 있어 새로 연 마지막 카드를 본다)
+    await expect(page.locator(".leaflet-popup .popup-card-lg").filter({ has: page.locator(".popup-card-title", { hasText: "모의 사라봉" }) }).last()).toBeVisible();
+    await page.locator(".leaflet-popup-close-button").last().click();
 
     // 반려동물 거르기: 관광공사 반려동물 동반여행·비짓제주 태그가 있는 관광지만
     await page.getByRole("button", { name: "🐾 반려동물 동반" }).click();

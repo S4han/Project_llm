@@ -94,19 +94,6 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
     };
   }, [mapReady, mapRef, facilities, labelZoom]);
 
-  // 목록에서 고른 시설물: 그 자리로 옮기고(확대 15 이상) 카드를 연다.
-  const openId = openFacility?.id;
-  const openSeq = openFacility?.seq;
-  useEffect(() => {
-    const map = mapRef.current;
-    const marker = openId ? facilityMarkers.current.get(openId) : undefined;
-    if (!mapReady || !map || !marker) return;
-    // 움직임 없이 바로 옮긴 뒤 카드를 연다. 다른 이동(검색 결과 맞추기 등)이 진행 중이거나 확대하는 중에 카드를 열면
-    // 카드 자동 이동이 확대를 멈춰 멀리 본 채로 남는다(TASK-031 점검).
-    map.stop();
-    map.setView(marker.getLatLng(), Math.max(map.getZoom(), 15), { animate: false });
-    marker.openPopup();
-  }, [mapReady, mapRef, openId, openSeq]);
 
   // 내 위치 반경 원(TASK-016). 좌표는 화면에만 쓰고 보내지 않는다.
   const nearbyLayer = useRef<L.LayerGroup | null>(null);
@@ -213,6 +200,21 @@ export function IncidentMap({ incidents, focus, viewKey, speedLines = [], speedO
     map.fitBounds(L.latLngBounds(facilities.map((p) => [p.lat, p.lng] as L.LatLngTuple)), { padding: [24, 24], maxZoom: 15 });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 검색할 때만 다시 맞춘다
   }, [mapReady, mapRef, fitKey]);
+
+  // 목록에서 고른 시설물: 그 자리로 옮기고(확대 15 이상) 카드를 연다. 화면 맞추기(제주 전체·반경·검색 결과)보다 뒤에 두어
+  // 같은 때에 둘 다 바뀌면(관광지 주변 화면에서 돌아올 때, TASK-032) 고른 곳이 이긴다.
+  const openId = openFacility?.id;
+  const openSeq = openFacility?.seq;
+  useEffect(() => {
+    const map = mapRef.current;
+    const marker = openId ? facilityMarkers.current.get(openId) : undefined;
+    if (!mapReady || !map || !marker) return;
+    // 움직임 없이 바로 옮긴 뒤 카드를 연다. 다른 이동(검색 결과 맞추기 등)이 진행 중이거나 확대하는 중에 카드를 열면
+    // 카드 자동 이동이 확대를 멈춰 멀리 본 채로 남는다(TASK-031 점검).
+    map.stop();
+    map.setView(marker.getLatLng(), Math.max(map.getZoom(), 15), { animate: false });
+    marker.openPopup();
+  }, [mapReady, mapRef, openId, openSeq]);
 
   if (failed) {
     return (

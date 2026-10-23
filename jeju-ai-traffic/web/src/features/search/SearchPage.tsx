@@ -140,16 +140,29 @@ export function SearchPage() {
   }, []);
 
   // 주소에 검색어·반려동물 거르기·주변 보기를 남긴다(공유·새로 고침·뒤로 가기). 위치는 남기지 않는다.
+  // 맛집↔숙소 전환처럼 주소만 바꿀 때도 쌓아 둔 표시(searchAround)는 그대로 둔다.
   useEffect(() => {
     const next = urlOf(query, petOnly, around);
-    if (`${window.location.pathname}${window.location.search}` !== next) window.history.replaceState(null, "", next);
+    if (`${window.location.pathname}${window.location.search}` !== next) window.history.replaceState(window.history.state, "", next);
   }, [query, petOnly, around]);
+  // 주변 맛집·숙소 화면에서 관광지로 돌아오면 그 관광지 카드를 다시 연다(TASK-032 범위 변경). 받아 둔 정보는 그대로 다시 쓴다.
+  const reopen = (id: string) => setOpen((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }));
+  const aroundNow = useRef(around);
   useEffect(() => {
-    const onPop = () => setAround(readUrl().around);
+    aroundNow.current = around;
+  }, [around]);
+  useEffect(() => {
+    const onPop = () => {
+      const next = readUrl().around;
+      const prev = aroundNow.current;
+      setAround(next);
+      if (prev && !next) setOpen((o) => ({ id: prev.id, seq: (o?.seq ?? 0) + 1 }));
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-  // "지도에 보기"는 주소를 새로 쌓아 뒤로 가기로 관광지 화면에 돌아온다. 공유 주소로 바로 연 경우에는 쌓은 것이 없어 그냥 닫는다.
+  // "지도에 보기"는 주소를 새로 쌓아 뒤로 가기로 관광지 화면에 돌아온다(돌아오면 위의 popstate가 카드를 연다).
+  // 공유 주소로 바로 연 경우에는 쌓은 것이 없어 바로 닫고 카드를 연다.
   const showAround = (a: Around) => {
     window.history.pushState({ searchAround: true }, "", urlOf(query, petOnly, a));
     setAround(a);
@@ -160,7 +173,9 @@ export function SearchPage() {
       window.history.back();
       return;
     }
+    const id = around?.id;
     setAround(null);
+    if (id) reopen(id);
   };
 
   const places = useMemo(() => index?.places ?? [], [index]);
